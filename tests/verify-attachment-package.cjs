@@ -1,0 +1,42 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const asar = require('@electron/asar');
+const project = path.resolve(__dirname, '..');
+const output = path.join(project, 'release/attachment-body-ready-20261024');
+const build = JSON.parse(fs.readFileSync(path.join(output, 'integration-build.json'), 'utf8'));
+const sourceRoot = build.sourceRoot || project;
+assert.equal(build.status, 'passed'); assert.deepEqual(build.sourceDrift, []);
+const archive = path.join(output, 'win-unpacked/resources/app.asar');
+const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const extract = (name) => asar.extractFile(archive, name.replaceAll('/', path.sep));
+const sources = Object.entries(build.sources).map(([file, sha256]) => {
+  assert.equal(hash(fs.readFileSync(path.join(sourceRoot, file))), sha256, 'Frozen source drift: ' + file);
+  if (file.startsWith('electron/')) assert.equal(hash(extract(file)), sha256, 'Packaged source mismatch: ' + file);
+  return { file, sha256 };
+});
+const html = extract('dist/index.html').toString('utf8'); assert.ok(html.includes(build.renderer));
+const resources = [...new Set(['dist/index.html', ...[...html.matchAll(/(?:src|href)="\.\/([^"?]+\.(?:js|css))"/g)].map((match) => 'dist/' + match[1])])];
+for (const file of resources) assert.equal(hash(extract(file)), hash(fs.readFileSync(path.join(sourceRoot, file))), 'Renderer mismatch: ' + file);
+const pkg = JSON.parse(extract('package.json').toString('utf8'));
+assert.equal(pkg.version, build.version);
+for (const name of ['word-extractor', 'pdfjs-dist', 'yauzl', 'saxes', 'exceljs']) assert.equal(pkg.dependencies[name], require('../package.json').dependencies[name]);
+const licenses = JSON.parse(extract('electron/third-party-licenses.json').toString('utf8'));
+for (const name of ['word-extractor', 'pdfjs-dist', '@napi-rs/canvas', 'yauzl', 'saxes']) {
+  const directory = path.dirname(require.resolve(name + '/package.json'));
+  const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'package.json')));
+  const entry = licenses.find((item) => item.name === name && item.version === metadata.version);
+  assert.ok(entry, 'Missing license metadata: ' + name); assert.equal(entry.license, metadata.license);
+  const files = fs.readdirSync(directory).filter((file) => /^(license|licence|copying|notice)(\.|$|-)/i.test(file) && fs.statSync(path.join(directory, file)).isFile());
+  for (const file of files) assert.ok(entry.notices.some((notice) => notice.file === file && notice.text === fs.readFileSync(path.join(directory, file), 'utf8')), 'Notice mismatch: ' + name + '/' + file);
+}
+const native = JSON.parse(extract('node_modules/@napi-rs/canvas-win32-x64-msvc/package.json'));
+const canvas = JSON.parse(extract('node_modules/@napi-rs/canvas/package.json'));
+assert.equal(native.license, 'MIT'); assert.equal(native.version, canvas.version); assert.deepEqual(native.repository, canvas.repository);
+assert.ok(licenses.some((entry) => entry.name === native.name && entry.license === 'MIT'));
+assert.equal(hash(fs.readFileSync(build.executable)), build.executableSha256);
+const result = { status: 'passed', version: build.version, renderer: build.renderer, executable: build.executable, executableBytes: fs.statSync(build.executable).size, executableSha256: build.executableSha256, sources, rendererResources: resources, licenseComponents: licenses.length, nativePdfBinding: asar.listPackage(archive).some((file) => file.includes('canvas-win32-x64-msvc') && file.endsWith('.node')) };
+assert.equal(result.nativePdfBinding, true);
+fs.writeFileSync(path.join(output, 'attachment-package-verification.json'), JSON.stringify(result, null, 2) + '\n');
+console.log(JSON.stringify({ status: result.status, sources: sources.length, rendererResources: resources.length, licenseComponents: licenses.length, executableSha256: result.executableSha256 }));

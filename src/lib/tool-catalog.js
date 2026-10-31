@@ -1,0 +1,25 @@
+export const TOOL_GROUPS = ['全部', '对话与项目', '文件与办公', '自动化与扩展', '配置与运行'];
+export const TOOL_CATALOG = [
+  { id: 'git', label: '版本控制', description: '检查文件差异、暂存与取消暂存、本地提交、新建分支和打开隔离工作树项目。', group: '对话与项目', icon: 'git', search: 'git diff stage commit branch worktree 分支 提交 工作树' },
+  { id: 'agent-task', label: '执行项目任务', description: '让模型读取项目、修改文件、运行命令并检查结果；对话中显示操作与文件差异。', group: '对话与项目', icon: 'terminal', search: 'agent 执行 编程 文件修改 自动 任务' },
+  { id: 'new-chat', label: '新建聊天', description: '在当前项目中开始任务，保留已有对话和草稿。', group: '对话与项目', icon: 'chat', shortcut: 'Ctrl K', search: '问答 编程 计划 办公 项目' },
+  { id: 'assistant', label: '项目工作台', description: '返回当前项目的对话与工作入口。', group: '对话与项目', icon: 'project' },
+  { id: 'recent', label: '最近聊天', description: '打开当前项目的最近聊天。', group: '对话与项目', icon: 'chat' },
+  { id: 'files', label: '文件与代码', description: '浏览项目、编辑代码并保存到本机。', group: '文件与办公', icon: 'file', shortcut: 'Ctrl P', search: 'read write edit search 文件 搜索' },
+  { id: 'tables', label: '表格', description: '编辑 Excel、CSV 和 TSV；模型可读取、批量修改并经审批保存工作簿。', group: '文件与办公', icon: 'table', search: 'xlsx csv spreadsheet' },
+  { id: 'images', label: '图片', description: '手动编辑图片；AI可查看、裁剪、旋转、缩放、调亮度、加文字，经审批保存。', group: '文件与办公', icon: 'image', search: '绘图 image' },
+  { id: 'terminal', label: '集成终端', description: '在第三工作台中运行当前项目的 Shell 命令。', group: '文件与办公', icon: 'terminal', shortcut: 'Ctrl J', search: 'exec command powershell cmd 运行' },
+  { id: 'services', label: '运行与预览', description: '托管项目开发服务，查看就绪状态和日志，打开本地预览或停止进程树。', group: '配置与运行', icon: 'terminal', search: 'dev server npm python 服务 端口 preview 日志 运行' },
+  { id: 'browser', label: '浏览器工作台', description: '网页标签与侧边工具；设置中可开启 AI 搜索、读取、交互及视觉截图，每次操作审批。', group: '文件与办公', icon: 'browser', shortcut: 'Ctrl Shift B' },
+  { id: 'reveal-project', label: '打开项目文件夹', description: '在 Windows 文件资源管理器中打开当前项目。', group: '对话与项目', icon: 'project' },
+  { id: 'tasks', label: '定时任务', description: '创建、暂停、立即运行计划，检查执行结果。', group: '自动化与扩展', icon: 'clock', search: '计划 定时 cron automation' },
+  { id: 'plugins', label: '插件', description: '查看本机插件包、Codex 启用状态与随包技能。', group: '自动化与扩展', icon: 'plugin', search: 'mcp 扩展 tools' },
+  { id: 'skills', label: 'SKILL 技能', description: '搜索、阅读、启停技能，并选作本轮指引。', group: '自动化与扩展', icon: 'skill', search: 'skill 技能' },
+  { id: 'setting:model', label: '模型与连接', description: '配置中转站、模型列表和回答强度。', group: '配置与运行', icon: 'settings', search: 'API Grok 模型' },
+  { id: 'setting:agent', label: '权限与配置', description: '管理沙箱、审批、网络和 CLI 诊断。', group: '配置与运行', icon: 'settings', search: 'sandbox approval config 权限 诊断 工具依赖' },
+  { id: 'setting:storage', label: '存储、子智能体与工作树', description: '查看本机数据、子任务与隔离 Git 工作树。', group: '配置与运行', icon: 'project', search: 'agent worktree' },
+  { id: 'setting:git', label: 'Git 偏好', description: '设置分支、提交、审查和 PR 指引。', group: '配置与运行', icon: 'git' },
+  { id: 'setting:general', label: '常规与系统托盘', description: '管理关闭行为、托盘驻留与通知。', group: '配置与运行', icon: 'settings', shortcut: 'Ctrl ,' },
+  { id: 'setting:shortcuts', label: '键盘快捷键', description: '查看工具搜索、导航、保存和发送操作。', group: '配置与运行', icon: 'keyboard' },
+];
+export const matchTools = (query = '', group = '全部') => TOOL_CATALOG.filter((item) => (group === '全部' || item.group === group) && [item.label, item.description, item.group, item.search || ''].join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));

@@ -1,0 +1,78 @@
+.storage-panel { --storage-muted: #757a7e; color: inherit; }
+.storage-panel p { font-size: calc(14px + var(--font-step)); line-height: 1.8; }
+.storage-panel button, .storage-panel input, .storage-panel select, .storage-panel textarea { font: inherit; }
+.storage-panel button { cursor: pointer; }
+.storage-panel button:disabled { cursor: default; opacity: .5; }
+.storage-panel button:focus-visible, .storage-panel input:focus-visible, .storage-panel select:focus-visible, .storage-panel textarea:focus-visible, .storage-files summary:focus-visible { outline: 2px solid var(--accent, #176c5b); outline-offset: 3px; }
+.storage-device h2 { margin: 0; font-size: calc(18px + var(--font-step)); font-weight: 600; }
+.storage-device > p { margin: 4px 0 15px; color: var(--storage-muted); }
+.storage-total-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0 13px; }
+.storage-total-row strong { font-size: calc(15px + var(--font-step)); font-weight: 550; }
+.storage-button { display: inline-flex; min-height: 34px; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px; padding: 5px 12px; border: 0; border-radius: 11px; background: #f2f3f4; color: #343a3e; font-size: calc(14px + var(--font-step)) !important; line-height: 1.6; text-decoration: none; }
+.storage-button:hover:not(:disabled) { background: #e7e9eb; }
+.storage-bar { display: flex; width: 100%; height: 25px; overflow: hidden; border-radius: 12px; background: #eceeef; }
+.storage-bar > span { display: block; height: 100%; flex-shrink: 0; }
+.storage-legend { display: flex; flex-wrap: wrap; gap: 15px 24px; margin: 14px 0 8px; }
+.storage-legend > div { min-width: 60px; }
+.storage-legend dt { display: flex; align-items: center; gap: 8px; color: var(--storage-muted); font-size: calc(14px + var(--font-step)); line-height: 1.8; }
+.storage-legend dt i { width: 9px; height: 9px; flex-shrink: 0; border-radius: 50%; }
+.storage-legend dd { margin: 3px 0 0; color: var(--storage-muted); font-size: calc(14px + var(--font-step)); line-height: 1.8; }
+.storage-device .storage-path { margin: 10px 0 0; overflow-wrap: anywhere; }
+.storage-device .storage-scan-note { margin: 2px 0 0; font-size: calc(14px + var(--font-step)); }
+.storage-device { margin-bottom: 35px; }
+.storage-management { padding: 0 18px; margin-bottom: 16px; border: 1px solid #e6e7e8; border-radius: 17px; }
+.storage-management-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; min-width: 0; }
+.storage-management-row + .storage-management-row { border-top: 1px solid #e9ebed; }
+.storage-management-row > div { min-width: 0; }
+.storage-management-row strong { display: block; font-weight: 550; line-height: 1.6; }
+.storage-management-row p { margin: 1px 0 0; color: var(--storage-muted); }
+.storage-files { margin: 24px 0 0; color: var(--storage-muted); font-size: calc(14px + var(--font-step)); }
+.storage-files summary { cursor: pointer; }
+.storage-files p, .storage-record p { overflow-wrap: anywhere; }
+.storage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.storage-back { display: flex; align-items: center; gap: 7px; margin: -10px 0 23px; padding: 4px 0; border: 0; color: var(--storage-muted); background: transparent; font-size: calc(14px + var(--font-step)) !important; }
+.storage-manager h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 7px; font-size: calc(21px + var(--font-step)); font-weight: 600; }
+.storage-manager > p { color: var(--storage-muted); margin: 0 0 20px; }
+.storage-search { display: flex; align-items: center; gap: 9px; padding: 9px 12px; margin-bottom: 14px; border: 1px solid #dee3e5; border-radius: 11px; color: var(--storage-muted); }
+.storage-search input { width: 100%; min-width: 0; border: 0; background: transparent; color: inherit; outline: none; }
+.storage-checkbox { display: flex; min-width: 0; align-items: center; gap: 9px; font-size: calc(14px + var(--font-step)); line-height: 1.7; }
+.storage-checkbox input { flex-shrink: 0; width: 17px; height: 17px; accent-color: var(--accent, #176c5b); }
+.storage-checkbox strong { overflow-wrap: anywhere; font-size: var(--ui-font-size); }
+.storage-list-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 13px; margin: 22px 0 13px; font-size: calc(14px + var(--font-step)); }
+.storage-list { display: grid; gap: 12px; }
+.storage-record { min-width: 0; padding: 16px; border: 1px solid #e2e6e8; border-radius: 13px; }
+.storage-record-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
+.storage-record-heading > strong { min-width: 0; overflow-wrap: anywhere; font-weight: 550; line-height: 1.7; }
+.storage-record-heading > span { flex-shrink: 0; color: var(--storage-muted); font-size: calc(14px + var(--font-step)); line-height: 1.7; }
+.storage-record > p { margin: 7px 0 10px; color: var(--storage-muted); }
+.storage-preview { max-height: 450px; overflow: auto; padding: 15px 0 0; margin-top: 14px; border-top: 1px solid #e2e6e8; font-size: calc(14px + var(--font-step)); line-height: 1.8; }
+.storage-preview pre { margin: 7px 0 18px; color: inherit; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.storage-empty { margin: 0; padding: 35px 18px; border: 1px dashed #dce2e4; border-radius: 13px; color: var(--storage-muted); text-align: center; }
+.storage-danger, .storage-error-text { color: #b03d35; }
+.storage-alert { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; padding: 13px; border: 1px solid #e9bdb8; border-radius: 10px; color: #9e352d; background: #fff5f3; overflow-wrap: anywhere; font-size: calc(14px + var(--font-step)); line-height: 1.8; }
+.storage-feedback { padding: 12px; border-radius: 10px; color: #246547; background: #edf6f0; }
+.storage-agent-form { display: grid; gap: 15px; padding: 18px; border: 1px solid #e2e6e8; border-radius: 14px; }
+.storage-agent-form label { display: grid; min-width: 0; gap: 8px; font-size: calc(14px + var(--font-step)); }
+.storage-agent-form select, .storage-agent-form textarea, .storage-retention select { width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid #dce2e4; border-radius: 9px; background: transparent; color: inherit; }
+.storage-agent-form textarea { resize: vertical; line-height: 1.8; }
+.storage-agent-form > button { justify-self: start; }
+.storage-retention { margin: 22px 0; padding: 18px; border: 1px solid #e2e6e8; border-radius: 14px; }
+.storage-retention label { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: calc(14px + var(--font-step)); }
+.storage-retention select { width: auto; }
+.storage-retention p { color: var(--storage-muted); }
+.storage-confirm { width: min(480px, calc(100vw - 50px)); box-sizing: border-box; padding: 25px; border: 1px solid #dfe4e6; border-radius: 16px; color: inherit; background: var(--surface, white); font-family: inherit; }
+.storage-confirm::backdrop { background: #0005; }
+.storage-confirm h2 { margin: 0 0 12px; font-size: calc(21px + var(--font-step)); }
+.storage-confirm p { margin: 0 0 23px; }
+.storage-confirm .storage-actions { justify-content: flex-end; }
+.storage-spinning { animation: storage-spin 1s linear infinite; }
+@keyframes storage-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .storage-spinning { animation: none; } }
+@media (max-width: 1100px) { .storage-legend { gap: 12px 17px; } .storage-record-heading { flex-wrap: wrap; } .storage-management { padding: 0 14px; } }
+[data-theme="dark"] .storage-panel { --storage-muted: #a8b4ae; }
+[data-theme="dark"] .storage-button { background: #303a35; color: #e2e9e5; }
+[data-theme="dark"] .storage-button:hover:not(:disabled) { background: #3d4a43; }
+[data-theme="dark"] .storage-management, [data-theme="dark"] .storage-record, [data-theme="dark"] .storage-agent-form, [data-theme="dark"] .storage-retention { border-color: #3a4640; }
+[data-theme="dark"] .storage-alert { background: #402824; color: #ffc5b8; }
+[data-theme="dark"] .storage-feedback { background: #22392e; color: #a3e0bc; }
+[data-theme="dark"] .storage-danger, [data-theme="dark"] .storage-error-text { color: #ffa59a; }

@@ -1,0 +1,105 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import http from 'node:http';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { createMcpStore, normalizeConfig } = require('../electron/mcp-store.cjs');
+const { createMcpRuntime, toolAlias } = require('../electron/mcp-runtime.cjs');
+const { boundedMcpResponse } = require('../electron/mcp-network.cjs');
+const { createSseFixture } = require('./mcp-fixture.cjs');
+const encryption = { isEncryptionAvailable: () => true, encryptString: value => Buffer.from(value).reverse(), decryptString: value => Buffer.from(value).reverse().toString() };
+const until = async (fn) => { for (let i = 0; i < 150; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 20)); } throw Error('SSE fixture wait timed out'); };
+const opts = { guard: async () => {}, approve: async () => {}, policy: () => 'on-request' };
+async function fixture(t, options = {}) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-mcp-sse-'));
+  const server = await createSseFixture({ token: 'sse-isolated-token', secret: 'sse-isolated-token', logFile: path.join(root, 'calls.jsonl'), ...options });
+  const store = createMcpStore(path.join(root, 'mcp.json'), { encryption });
+  const runtime = createMcpRuntime({ store, getWorkspaceRoot: () => root });
+  t.after(async () => { await runtime.shutdown(); await server.close(); await fs.rm(root, { recursive: true, force: true }); });
+  const saved = await store.save({ name: 'SSE 中文服务', transport: 'sse', url: server.url, token: 'sse-isolated-token', headers: { 'X-Fixture-Key': 'sse-custom-header' }, readOnlyTools: ['echo'] });
+  return { root, server, store, runtime, saved };
+}
+test('SSE configuration preserves encrypted auth only within the same origin and transport', async t => {
+  const f = await fixture(t);
+  assert.equal(normalizeConfig({ name: 'sse', transport: 'sse', url: f.server.url }).transport, 'sse');
+  assert.throws(() => normalizeConfig({ name: 'sse', transport: 'sse', url: 'http://other.invalid/sse' }));
+  assert.throws(() => normalizeConfig({ name: 'sse', transport: 'sse', url: 'https://other.invalid/sse?token=private' }));
+  await f.store.save({ ...f.saved, name: 'SSE 重命名' });
+  assert.equal((await f.store.load(f.saved.id)).secrets.token, 'sse-isolated-token');
+  await f.store.save({ ...f.saved, url: 'https://different.invalid/sse' });
+  assert.equal((await f.store.load(f.saved.id)).secrets.token, '');
+  assert.deepEqual((await f.store.load(f.saved.id)).secrets.headers, {});
+  const disk = await fs.readFile(path.join(f.root, 'mcp.json'), 'utf8');
+  assert.equal(disk.includes('sse-isolated-token'), false);
+});
+test('SSE SDK authentications reach GET and POST, and real tools, resources and prompts work', async t => {
+  const f = await fixture(t); await f.runtime.connect(f.saved.id);
+  assert.equal((await f.runtime.snapshot()).servers[0].status, 'connected');
+  const result = await f.runtime.agentTools(opts).execute(toolAlias(f.saved.id, 'echo'), { message: 'SSE 工具核对' });
+  assert.equal(result.ok, true); assert.match(result.activity.output, /SSE 工具核对/);
+  assert.equal(JSON.stringify(result).includes('sse-isolated-token'), false);
+  assert.ok(f.server.seen.some(row => row.method === 'GET' && row.auth === 'Bearer sse-isolated-token' && row.custom === 'sse-custom-header'));
+  assert.ok(f.server.seen.some(row => row.method === 'POST' && row.auth === 'Bearer sse-isolated-token' && row.custom === 'sse-custom-header'));
+  const catalog = await f.runtime.contextCatalog(f.saved.id);
+  assert.ok(JSON.stringify(catalog).includes('SSE 项目资料'));
+  const context = { serverId: f.saved.id, generation: catalog.generation, catalogId: catalog.catalogId, arguments: {} };
+  const resource = await f.runtime.contextRead({ ...context, itemId: catalog.resources[0].id });
+  assert.match(JSON.stringify(resource), /S7419/); assert.equal(JSON.stringify(resource).includes('sse-isolated-token'), false);
+  const prompt = await f.runtime.contextRead({ ...context, itemId: catalog.prompts[0].id, arguments: { topic: '中文项目' } });
+  assert.match(JSON.stringify(prompt), /中文项目/);
+  await f.runtime.disconnect(f.saved.id);
+  await until(() => f.server.activeSessions === 0);
+  assert.equal((await f.runtime.snapshot()).servers[0].status, 'disconnected');
+});
+test('SSE rejects a cross-origin message endpoint before forwarding any authentication', async t => {
+  let hits = 0;
+  const destination = http.createServer((_req, res) => { hits++; res.writeHead(200).end(); });
+  await new Promise(resolve => destination.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { destination.closeAllConnections(); await new Promise(resolve => destination.close(resolve)); });
+  const f = await fixture(t, { endpoint: 'http://127.0.0.1:' + destination.address().port + '/messages' });
+  await assert.rejects(f.runtime.connect(f.saved.id), /origin|主机/);
+  assert.equal(hits, 0); assert.equal((await f.runtime.snapshot()).servers[0].status, 'failed');
+});
+test('SSE stream loss fails the connection and reconnection creates a fresh generation', async t => {
+  const f = await fixture(t); await f.runtime.connect(f.saved.id);
+  const previous = (await f.runtime.snapshot()).servers[0].generation;
+  await f.server.disconnectClients();
+  await until(async () => (await f.runtime.snapshot()).servers[0].status === 'failed');
+  await f.runtime.connect(f.saved.id);
+  assert.notEqual((await f.runtime.snapshot()).servers[0].generation, previous);
+  const stale = f.runtime.agentTools(opts);
+  await f.runtime.disconnect(f.saved.id);
+  await assert.rejects(stale.execute(toolAlias(f.saved.id, 'echo'), { message: '旧 SSE' }), /已变化/);
+});
+test('SSE refuses unapproved changes and cancels an actual pending SDK call', async t => {
+  const f = await fixture(t); await f.runtime.connect(f.saved.id);
+  const denied = f.runtime.agentTools({ ...opts, approve: async () => { throw Error('拒绝 SSE'); } });
+  await assert.rejects(denied.execute(toolAlias(f.saved.id, 'record'), { message: '不得执行' }), /拒绝 SSE/);
+  const controller = new AbortController();
+  const pending = f.runtime.agentTools(opts).execute(toolAlias(f.saved.id, 'slow'), {}, { signal: controller.signal });
+  await until(async () => (await fs.readFile(path.join(f.root, 'calls.jsonl'), 'utf8').catch(() => '')).includes('"slow"'));
+  controller.abort(); await assert.rejects(pending);
+  const calls = await fs.readFile(path.join(f.root, 'calls.jsonl'), 'utf8'); assert.equal(calls.includes('"record"'), false);
+  assert.equal((await f.runtime.snapshot()).servers[0].status, 'connected');
+  assert.equal((await f.runtime.agentTools(opts).execute(toolAlias(f.saved.id, 'echo'), { message: '取消后仍可用' })).ok, true);
+});
+test('SSE limits each event across CRLF chunk boundaries, not total lifetime bytes', async () => {
+  const chunks = [':123456\r', '\n\r', '\n:654321\n\n'].map(value => Buffer.from(value));
+  const response = new Response(new ReadableStream({ start(sink) { for (const value of chunks) sink.enqueue(value); sink.close(); } }), { headers: { 'content-type': 'text/event-stream; charset=utf-8' } });
+  assert.equal(await boundedMcpResponse(response, 12, { eventStream: true }).text(), chunks.map(value => value.toString()).join(''));
+  const oversized = new Response(':0123456789abcdef', { headers: { 'content-type': 'text/event-stream' } });
+  await assert.rejects(boundedMcpResponse(oversized, 12, { eventStream: true }).text(), /单个事件/);
+  await assert.rejects(boundedMcpResponse(new Response('0123456789abcdef'), 12).text(), /大小限制/);
+});
+test('SSE accepts more than 2MB lifetime traffic while rejecting one oversized event', async t => {
+  const f = await fixture(t); await f.runtime.connect(f.saved.id);
+  for (let i = 0; i < 5; i++) f.server.padding(':' + 'p'.repeat(450_000) + '\n\n');
+  const result = await f.runtime.agentTools(opts).execute(toolAlias(f.saved.id, 'echo'), { message: '累计流量仍可用' });
+  assert.equal(result.ok, true);
+  f.server.padding(':' + 'p'.repeat(2_000_001));
+  await until(async () => (await f.runtime.snapshot()).servers[0].status === 'failed');
+  await until(() => f.server.activeSessions === 0);
+});

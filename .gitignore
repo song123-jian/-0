@@ -1,0 +1,14 @@
+node_modules/
+release/
+workspace/
+dist/
+手动删除/
+resources/workspace-tools/
+.env
+.env.*
+*.log
+*.tmp
+*.user
+*.local
+*.key
+*.pem
