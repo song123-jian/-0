@@ -2,7 +2,7 @@
 
 ## 当前验证检查点（2026-11-01）
 
-- 被测项目：Scodex Workbench，`package.json` 版本 1.3.21；目标仓库初始化候选，分支 `main`，尚无 Git 提交。
+- 被测项目：Scodex Workbench，`package.json` 版本 1.3.21；目标仓库 `song123-jian/-0`，分支 `main`，提交 `79dc314f85151269d736cf21847e86780465a73c`。
 - 目标运行环境：Windows x64；实际 Node.js v24.11.0、npm 11.6.1。npm ci 已按锁文件安装 681 个包；已构建 release/Scodex-Workbench-1.3.21-x64.exe（Electron 45.0.0 / x64）。npm 报告锁定依赖树有 24 项 audit 告警（22 moderate、2 high），本轮未升级依赖。
 - 测试入口：代码/文件工作流及包构建均从项目根目录执行；实际 UI 验收在本机 Windows x64 便携 EXE 上操作隔离项目并回读文件。
 - 先前结果：上轮摘要提到 19/19 定向测试通过，但本地候选没有对应日志或报告；作为背景记录，不计入本轮通过数。
@@ -13,14 +13,14 @@
 
 | 范围 | 操作 / 预期 | 当前结果 | 证据或限制 |
 | --- | --- | --- | --- |
-| 归档和构建输入 | 对照 `electron/workspace-tools.cjs` 固定 SHA-256，确认 package extraResources 读取目录及三项归档。 | 逻辑回归通过 | `tests/workspace-tools.test.mjs` 新增打包输入核验；待执行正式构建确认包内资源。 |
+| 归档和构建输入 | 对照 `electron/workspace-tools.cjs` 固定 SHA-256，确认 package extraResources 读取目录及三项归档。 | 逻辑回归和正式构建通过 | `tests/workspace-tools.test.mjs` 回归通过；`npm run dist` 已完成构建，三项归档已进入候选包输入目录。 |
 | 编程和文件工作流 | 相关 Node 测试及实际便携 EXE 中的代码编辑、文件保存与回读。 | 自动化测试 316/316；范围化实际 UI smoke 通过。 | `SCODEX_SMOKE_SCOPE=programming-files npm run smoke` 退出码 0；Electron 45.0.0 / x64；fixture 不代替实际 UI 验收。 |
 | 全项目自动化测试 | `npm test`（由 `npm run dist` 调用） | 修复后 316/316 通过。 | 包含新增归档路径回归。首轮两个失败已分别核实并记录。 |
 | 对话与存储修复 | `node --test tests/storage.test.mjs tests/conversations.test.mjs` | 17/17 通过。 | 覆盖存档往返、规范化幂等、存储量、旧消息兼容和对话字段持久化。 |
-| Renderer / Windows 包 | `npm run build`、`electron-builder --win portable --x64`（来自 `npm run dist`） | 通过，renderer `assets/index-Ce5CyD9f.js`，EXE `release/Scodex-Workbench-1.3.21-x64.exe`。 | Electron 45.0.0；仍需包内核验与 smoke 复验。 |
+| Renderer / Windows 包 | `npm run build`、`electron-builder --win portable --x64`（来自 `npm run dist`） | 通过，renderer `assets/index-Ce5CyD9f.js`，EXE `release/Scodex-Workbench-1.3.21-x64.exe`。 | Electron 45.0.0；随后已完成范围化 EXE smoke 验收。 |
 | 实际 EXE smoke | `SCODEX_SMOKE_SCOPE=programming-files npm run smoke`（1.3.21 x64 EXE） | 通过，退出码 0。 | 代码/文件功能真实 UI 操作与文件回读通过；跳过范围外 SKILL/原生关闭段。 |
 | 工作流文档 | 内容和引用、UTF-8 无 BOM、Git 差异检查通过。 | 通过 | `docs/WORKFLOW.md`、两份交接文档均已回读；相对链接存在、无 BOM、无尾随空白。 |
-| 远端 Git 交付 | 核对远端为空；创建首次提交并推送后读取远端状态。 | 尚未完成验证 | 远端无分支；本地作者仍为占位身份 `Scodex Workflow <scodex-workflow@example.invalid>`，等待有效身份。 |
+| 远端 Git 交付 | 创建首次 `main` 提交并推送后读取远端分支、HEAD 和本地状态。 | 通过 | 远端 `refs/heads/main` 与本地 `79dc314f85151269d736cf21847e86780465a73c` 一致；`git status` 显示本地与 `origin/main` 同步。 |
 
 ## 复用条件
 
