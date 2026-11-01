@@ -1,7 +1,7 @@
 .model-connection-form { color: var(--ink); font-size: var(--ui-font-size); }
 .model-connection-form fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
-.model-connection-form input { min-width: 0; width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); padding: 7px 11px; font: inherit; font-size: calc(14px + var(--font-step)); outline: none; }
-.model-connection-form input:focus, .model-effort > button:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
+.model-connection-form input, .model-connection-form select { min-width: 0; width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); padding: 7px 11px; font: inherit; font-size: calc(14px + var(--font-step)); outline: none; }
+.model-connection-form input:focus, .model-connection-form select:focus, .model-effort > button:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
 .model-connection-form input::placeholder { color: var(--muted); opacity: .85; }
 .model-connection-form button { font-family: inherit; }
 .model-field { margin-bottom: 26px; min-width: 0; }
@@ -30,7 +30,7 @@
 .model-chip button { display: flex; flex: 0 0 20px; width: 20px; height: 22px; padding: 0; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--muted); border-radius: 3px; cursor: pointer; }
 .model-chip button:hover { color: #bd4944; background: var(--paper); }
 .model-chip button:disabled { opacity: .3; cursor: default; }
-.model-and-effort > input { flex: 1 1 auto; }
+.model-and-effort > input, .model-and-effort > select { flex: 1 1 auto; }
 .model-effort { position: relative; flex: 0 0 142px; width: 142px; }
 .model-effort > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 7px 10px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: calc(14px + var(--font-step)); }
 .model-effort-menu { position: absolute; z-index: 40; bottom: calc(100% + 5px); right: 0; width: max(100%, 160px); max-height: min(370px, 60vh); overflow-y: auto; padding: 5px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); box-shadow: 0 4px 14px #00000016; }
@@ -50,4 +50,10 @@
 .model-form-footer > span { color: var(--muted); font-size: calc(13px + var(--font-step)); line-height: 1.6; }
 .model-save-button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 15px; border: 1px solid var(--accent); border-radius: 6px; color: var(--paper); background: var(--accent); font-size: calc(14px + var(--font-step)); cursor: pointer; }
 .model-connection-form button:disabled { opacity: .5; cursor: default; }
-@container settings (max-width: 560px) { .model-name-row { grid-template-columns: 1fr; gap: 0; } .model-and-effort { flex-wrap: wrap; } .model-and-effort > input { flex-basis: 100%; } .model-effort { flex-basis: 100%; width: 100%; } .model-effort-menu { width: 100%; } .model-address-row { flex-wrap: wrap; } .model-address-row label { flex-basis: 100%; } .model-form-footer { align-items: flex-start; } }
+.model-subagent-section { margin: 8px 0 28px; padding: 18px 16px 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.model-subagent-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.model-subagent-heading h2 { margin: 0 0 5px; font-size: calc(16px + var(--font-step)); }
+.model-subagent-heading p { margin: 0; color: var(--muted); line-height: 1.6; font-size: calc(13px + var(--font-step)); }
+.model-subagent-fallback { flex: 0 0 auto; color: var(--muted); font-size: calc(12px + var(--font-step)); line-height: 1.5; text-align: right; }
+@container settings (max-width: 560px) { .model-subagent-heading { display: block; } .model-subagent-heading > span { display: block; margin-top: 8px; text-align: left; } }
+@container settings (max-width: 560px) { .model-name-row { grid-template-columns: 1fr; gap: 0; } .model-and-effort { flex-wrap: wrap; } .model-and-effort > input, .model-and-effort > select { flex-basis: 100%; } .model-effort { flex-basis: 100%; width: 100%; } .model-effort-menu { width: 100%; } .model-address-row { flex-wrap: wrap; } .model-address-row label { flex-basis: 100%; } .model-form-footer { align-items: flex-start; } }

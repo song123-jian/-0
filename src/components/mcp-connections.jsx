@@ -64,8 +64,8 @@ export function McpConnections({ onUseContext }) {
       {server.status === 'connected' && <details className="mcp-tools"><summary><ChevronRight size={16} />已发现 {server.tools.length} 项工具<span>展开查看参数与规划权限</span></summary><div>{server.tools.map((tool) => <details className="mcp-tool" key={tool.name}><summary><span>{tool.name}</span>{tool.allowedInPlan && <small><Check size={14} />规划可用</small>}</summary><p>{tool.description || '服务未提供工具说明。'}</p><pre>{JSON.stringify(tool.inputSchema, null, 2)}</pre></details>)}{!server.tools.length && <p>服务未声明工具。</p>}</div></details>}
       {server.status === 'connected' && (server.contextCapabilities?.resources || server.contextCapabilities?.prompts) && <McpContextBrowser server={server} onUseContext={onUseContext} />}
     </article>)}</div>
-    {!state.servers.length && <div className="mcp-empty"><span className="mcp-server-icon"><Plug size={28} /></span><h3>连接你的工具</h3><p>添加已知 MCP 服务，连接后可在启用“执行任务”的对话中使用。</p><button className="primary-button" onClick={() => setEditor(null)}><Plus size={16} />添加第一个连接</button></div>}
-    <p className="mcp-footer-note">普通对话不开放模型工具。规划模式可逐次审批读取资料，调用其他工具需要只读白名单；禁止审批的策略不开放模型 MCP 调用。服务不会随应用启动自动运行，切换项目或退出时会断开。</p>
+    {!state.servers.length && <div className="mcp-empty"><span className="mcp-server-icon"><Plug size={28} /></span><h3>连接你的工具</h3><p>添加已知 MCP 服务，连接后可直接在对话中按当前权限使用。</p><button className="primary-button" onClick={() => setEditor(null)}><Plus size={16} />添加第一个连接</button></div>}
+    <p className="mcp-footer-note">仅对话不开放本机工具。规划可读取资料，其他工具需要只读白名单；完整访问且不请求审批时直接调用，按请求审批时逐项确认。服务不会随应用启动自动运行，切换项目或退出时会断开。</p>
     {editor !== undefined && <ConnectionEditor connection={editor} onClose={() => setEditor(undefined)} onSave={async (input) => { setState(await window.scodex.saveMcpConnection(input)); }} />}
   </div>;
 }

@@ -169,6 +169,7 @@ const actionLabels = {
   browser_screenshot: '截取网页', browser_close: '关闭网页',
   spreadsheet_read: '读取表格', spreadsheet_edit: '保存表格',
   image_read: '查看图片', image_edit: '保存图片',
+  artifact_read: '读取办公成品', artifact_write: '保存办公成品', artifact_image: '生成图片', goal_finish: '报告目标结果',
 };
 export function operationCaption(operation) {
   const action = actionLabels[operation.name] || operation.title || operation.name || '操作';

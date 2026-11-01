@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scodex 电脑操控</title>
+  <link rel="stylesheet" href="desktop-control.css">
+</head>
+<body>
+  <main aria-label="电脑操控状态">
+    <span class="indicator" aria-hidden="true"></span>
+    <div class="message" role="status" aria-live="polite">
+      <strong id="title">Scodex 正在使用你的电脑</strong>
+      <span id="hint">按 Esc 可停止</span>
+    </div>
+    <button id="stop" type="button" aria-label="停止电脑操控">停止</button>
+  </main>
+  <script src="desktop-control-renderer.js"></script>
+</body>
+</html>

@@ -64,6 +64,21 @@ test('path traversal, secrets, reference configuration and directory junctions a
   await assert.rejects(fs.access(path.join(outside, 'out.txt')));
 });
 
+test('assigned agents can only read and edit within their declared paths', async (t) => {
+  const { root, tools } = await fixture(t, { allowedPaths: ['src/owned.js'], allowedTools: ['read_file', 'write_file', 'edit_file'] });
+  await fs.mkdir(path.join(root, 'src'));
+  await fs.writeFile(path.join(root, 'src', 'owned.js'), 'owned');
+  await fs.writeFile(path.join(root, 'src', 'other.js'), 'other');
+  const read = await tools.execute('read_file', { path: 'src/owned.js' });
+  const edit = await tools.execute('edit_file', { path: 'src/owned.js', expected_hash: read.hash, old_text: 'owned', new_text: 'updated' });
+  assert.equal(edit.ok, true);
+  await assert.rejects(tools.execute('read_file', { path: 'src/other.js' }), /分配范围/);
+  await assert.rejects(tools.execute('write_file', { path: 'new.js', expected_hash: 'new', content: 'no' }), /分配范围/);
+  assert.equal(tools.definitions.some((item) => item.function.name === 'run_command'), false);
+  assert.equal(await fs.readFile(path.join(root, 'src', 'owned.js'), 'utf8'), 'updated');
+  assert.equal(await fs.readFile(path.join(root, 'src', 'other.js'), 'utf8'), 'other');
+});
+
 test('planning tools inspect project instructions and search while rejecting writes and commands', async (t) => {
   const { root, tools } = await fixture(t, { readOnly: true });
   await fs.writeFile(path.join(root, 'AGENTS.md'), '请保留中文。'); await fs.mkdir(path.join(root, 'src'));
@@ -83,4 +98,33 @@ test('user changes occurring during permission approval remain intact', async (t
   const before = await fixtureData.tools.execute('read_file', { path: 'a.txt' });
   await assert.rejects(fixtureData.tools.execute('write_file', { path: 'a.txt', expected_hash: before.hash, content: 'candidate' }), /基线/);
   assert.equal(await fs.readFile(path.join(root, 'a.txt'), 'utf8'), 'concurrent');
+});
+
+test('full access includes ancestor instructions for an outside target', async t => {
+  const { tools } = await fixture(t, { fullAccess: true });
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-outside-rules-'));
+  t.after(() => fs.rm(outside, { recursive: true, force: true }));
+  await fs.mkdir(path.join(outside, 'child'));
+  await fs.writeFile(path.join(outside, 'AGENTS.md'), '外部目录规则');
+  await fs.writeFile(path.join(outside, 'child/a.txt'), '内容');
+  const result = await tools.execute('read_file', { path: path.join(outside, 'child/a.txt') });
+  assert.ok(result.instructions.some(i => i.content === '外部目录规则'));
+});
+
+test('full access reads and edits an outside file and runs a command in its directory', async (t) => {
+  const { tools } = await fixture(t, { fullAccess: true });
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-full-access-'));
+  t.after(() => fs.rm(outside, { recursive: true, force: true }));
+  const file = path.join(outside, '中文.txt'); await fs.writeFile(file, '原内容');
+  const before = await tools.execute('read_file', { path: file });
+  await tools.execute('edit_file', { path: file, expected_hash: before.hash, old_text: '原内容', new_text: '完整访问' });
+  assert.equal(await fs.readFile(file, 'utf8'), '完整访问');
+  const command = process.platform === 'win32' ? '(Get-Location).Path' : 'pwd';
+  const result = await tools.execute('run_command', { cwd: outside, command });
+  assert.equal(result.exitCode, 0); assert.ok(result.output.toLowerCase().includes(outside.toLowerCase()));
+  await tools.execute('write_file', { path: path.join(outside, 'nested/new.txt'), expected_hash: 'new', content: '新增' });
+  assert.equal(await fs.readFile(path.join(outside, 'nested/new.txt'), 'utf8'), '新增');
+  await assert.rejects(tools.execute('read_file', { path: path.join(outside, '.env') }), /保护/);
+  await fs.symlink(outside, path.join(outside, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(tools.execute('read_file', { path: path.join(outside, 'link/中文.txt') }), /符号链接|联接/);
 });

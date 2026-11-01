@@ -95,6 +95,12 @@ async function select(name, value, key) {
   await cdp.evaluate(`{const el=document.querySelector(${JSON.stringify(aria(name))}); el.value=${JSON.stringify(String(value))}; el.dispatchEvent(new Event('change',{bubbles:true}));}`);
   if (key) await waitFor(async () => (await preferences())[key] === value, `${name} disk readback`);
 }
+async function selectFileOpen(value) {
+  await click(aria('默认文件打开位置'));
+  await waitFor(() => cdp.evaluate('Boolean(document.querySelector(".settings-file-open-menu"))'), 'file open menu');
+  await cdp.evaluate(`document.querySelector('.settings-file-open-option[role="option"][data-value="${String(value).replaceAll('"', '')}"]')?.click()`);
+  await waitFor(async () => (await preferences()).defaultFileOpen === value, `默认文件打开位置 disk readback: ${value}`);
+}
 async function toggle(name, setting, value) {
   const selector = aria(name);
   const before = { disk: (await preferences())[setting], control: await cdp.evaluate(`document.querySelector(${JSON.stringify(selector)})?.outerHTML`) };
@@ -131,7 +137,7 @@ async function nativeClose() {
 async function prepare() {
   for (const dir of [profile, workspace, path.join(isolatedHome, 'skills', 'settings-check')]) await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(isolatedHome, 'skills', 'settings-check', 'SKILL.md'), '---\nname: settings-check\ndescription: Local settings acceptance fixture\n---\nOnly a local test instruction.\n');
-  const continuedPreferences = process.argv.includes('--continue-after-general') || finishOnly ? { contextAccess: 'manual', defaultFileOpen: 'builtin', terminalShell: 'cmd', closeConfirmation: 'busy', defaultMode: 'code', sendShortcut: 'enter', notifyOnComplete: false, notificationSound: 'silent', notifyOnPermissions: false, notifyOnIssues: false, skillsEnabled: true, showEditorStatusBar: true, defaultFullView: false, railCollapsed: true } : {};
+  const continuedPreferences = process.argv.includes('--continue-after-general') || finishOnly ? { contextAccess: 'manual', defaultFileOpen: 'vscode', terminalShell: 'cmd', closeConfirmation: 'busy', defaultMode: 'code', sendShortcut: 'enter', notifyOnComplete: false, notificationSound: 'silent', notifyOnPermissions: false, notifyOnIssues: false, skillsEnabled: true, showEditorStatusBar: true, defaultFullView: false, railCollapsed: true } : {};
   const finishPreferences = finishOnly ? { fontSize: 18, fontFamily: 'Microsoft YaHei', themeMode: 'system', themeStyle: 'high-contrast', accentColor: '#6747AB', backgroundColor: '#EEF2F9', foregroundColor: '#202B44', compressHistory: true, autoArchiveDays: 0 } : {};
   await fs.writeFile(path.join(profile, 'settings.json'), JSON.stringify({ workspaceRoot: workspace, preferences: { browserPanelOpen: false, ...continuedPreferences, ...finishPreferences } }));
   const old = new Date(Date.now() - 120 * 86400000).toISOString();
@@ -165,13 +171,14 @@ async function run() {
   });
   if (process.argv.includes('--continue-after-general')) report.checks.push({ name: '常规选项操作与落盘、受限能力真实提示', status: 'passed', reused: '同一 EXE 与 renderer 上轮 UI 与磁盘回读通过；后续组使用相同偏好的隔离前置数据，不替代真实程序' });
   else await check('常规选项操作与落盘、受限能力真实提示', async () => {
-    for (const [name, value, setting] of [['默认权限', 'chat-only', 'contextAccess'], ['默认文件打开方式', 'system', 'defaultFileOpen'], ['集成终端 Shell', 'cmd', 'terminalShell'], ['关闭窗口前确认', 'always', 'closeConfirmation'], ['新对话默认模式', 'code', 'defaultMode'], ['发送快捷键', 'enter', 'sendShortcut'], ['任务完成通知', 'off', 'notifyOnComplete'], ['通知提示音', 'silent', 'notificationSound']]) {
+    for (const [name, value, setting] of [['默认权限', 'chat-only', 'contextAccess'], ['集成终端 Shell', 'cmd', 'terminalShell'], ['关闭窗口前确认', 'always', 'closeConfirmation'], ['新对话默认模式', 'code', 'defaultMode'], ['发送快捷键', 'enter', 'sendShortcut'], ['任务完成通知', 'off', 'notifyOnComplete'], ['通知提示音', 'silent', 'notificationSound']]) {
       await select(name, value, setting === 'notifyOnComplete' ? undefined : setting);
     }
+    await selectFileOpen('git-bash');
     await toggle('权限通知', 'notifyOnPermissions', false); await toggle('问题通知', 'notifyOnIssues', false); await toggle('允许使用本地 SKILL 指引', 'skillsEnabled', false);
     const prefs = await preferences(); assert.equal(prefs.notifyOnComplete, false);
     assert.equal(await cdp.evaluate('document.querySelector(".settings-detail").textContent.includes("暂不可用") && document.querySelector(".settings-detail").textContent.includes("未接入")'), true);
-    await select('关闭窗口前确认', 'busy', 'closeConfirmation'); await select('默认文件打开方式', 'builtin', 'defaultFileOpen'); await select('默认权限', 'manual', 'contextAccess');
+    await select('关闭窗口前确认', 'busy', 'closeConfirmation'); await selectFileOpen('vscode'); await select('默认权限', 'manual', 'contextAccess');
     await toggle('底部面板', 'showEditorStatusBar', false);
     await click(aria('文件与代码')); assert.equal(await cdp.evaluate('getComputedStyle(document.querySelector(".editor-statusbar")).display'), 'none');
     await click(aria('设置')); await toggle('底部面板', 'showEditorStatusBar', true);

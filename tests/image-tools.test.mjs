@@ -7,6 +7,16 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),{createImageTools,validate,imageHeader}=require('../electron/image-tools.cjs');
 const {createAgentTools}=require('../electron/agent-tools.cjs'),{runModelTask}=require('../electron/agent-runtime.cjs'),{png}=require('./image-fixtures.cjs');
 const preview='data:image/png;base64,'+png(10,10).toString('base64');
+
+test('full access with never exposes image read/edit while planning remains read only', async t => {
+  const f = await fixture(t, { policy: () => 'never', fullAccess: () => true });
+  assert.deepEqual(f.tools.definitions.map(d => d.function.name), ['image_read', 'image_edit']);
+  const before = await f.read(); await f.edit(before.hash);
+  assert.equal((await fs.stat(path.join(f.root, 'out.png'))).isFile(), true);
+  const plan = await fixture(t, { policy: () => 'never', fullAccess: () => true, readOnly: true });
+  assert.deepEqual(plan.tools.definitions.map(d => d.function.name), ['image_read']);
+  await assert.rejects(plan.edit('a'.repeat(64)), /规划/);
+});
 async function fixture(t,extra={}) {
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'scodex-image-unit-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
   await fs.writeFile(path.join(root,'a.png'),png(10,10));
@@ -38,11 +48,11 @@ test('dirty, stale/unread target and source conflicts prevent overwrite',async t
 test('refusal, cancelled and changed policy are enforced after approvals',async t=>{
   const f=await fixture(t,{approve:async()=>{throw Error('用户拒绝');}});await assert.rejects(f.read(),/拒绝/);
   let policy='on-request';const c=new AbortController(),g=await fixture(t,{policy:()=>policy,approve:async()=>{c.abort();}});await assert.rejects(g.read('a.png',{signal:c.signal}),/停止/);
-  const h=await fixture(t,{policy:()=>policy,approve:async()=>{policy='never';}});await assert.rejects(h.read(),/审批/);
+  const h=await fixture(t,{policy:()=>policy,approve:async()=>{policy='never';}});await assert.rejects(h.read(),/当前权限不允许图片操作/);
 });
 test('plan and never catalogs, traversal, credentials and processor failure preserve files',async t=>{
   const f=await fixture(t,{readOnly:true});assert.deepEqual(f.tools.definitions.map(d=>d.function.name),['image_read']);await assert.rejects(f.edit('a'.repeat(64)),/规划/);
-  const n=await fixture(t,{policy:()=> 'never'});assert.equal(n.tools.definitions.length,0);await assert.rejects(n.read(),/审批/);
+  const n=await fixture(t,{policy:()=> 'never'});assert.equal(n.tools.definitions.length,0);await assert.rejects(n.read(),/当前权限不允许图片操作/);
   const g=await fixture(t);await assert.rejects(g.read('../a.png'),/项目/);await assert.rejects(g.read('.codex/a.png'),/保护/);
   let fail=false;const h=await fixture(t,{processor:async()=>{if(fail)throw Error('解码失败');return {width:10,height:10,preview,thumbnail:preview};}});const r=await h.read();fail=true;await assert.rejects(h.edit(r.hash),/解码失败/);await assert.rejects(fs.access(path.join(h.root,'out.png')));
 });

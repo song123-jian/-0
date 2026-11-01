@@ -1,5 +1,6 @@
 const { validMode } = require('./conversations.cjs');
 const path = require('node:path');
+const { normalizeFileOpenMode } = require('./file-open.cjs');
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const FONT_FAMILIES = require('./font-families.json').map(([value]) => value);
@@ -48,7 +49,7 @@ function normalizePreferences(value = {}) {
     backgroundColor: HEX_COLOR.test(value.backgroundColor || '') ? value.backgroundColor.toUpperCase() : null,
     foregroundColor: HEX_COLOR.test(value.foregroundColor || '') ? value.foregroundColor.toUpperCase() : null,
     fontFamily: FONT_FAMILIES.includes(value.fontFamily) ? value.fontFamily : 'Microsoft YaHei',
-    defaultFileOpen: value.defaultFileOpen === 'system' ? 'system' : 'builtin',
+    defaultFileOpen: normalizeFileOpenMode(value.defaultFileOpen),
     terminalShell: value.terminalShell === 'cmd' ? 'cmd' : 'powershell',
     closeConfirmation: value.closeConfirmation === 'always' ? 'always' : 'busy',
     trayEnabled: value.trayEnabled === undefined ? true : Boolean(value.trayEnabled),
@@ -64,6 +65,7 @@ function normalizePreferences(value = {}) {
     computerControlEnabled: Boolean(value.computerControlEnabled),
     computerAllowedApps: [...new Set(boundedStrings(value.computerAllowedApps, DESKTOP_APP_IDS.length, 20).filter((id) => DESKTOP_APP_IDS.includes(id)))],
     browserAiEnabled: Boolean(value.browserAiEnabled),
+    browserCdpEnabled: Boolean(value.browserCdpEnabled),
     browserShowFullUrl: value.browserShowFullUrl === undefined ? true : Boolean(value.browserShowFullUrl),
     browserLinkOpenTarget: value.browserLinkOpenTarget === 'system' ? 'system' : 'builtin',
     browserLocalUrlTarget: value.browserLocalUrlTarget === 'system' ? 'system' : 'builtin',

@@ -161,9 +161,9 @@ function createMcpRuntime({ store, getWorkspaceRoot, environment = async () => p
     }finally{authorizationRequests.delete(id);notify();}
     return snapshot();
   }
-  function agentTools({ readOnly = false, guard, approve, policy }) {
+  function agentTools({ readOnly = false, guard, approve, policy, fullAccess = () => false }) {
     const captured = new Map();
-    if (policy() !== 'on-request') return { definitions: [], execute: async () => { throw new Error('MCP 工具必须逐次审批，当前策略不允许。'); } };
+    if (!require('./permission-policy.cjs').toolPolicyAllowed(policy(), fullAccess())) return { definitions: [], execute: async () => { throw new Error('当前策略不允许 MCP 工具。'); } };
     for (const entry of entries.values()) if (entry.status === 'connected') for (const tool of entry.tools) {
       if (captured.size >= MAX_TOOLS) break;
       if (readOnly && !(tool.annotations?.readOnlyHint === true && entry.config.readOnlyTools.includes(tool.name))) continue;
@@ -171,10 +171,10 @@ function createMcpRuntime({ store, getWorkspaceRoot, environment = async () => p
       captured.set(name, { entry, tool, generation: entry.generation, revision: entry.revision, validate: validator.getValidator(tool.inputSchema) });
     }
     function current(item) {
-      if (policy() !== 'on-request') throw new Error('当前策略不允许 MCP 调用。');
+      if (!require('./permission-policy.cjs').toolPolicyAllowed(policy(), fullAccess())) throw new Error('当前策略不允许 MCP 调用。');
       if (entries.get(item.entry.config.id) !== item.entry || item.entry.status !== 'connected' || item.entry.generation !== item.generation || item.entry.revision !== item.revision) throw new Error('MCP 连接或工具目录已变化，请重新发起任务。');
     }
-    const contextual = contexts.agentTools({ readOnly, guard, approve, policy, limit: Math.max(0, MAX_TOOLS - captured.size) });
+    const contextual = contexts.agentTools({ readOnly, guard, approve, policy, fullAccess, limit: Math.max(0, MAX_TOOLS - captured.size) });
     return {
       definitions: [...contextual.definitions, ...[...captured].map(([name, { entry, tool }]) => ({ type: 'function', function: { name,
         description: ('MCP · ' + entry.config.name + ' / ' + tool.name + '\n' + tool.description).slice(0, 3000), parameters: tool.inputSchema } }))],

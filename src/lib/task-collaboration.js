@@ -59,6 +59,5 @@ export function prepareTaskHandoff(library, projects, runningIds, input) {
   if (runningIds.includes(target.id)) throw Error('目标任务仍在运行，请等待结束。');
   if (target.draft) throw Error('目标任务有未发送草稿，请先处理草稿。');
   if (runningIds.length >= 3) throw Error('最多同时运行3个聊天任务，请等待其中一项结束。');
-  if (executionEnabled && !target.executionEnabled) throw Error('目标任务未启用项目工具，请先在目标任务中启用。');
   return { target, prompt: `【任务交接】来自“${source.title}”（${source.id}）\n以下是用户确认发送的交接内容；仍须遵守目标任务现有权限与审批。\n\n${text.trim()}` };
 }

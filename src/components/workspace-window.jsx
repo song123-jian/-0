@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ArrowUpRight, Braces, FolderOpen, LoaderCircle, MessageSquare, Plus, Square } from 'lucide-react';
+import { ArrowUp, ArrowUpRight, FolderOpen, LoaderCircle, MessageSquare, Plus, Square } from 'lucide-react';
 import { MessageBubble } from '../workbench.jsx';
 import { ConversationVersions, MessageRevisionDialog } from './conversation-revisions.jsx';
 import { revisionStamp, revisionSource } from '../lib/conversation-revisions.js';
@@ -42,7 +42,7 @@ export function WorkspaceWindow() {
       <div className="detached-composer"><textarea ref={inputRef} aria-label="独立窗口输入工作内容" placeholder={archived?'聊天已归档，请先在主工作台恢复':'输入工作内容…'} value={draft} disabled={archived} maxLength={64000}
         onChange={e=>{setDraft(e.target.value);draftRef.current=e.target.value;pendingDraftRef.current=e.target.value;action({type:'draft',text:e.target.value});}}
         onKeyDown={e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&!e.nativeEvent.isComposing){e.preventDefault();send();}}}/>
-        <div><button type="button" className={'agent-execution-toggle '+(chat.executionEnabled?'active':'')} aria-label="独立窗口执行任务" aria-pressed={Boolean(chat.executionEnabled)} disabled={busy||archived||!snapshot.canExecute} onClick={()=>action({type:'execution'})}><Braces size={17}/>{chat.executionEnabled?'执行任务':'对话模式'}</button><span>{chat.model||snapshot.model} · {chat.mode==='plan'?'规划只读':'当前项目'}</span>
+        <div><span>{chat.model||snapshot.model} · {chat.mode==='plan'?'规划只读':snapshot.canExecute?'自动衔接':'仅对话'}</span>
         {busy?<button type="button" className="send-button stop-button" aria-label="独立窗口停止生成" onClick={()=>action({type:'stop'})}><Square size={15}/></button>:<button type="button" className="send-button" aria-label="独立窗口发送消息" disabled={!draft.trim()||waiting||archived} onClick={send}><ArrowUp size={18}/></button>}</div></div>
     </>}
     {error&&<div className="detached-error" role="alert">{error}</div>}

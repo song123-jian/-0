@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Bot, Check, ChevronDown, Clipboard, FolderOpen, GitBranch, Globe, Info, Keyboard, LayoutPanelLeft, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, Sun, X } from 'lucide-react';
+import { AppWindow, BookOpen, Bot, Check, ChevronDown, Clipboard, Code2, Folder, FolderOpen, GitBranch, Globe, Info, Keyboard, LayoutPanelLeft, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, Sun, Terminal, X } from 'lucide-react';
 import { WORK_MODES } from '../lib/modes.js';
 import { StoragePanel } from './storage-panel.jsx';
 import { ModelConnectionPanel } from './model-connection-panel.jsx';
@@ -13,6 +13,7 @@ const CATEGORIES = [
   { id: 'storage', label: '存储空间', icon: FolderOpen, group: '个人', search: '数据目录 会话 草稿 文件 保存 本地 归档 聊天 子智能体 工作树 清理' },
   { id: 'shortcuts', label: '键盘快捷键', icon: Keyboard, group: '个人', search: 'Ctrl K P S Enter 快捷键' },
   { id: 'model', label: '模型与连接', icon: Globe, group: '集成', search: 'Grok 中转站 服务地址 密钥 凭据 API 网络' },
+  { id: 'sync', label: '应用同步', icon: RefreshCw, group: '集成', search: 'Supabase 云同步 应用同步 冲突 离线 副本 Key' },
   { id: 'agent', label: '配置', icon: Bot, group: '集成', search: '智能体 默认 审批 策略 沙盒 权限 网页搜索 输出详细程度 推理摘要 可用推理强度 工作空间依赖 诊断 重新安装 config.toml' },
   { id: 'skills', label: 'SKILL 技能', icon: BookOpen, group: '集成', search: '技能 SKILL 指引 目录 搜索 启用 停用 刷新 自动调用' },
   { id: 'computer', label: '电脑操控', icon: Monitor, group: '集成', search: '桌面 应用 Chrome Edge Excel 授权 扩展' },
@@ -27,12 +28,52 @@ const ACCENT_PRESETS = [
   ['purple', '紫色', '#7259B8'], ['black', '黑色', '#34383B'],
 ];
 
+const FILE_OPEN_OPTIONS = [
+  ['vscode', 'VS Code', Code2, 'vscode'],
+  ['visual-studio', 'Visual Studio', AppWindow, 'visual-studio'],
+  ['default', 'Default app', AppWindow, 'default'],
+  ['explorer', 'File Explorer', Folder, 'explorer'],
+  ['git-bash', 'Git Bash', Terminal, 'git-bash'],
+];
+
 function SettingRow({ label, description, children, wide = false }) {
   return <div className={'settings-row ' + (wide ? 'wide-control' : '')}><div className="settings-row-copy"><strong>{label}</strong>{description && <p>{description}</p>}</div><div className="settings-row-control">{children}</div></div>;
 }
 
 function SettingsGroup({ title, children }) {
   return <section className="settings-section"><h2>{title}</h2><div className="settings-row-group">{children}</div></section>;
+}
+
+function FileOpenLocationSelect({ value, onChange }) {
+  const root = useRef(null);
+  const trigger = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
+  const selected = FILE_OPEN_OPTIONS.find(([key]) => key === value) || FILE_OPEN_OPTIONS[0];
+  const SelectedIcon = selected[2];
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (event) => { if (!root.current?.contains(event.target)) setOpen(false); };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); setOpen(false); trigger.current?.focus(); }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('pointerdown', closeOutside); document.removeEventListener('keydown', onKeyDown); };
+  }, [open]);
+  const toggleOpen = () => {
+    if (!open) {
+      const bounds = trigger.current?.getBoundingClientRect();
+      setOpenUp(Boolean(bounds && bounds.bottom + 230 > window.innerHeight));
+    }
+    setOpen((current) => !current);
+  };
+  return <div className="settings-file-open-select" ref={root}>
+    <button ref={trigger} type="button" className="settings-file-open-trigger" aria-label="默认文件打开位置" aria-haspopup="listbox" aria-expanded={open} onClick={toggleOpen}>
+      <SelectedIcon size={18} aria-hidden="true" /><span>{selected[1]}</span><ChevronDown size={16} aria-hidden="true" />
+    </button>
+    {open && <div className={'settings-file-open-menu' + (openUp ? ' open-up' : '')} role="listbox" aria-label="默认文件打开位置选项">{FILE_OPEN_OPTIONS.map(([key, label, Icon, tone]) => <button type="button" role="option" data-value={key} aria-selected={value === key} className={'settings-file-open-option ' + (value === key ? 'selected ' : '') + 'tone-' + tone} key={key} onClick={() => { onChange(key); setOpen(false); trigger.current?.focus(); }}><Icon size={18} aria-hidden="true" /><span>{label}</span>{value === key && <Check size={17} aria-hidden="true" />}</button>)}</div>}
+  </div>;
 }
 
 function Switch({ label, checked, onChange, disabled = false }) {
@@ -68,6 +109,62 @@ function AccentSelect({ value, onChange }) {
 
 function AppearanceModes({ value, onChange }) {
   return <div className="settings-mode-choices" role="group" aria-label="外观模式">{[['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([mode, label]) => <button key={mode} type="button" className={'settings-mode-choice ' + (value === mode ? 'selected' : '')} aria-label={label} aria-pressed={value === mode} onClick={() => onChange(mode)}><span className={'settings-mode-preview preview-' + mode} aria-hidden="true"><span className="preview-sidebar"><i /><i /><i /></span><span className="preview-content"><i /><i /><i /><b /></span></span><span>{label}</span></button>)}</div>;
+}
+
+function SupabaseSyncSettings({ appState, chatBusy, onSaved, onSync }) {
+  const initial = appState?.supabaseSync || { projectUrl: '', syncId: 'default', enabled: false, hasCredential: false, version: 0 };
+  const [savedState, setSavedState] = useState(initial);
+  const current = savedState;
+  const [form, setForm] = useState({ projectUrl: current.projectUrl || '', syncId: current.syncId || 'default', enabled: Boolean(current.enabled) });
+  const [anonKey, setAnonKey] = useState('');
+  const [syncSecret, setSyncSecret] = useState('');
+  const [working, setWorking] = useState('');
+  const [status, setStatus] = useState(null);
+  useEffect(() => {
+    setSavedState(initial);
+    setForm({ projectUrl: initial.projectUrl || '', syncId: initial.syncId || 'default', enabled: Boolean(initial.enabled) });
+  }, [initial.projectUrl, initial.syncId, initial.enabled, initial.version, initial.hasCredential]);
+
+  const save = async () => {
+    setWorking('save');
+    setStatus(null);
+    try {
+      const saved = await window.scodex.saveSupabaseSync({ ...form, ...(anonKey.trim() ? { anonKey } : {}), ...(syncSecret ? { syncSecret } : {}) });
+      setAnonKey(''); setSyncSecret('');
+      setSavedState(saved);
+      onSaved?.(saved);
+      setForm({ projectUrl: saved.projectUrl || '', syncId: saved.syncId || 'default', enabled: Boolean(saved.enabled) });
+      setStatus({ type: 'ok', text: saved.enabled ? '同步配置已保存；可执行手动同步。' : '同步配置已保存，当前未启用。' });
+    } catch (error) {
+      setStatus({ type: 'error', text: String(error?.message || error) });
+    } finally { setWorking(''); }
+  };
+
+  const syncNow = async () => {
+    setWorking('sync');
+    setStatus(null);
+    try {
+      const result = await onSync();
+      if (result.status === 'conflict') setStatus({ type: 'conflict', text: '发现远端版本冲突，已保留本地和远端数据，未覆盖任何一方。' });
+      else { setSavedState((value) => ({ ...value, version: result.version })); onSaved?.({ ...current, version: result.version }); setStatus({ type: 'ok', text: `双向同步完成，版本 ${result.version}；保留 ${result.conflicts || 0} 个冲突副本。` }); }
+    } catch (error) {
+      setStatus({ type: 'error', text: String(error?.message || error) });
+    } finally { setWorking(''); }
+  };
+
+  return <>
+    <SettingsGroup title="Supabase 应用级同步">
+      <SettingRow label="启用同步" description="双向同步聊天、目标、聊天附件内容和外观偏好；密钥、本机权限与项目路径留在本机。"><Switch label="启用 Supabase 应用同步" checked={form.enabled} disabled={working !== ''} onChange={(enabled) => setForm((value) => ({ ...value, enabled }))} /></SettingRow>
+      <SettingRow label="Supabase 项目地址" description="填写项目根地址，例如 https://your-project.supabase.co。"><input className="integration-prefix" aria-label="Supabase 项目地址" value={form.projectUrl} disabled={working !== ''} onChange={(event) => setForm((value) => ({ ...value, projectUrl: event.target.value }))} /></SettingRow>
+      <SettingRow label="同步空间" description="同一项目内用于区分应用副本，只能使用字母、数字、点、下划线和连字符。"><input className="integration-prefix" aria-label="Supabase 同步空间" value={form.syncId} disabled={working !== ''} onChange={(event) => setForm((value) => ({ ...value, syncId: event.target.value }))} /></SettingRow>
+      <SettingRow label="Supabase anon key" description={current.hasCredential ? '已保存加密凭据；留空表示继续使用现有凭据。' : '只在本机加密保存，不会显示或写入普通设置文件。'}><input className="integration-prefix" aria-label="Supabase anon key" type="password" value={anonKey} disabled={working !== ''} autoComplete="new-password" onChange={(event) => setAnonKey(event.target.value)} /></SettingRow>
+      <SettingRow label="端到端同步口令" description={current.hasSyncSecret ? '已加密保存。所有设备使用同一口令；留空沿用。云端只保存密文。' : '输入至少16字符的共享口令；丢失口令将无法解密远端记录。'}><input aria-label="同步加密口令" className="integration-prefix" type="password" autoComplete="new-password" value={syncSecret} maxLength={512} onChange={event => setSyncSecret(event.target.value)} /></SettingRow>
+      <SettingRow label="保存配置" description={`当前远端版本：${current.version ?? 0}。保存只更新本机配置，不会立即写入 Supabase。`}><button className="secondary-button" type="button" disabled={working !== ''} onClick={save}>{working === 'save' ? '保存中…' : '保存配置'}</button></SettingRow>
+      <SettingRow label="手动同步" description="三方合并本地与远端修改；并发编辑保存冲突副本，远端再次变化时停止本轮写入。"><button className="primary-button" type="button" disabled={working !== '' || chatBusy || !current.enabled || !current.hasCredential || !current.hasSyncSecret} onClick={syncNow}><RefreshCw size={16} />{working === 'sync' ? '同步中…' : '立即同步'}</button></SettingRow>
+    </SettingsGroup>
+    {status && <section className="settings-config-status" aria-live="polite"><p className={status.type === 'error' ? 'settings-agent-error' : ''} role={status.type === 'error' ? 'alert' : 'status'}>{status.text}</p></section>}
+    <p className="settings-footnote">同步只使用专用表 `scodex_sync_records`；不会修改 Supabase 其他业务表。首次启用前请先在独立测试项目执行本轮 SQL。</p>
+  </>;
 }
 
 function LicenseDialog({ onClose }) {
@@ -129,7 +226,7 @@ function ReasoningEffortSelect({ value, onChange }) {
   </details>;
 }
 
-export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnectionSaved, onModalChange, appState, workspaceRoot, preferences, resolvedTheme, agentSettings: effectiveAgentSettings, onPreference, onAgentSetting, onConfigureConversationStorage, onOpenCodexConfig, onDiagnoseCodex, onOpenCodexDiagnostic, onUpdateCodex, onReinstallTools, onChooseWorkspace, onReveal, onCopyPath, onRefreshSkills, skills = [], connectionLabel, onView, library, chatBusy, onManageChats }) {
+export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onModelConnectionSaved, onSupabaseSyncSaved, onModalChange, appState, workspaceRoot, preferences, resolvedTheme, agentSettings: effectiveAgentSettings, onPreference, onAgentSetting, onConfigureConversationStorage, onOpenCodexConfig, onDiagnoseCodex, onOpenCodexDiagnostic, onUpdateCodex, onReinstallTools, onChooseWorkspace, onReveal, onCopyPath, onRefreshSkills, skills = [], connectionLabel, onView, library, chatBusy, onManageChats }) {
   const [selected, setSelected] = useState(initialCategory?.id || 'general');
   const [desktopError, setDesktopError] = useState('');
   useEffect(() => { if (initialCategory?.id && CATEGORIES.some((item) => item.id === initialCategory.id)) setSelected(initialCategory.id); }, [initialCategory]);
@@ -165,6 +262,19 @@ export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnecti
   const updateAgentSetting = async (key, value) => {
     setSavingAgent(true);
     try { return await onAgentSetting(key === null ? null : { [key]: value }, scope); }
+    finally { setSavingAgent(false); }
+  };
+  const enableFullAccess = async () => {
+    setSavingAgent(true);
+    setDesktopError('');
+    try {
+      // Apply to the active workspace so an existing override cannot hide the preset.
+      const saved = await onAgentSetting({ sandboxMode: 'danger-full-access', approvalPolicy: 'never', networkAccess: true, networkDomains: ['*'], allowLocalBinding: true }, 'workspace');
+      if (!saved) throw new Error('权限保存失败，请重试。');
+      const enabled = await onPreference({ computerControlEnabled: true });
+      if (!enabled) throw new Error('权限已保存，电脑操控启用失败，请在电脑操控页开启。');
+      setScope('workspace');
+    } catch (error) { setDesktopError(String(error.message || error)); }
     finally { setSavingAgent(false); }
   };
   const runCodexAction = async (kind, action) => {
@@ -212,7 +322,7 @@ export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnecti
           <SettingsGroup title="常规">
             <SettingRow label="本地聊天文件夹" description={appState?.conversationDirectory || appState?.userDataPath || '当前应用数据目录'} wide><button className="secondary-button" disabled={chatBusy || Boolean(appState?.historyError)} onClick={() => onConfigureConversationStorage({ chooseDirectory: true })}><FolderOpen size={16} />更改</button></SettingRow>
             <SettingRow label="本地工作区" description={workspaceRoot} wide><button className="secondary-button" onClick={onChooseWorkspace}>更改</button></SettingRow>
-            <SettingRow label="默认文件打开位置" description="在内置编辑器中打开文件，或使用 Windows 默认程序。"><select aria-label="默认文件打开方式" value={preferences.defaultFileOpen} onChange={(event) => onPreference({ defaultFileOpen: event.target.value })}><option value="builtin">Scodex 编辑器</option><option value="system">Windows 默认程序</option></select></SettingRow>
+            <SettingRow label="默认文件打开位置" description="默认打开文件和文件夹的位置。"><FileOpenLocationSelect value={preferences.defaultFileOpen} onChange={(value) => onPreference({ defaultFileOpen: value })} /></SettingRow>
             <SettingRow label="集成终端 Shell" description="从工作台打开终端时使用的程序。"><select aria-label="集成终端 Shell" value={preferences.terminalShell} onChange={(event) => onPreference({ terminalShell: event.target.value })}><option value="powershell">PowerShell</option><option value="cmd">命令提示符</option></select></SettingRow>
             <SettingRow label="语言" description="当前桌面界面语言。"><span className="settings-value">简体中文</span></SettingRow>
             <SettingRow label="退出程序前确认" description="完整退出时检查未保存文件和生成请求；隐藏到托盘不会丢弃编辑。"><select aria-label="关闭窗口前确认" value={preferences.closeConfirmation} onChange={(event) => onPreference({ closeConfirmation: event.target.value })}><option value="busy">有未完成工作时</option><option value="always">每次关闭</option></select></SettingRow>
@@ -232,7 +342,7 @@ export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnecti
           </SettingsGroup>
           <SettingsGroup title="编辑器">
             <SettingRow label="纯文本编辑器" description="代码、Markdown 和链接均以纯文本编辑。"><span className="settings-value">已启用</span></SettingRow>
-            <SettingRow label="显示上下文窗口使用情况" description="当前中转站没有提供上下文用量，接入后才能显示。"><span className="settings-value">暂不可用</span></SettingRow>
+            <SettingRow label="显示上下文窗口使用情况" description="模型与连接中可查看服务返回的token用量；上下文容量比例需服务提供容量。"><span className="settings-value">暂不可用</span></SettingRow>
             <SettingRow label="发送快捷键" description="Shift Enter 始终换行；中文输入法选词时不会发送。"><select aria-label="发送快捷键" value={preferences.sendShortcut} onChange={(event) => onPreference({ sendShortcut: event.target.value })}><option value="ctrl-enter">Ctrl Enter 发送</option><option value="enter">Enter 发送</option></select></SettingRow>
             <SettingRow label="跟进处理方式" description="生成过程中可停止当前请求，结束后再发送下一条。"><span className="settings-value">单条处理</span></SettingRow>
           </SettingsGroup>
@@ -266,6 +376,7 @@ export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnecti
         </>}
         {active === 'shortcuts' && <SettingsGroup title="常用操作">{[['工具命令搜索', 'Ctrl Shift P'], ['新建对话', 'Ctrl K'], ['打开文件面板', 'Ctrl P'], ['集成终端', 'Ctrl J'], ['打开设置', 'Ctrl ,'], ['工作台后退／前进', 'Alt ← / →'], ['发送当前消息', preferences.sendShortcut === 'enter' ? 'Enter' : 'Ctrl Enter'], ['保存当前文件或表格', 'Ctrl S'], ['显示或隐藏标签工作台', 'Ctrl Shift B']].map(([label, key]) => <SettingRow key={key} label={label}><kbd>{key}</kbd></SettingRow>)}</SettingsGroup>}
         {active === 'model' && <ModelConnectionPanel connection={appState?.connection} onSaved={onModelConnectionSaved} busy={chatBusy} />}
+        {active === 'sync' && <SupabaseSyncSettings onSync={onAppSync} appState={appState} chatBusy={chatBusy} onSaved={onSupabaseSyncSaved} />}
         {active === 'agent' && <>
           {appState?.agentSettingsError && <p className="settings-agent-error" role="alert">{appState.agentSettingsError}</p>}
           <div className="settings-configuration-toolbar">
@@ -279,9 +390,11 @@ export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnecti
             {configurationStatus?.warnings?.map((warning, index) => <div className="settings-config-warning" key={index}><strong>{warning.summary}</strong>{warning.details && <p>{warning.details}</p>}{warning.path && <p>{warning.path}{warning.range?.start?.line ? `:${warning.range.start.line}` : ''}</p>}</div>)}
           </section>
           <SettingsGroup title="智能体默认设置">
-            <SettingRow label="批准策略" description="作用于 Scodex 启动的 Codex CLI；工作台聊天不会执行生成的命令。"><select aria-label="批准策略" value={agentSettings.approvalPolicy} onChange={(event) => updateAgentSetting('approvalPolicy', event.target.value)}><option value="on-request">按请求</option><option value="never">从不请求审批</option></select></SettingRow>
-            <SettingRow label="沙盒设置" description="选择 Codex CLI 运行命令时的文件访问范围。"><select aria-label="沙盒设置" value={agentSettings.sandboxMode} onChange={(event) => updateAgentSetting('sandboxMode', event.target.value)}><option value="read-only">只读</option><option value="workspace-write">工作空间写入</option><option value="danger-full-access">完整访问权限</option></select></SettingRow>
-            <SettingRow label="工作台权限边界" description="同一策略同时约束工作台文件、终端、插件、Git 工作树和浏览器相关本机入口。"><span className="settings-value">{agentSettings.sandboxMode === 'read-only' ? '只读' : agentSettings.sandboxMode === 'workspace-write' ? '工作空间写入' : '完整访问'} · {agentSettings.approvalPolicy === 'on-request' ? '按请求审批' : '直接拒绝越界操作'}</span></SettingRow>
+            <SettingRow label="完整访问快捷设置" description="为当前工作空间开启完整访问、不再询问审批、全部网络和电脑操控。使用当前 Windows 账号权限。"><button className="secondary-button" disabled={savingAgent || chatBusy} onClick={enableFullAccess}>启用完整访问</button></SettingRow>
+            {desktopError && <p className="tools-inline-error" role="alert">{desktopError}</p>}
+            <SettingRow label="批准策略" description="同时用于工作台执行任务和新开的 Codex CLI；完整访问配合从不请求审批可直接运行本机工具。"><select aria-label="批准策略" value={agentSettings.approvalPolicy} onChange={(event) => updateAgentSetting('approvalPolicy', event.target.value)}><option value="on-request">按请求</option><option value="never">从不请求审批</option></select></SettingRow>
+            <SettingRow label="沙盒设置" description="选择本机工具的文件访问范围；完整访问允许使用项目外绝对路径。"><select aria-label="沙盒设置" value={agentSettings.sandboxMode} onChange={(event) => updateAgentSetting('sandboxMode', event.target.value)}><option value="read-only">只读</option><option value="workspace-write">工作空间写入</option><option value="danger-full-access">完整访问权限</option></select></SettingRow>
+            <SettingRow label="工作台权限边界" description="同一策略用于本机工具；完整访问可使用项目外文件、命令和已启用的桌面操控。"><span className="settings-value">{agentSettings.sandboxMode === 'read-only' ? '只读' : agentSettings.sandboxMode === 'workspace-write' ? '工作空间写入' : '完整访问'} · {agentSettings.approvalPolicy === 'on-request' ? '按请求审批' : agentSettings.sandboxMode === 'danger-full-access' ? '按授权直接执行' : '直接拒绝越界操作'}</span></SettingRow>
             <SettingRow label="网页搜索" description="设置 Codex CLI 的网页搜索模式；工作台网页标签仍由用户手动访问。"><select aria-label="网页搜索" value={agentSettings.webSearch} onChange={(event) => updateAgentSetting('webSearch', event.target.value)}><option value="disabled">禁用</option><option value="cached">缓存</option><option value="indexed">索引</option><option value="live">实时</option></select></SettingRow>
             <SettingRow label="命令网络访问" description="开启后仍只允许下方域名；未列出的地址保持阻止。"><Switch label="命令网络访问" checked={Boolean(agentSettings.networkAccess)} onChange={(checked) => updateAgentSetting('networkAccess', checked)} /></SettingRow>
             <SettingRow label="允许网络域名" description="用逗号分隔，例如 api.openai.com, *.example.com。"><input className="integration-prefix" aria-label="允许网络域名" value={(agentSettings.networkDomains || []).join(', ')} onChange={(event) => updateAgentSetting('networkDomains', event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} /></SettingRow>
@@ -316,7 +429,7 @@ export function SettingsPanel({ onOpenWorktree, initialCategory, onModelConnecti
         {active === 'computer' && <ComputerSettings preferences={preferences} desktopApps={appState?.desktopApps} onPreference={onPreference} />}
         {active === 'browser' && <BrowserSettings preferences={preferences} onPreference={onPreference} />}
         {active === 'git' && <GitSettings preferences={preferences} onPreference={onPreference} />}
-        {active === 'about' && <><SettingsGroup title="Scodex 工作台"><SettingRow label="当前版本"><span className="settings-value">{appState?.version || '—'}</span></SettingRow><SettingRow label="运行方式" description="Windows 本地桌面 EXE；模型通过已配置的中转站提供输出。"><span className="settings-value">本地运行</span></SettingRow><SettingRow label="上下文用量"><span className="settings-value">中转站未提供 token 用量数据</span></SettingRow></SettingsGroup><p className="settings-footnote">支持对话、项目与最近记录；本地输入输出由 AI 按需求处理。模型输出取决于服务可用性。</p></>}
+        {active === 'about' && <><SettingsGroup title="Scodex 工作台"><SettingRow label="当前版本"><span className="settings-value">{appState?.version || '—'}</span></SettingRow><SettingRow label="运行方式" description="Windows 本地桌面 EXE；模型通过已配置的中转站提供输出。"><span className="settings-value">本地运行</span></SettingRow><SettingRow label="上下文用量"><span className="settings-value">请求用量与响应诊断见“模型与连接”</span></SettingRow></SettingsGroup><p className="settings-footnote">支持对话、项目与最近记录；本地输入输出由 AI 按需求处理。模型输出取决于服务可用性。</p></>}
       </div> : <div className="settings-search-empty"><Search size={30} /><h2>没有匹配的设置</h2><p>试试“字体”“标签”或“模型”。</p><button className="secondary-button" onClick={() => setSearch('')}>清除搜索</button></div>}
     </div>
     {licensesOpen && <LicenseDialog onClose={() => setLicensesOpen(false)} />}

@@ -41,6 +41,70 @@ test('credentials are persisted through encryption, never returned, and isolated
   assert.equal('reasoning_effort' in await reopened.request(undefined, '', 'main-test'), false);
 });
 
+test('main and subagent credentials route independently and never expose either credential', async (t) => {
+  const { file, service } = await fixture(t);
+  const saved = await service.save({ ...DEFAULT_CONNECTION,
+    baseUrl: 'https://main.example/v1', apiKey: 'main-secret', model: 'main-model', models: ['main-model'],
+    subagentBaseUrl: 'https://child.example/v1', subagentApiKey: 'child-secret', subagentModel: 'child-model', subagentModels: ['child-model'],
+  });
+  assert.equal(saved.hasCredential, true);
+  assert.equal(saved.hasSubagentCredential, true);
+  assert.doesNotMatch(JSON.stringify(saved), /main-secret|child-secret/);
+  const bytes = await fs.readFile(file, 'utf8');
+  assert.doesNotMatch(bytes, /main-secret|child-secret/);
+  const reopened = createModelConnection(file, { encryption });
+  const main = await reopened.request('main');
+  const child = await reopened.request('subagent');
+  assert.deepEqual({ endpoint: main.endpoint, model: main.model, apiKey: main.apiKey }, { endpoint: 'https://main.example/v1/chat/completions', model: 'main-model', apiKey: 'main-secret' });
+  assert.deepEqual({ endpoint: child.endpoint, model: child.model, apiKey: child.apiKey }, { endpoint: 'https://child.example/v1/chat/completions', model: 'child-model', apiKey: 'child-secret' });
+});
+
+test('a different API path on the same host requires its own subagent key', async (t) => {
+  const { service } = await fixture(t);
+  const input = { ...DEFAULT_CONNECTION, baseUrl: 'https://provider.example/v1', apiKey: 'main-key',
+    model: 'main-model', subagentBaseUrl: 'https://provider.example/child/v1',
+    subagentModel: 'child-model', subagentModels: ['child-model'] };
+  await assert.rejects(service.save(input), /独立密钥/);
+  const saved = await service.save({ ...input, subagentApiKey: 'child-key' });
+  assert.equal((await service.request('subagent')).apiKey, 'child-key');
+  await assert.rejects(service.save({ ...saved, subagentBaseUrl: 'https://provider.example/other/v1' }), /独立密钥/);
+  await assert.rejects(service.models({ ...saved, subagentBaseUrl: 'https://provider.example/other/v1' }, 'subagent'), /独立 API Key/);
+});
+
+test('a separate subagent service must select a model before saving', async (t) => {
+  const { service } = await fixture(t);
+  await assert.rejects(service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://main.example/v1', apiKey: 'main-key',
+    subagentBaseUrl: 'https://child.example/v1', subagentApiKey: 'child-key', subagentModel: '', subagentModels: [] }), /请先选择子模型/);
+});
+
+test('subagent tool protocol and reasoning effort are independent of a different main model', async (t) => {
+  const { file, service } = await fixture(t);
+  await service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://main.example/v1', apiKey: 'main-key',
+    model: 'main-model', reasoningEffort: 'high', toolProtocol: 'json',
+    subagentBaseUrl: 'https://child.example/v1', subagentApiKey: 'child-key',
+    subagentModels: ['child-model'], subagentModel: 'child-model', subagentReasoningEffort: '', subagentToolProtocol: 'native' });
+  const reopened = createModelConnection(file, { encryption });
+  const main = await reopened.request('main');
+  const child = await reopened.request('subagent');
+  assert.equal(main.toolProtocol, 'json');
+  assert.equal(main.reasoning_effort, 'high');
+  assert.equal(child.toolProtocol, 'native');
+  assert.equal('reasoning_effort' in child, false);
+  assert.equal((await reopened.get()).subagentToolProtocol, 'native');
+});
+
+test('subagent model discovery uses its own address and key and cannot silently lose a required key', async (t) => {
+  let seen;
+  const { file, service } = await fixture(t, { fetchImpl: async (url, options) => { seen = { url, authorization: options.headers.authorization }; return Response.json({ data: [{ id: 'child-model' }] }); } });
+  const input = { ...DEFAULT_CONNECTION, apiKey: 'main-secret', baseUrl: 'https://main.example/v1', subagentApiKey: 'child-secret', subagentBaseUrl: 'https://child.example/v1', subagentModels: ['child-model'], subagentModel: 'child-model' };
+  await service.save(input);
+  const result = await service.models(input, 'subagent');
+  assert.equal(result.address, 'https://child.example/v1');
+  assert.deepEqual(seen, { url: 'https://child.example/v1/models', authorization: 'Bearer child-secret' });
+  const reopened = createModelConnection(file, { encryption });
+  await assert.rejects(reopened.save({ ...input, subagentBaseUrl: 'https://other-child.example/v1', subagentApiKey: '' }), /独立密钥/);
+});
+
 test('model list uses the configured URL, refuses redirects and handles HTTP and malformed lists', async (t) => {
   let response = new Response(JSON.stringify({ data: [{ id: 'z-model' }, { id: 'a-model' }, { id: 'z-model' }] }));
   let call; const { service } = await fixture(t, { fetchImpl: async (url, options) => { call = { url, options }; return response; } });
@@ -50,6 +114,24 @@ test('model list uses the configured URL, refuses redirects and handles HTTP and
   response = new Response('no', { status: 401 }); await assert.rejects(service.models(input), /HTTP 401/);
   response = new Response('{}'); await assert.rejects(service.models(input), /兼容模型列表/);
   response = new Response('not json'); await assert.rejects(service.models(input), /JSON/);
+});
+
+test('fetched replacement survives persistence and reopening without resurrecting old selections', async (t) => {
+  const { replaceModelList } = await import('../src/lib/model-list.js');
+  const models = Array.from({ length: 36 }, (_, index) => 'fetched-' + String(index + 1).padStart(2, '0'));
+  const { file, service } = await fixture(t, { fetchImpl: async () => new Response(JSON.stringify({ data: models.map(id => ({ id })) })) });
+  const old = await service.save({ ...DEFAULT_CONNECTION, models: ['old-main', 'old-child'], model: 'old-main', subagentModel: 'old-child', baseUrl: 'https://replace.example/v1', apiKey: 'controlled-unit-key' });
+  const fetched = await service.models(old);
+  await service.save({ ...old, ...replaceModelList(old, fetched.models) });
+  const reopened = createModelConnection(file, { encryption });
+  const saved = await reopened.get();
+  assert.deepEqual(saved.models, models);
+  assert.equal(saved.model, models[0]);
+  assert.equal(saved.subagentModel, models[0]);
+  assert.equal((await reopened.request('subagent')).model, models[0]);
+  // Manual IDs remain supported by the editable default/subagent fields.
+  const manual = await reopened.save({ ...saved, model: 'manual-model' });
+  assert.ok(manual.models.includes('manual-model'));
 });
 
 test('damaged config is retained and encryption unavailability cannot overwrite state', async (t) => {

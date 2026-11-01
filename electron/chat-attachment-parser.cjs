@@ -52,4 +52,4 @@ async function prepareChatAttachments(value, existing = []) {
   } finally { parsing = false; }
 }
 
-module.exports = { prepareChatAttachments };
+module.exports = { prepareChatAttachments, parseFile };

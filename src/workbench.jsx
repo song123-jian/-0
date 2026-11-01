@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { DocumentPreview } from './components/document-preview.jsx';
 import CodeMirror from '@uiw/react-codemirror';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
@@ -163,10 +164,11 @@ function App() {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const storageBusyRef = useRef(false);
   const storageOperationRef = useRef(null);
-  const [preferences, setPreferences] = useState({ defaultMode: 'answer', railCollapsed: false, browserPanelOpen: true, browserPanelExpanded: false, fontSize: 16, themeMode: 'system', themeStyle: 'standard', accentColor: '#176C5B', backgroundColor: null, foregroundColor: null, fontFamily: 'Microsoft YaHei', defaultFileOpen: 'builtin', terminalShell: 'powershell', closeConfirmation: 'busy', sendShortcut: 'ctrl-enter', showEditorStatusBar: true, defaultFullView: false, skillsEnabled: true, notifyOnComplete: true, notifyOnIssues: true, notifyOnPermissions: true, notificationSound: 'default', conversationDirectory: null, compressHistory: false, autoArchiveDays: 0 });
+  const [preferences, setPreferences] = useState({ defaultMode: 'answer', railCollapsed: false, browserPanelOpen: true, browserPanelExpanded: false, fontSize: 16, themeMode: 'system', themeStyle: 'standard', accentColor: '#176C5B', backgroundColor: null, foregroundColor: null, fontFamily: 'Microsoft YaHei', defaultFileOpen: 'vscode', terminalShell: 'powershell', closeConfirmation: 'busy', sendShortcut: 'ctrl-enter', showEditorStatusBar: true, defaultFullView: false, skillsEnabled: true, notifyOnComplete: true, notifyOnIssues: true, notifyOnPermissions: true, notificationSound: 'default', conversationDirectory: null, compressHistory: false, autoArchiveDays: 0 });
   const [agentSettings, setAgentSettings] = useState(DEFAULT_AGENT_SETTINGS);
   const [skills, setSkills] = useState([]);
   const [plugins, setPlugins] = useState([]);
+  const [officeDocument, setOfficeDocument] = useState(null);
   const [scheduledState, setScheduledState] = useState({ version: 1, tasks: [], runs: [] });
   const [scheduledBackgroundBusy, setScheduledBackgroundBusy] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState(null);
@@ -384,7 +386,9 @@ function App() {
     const request = activeRequestsRef.current.get(event.requestId);
     if (!request) return;
     const updateRequestMessages = (update) => setMessages(update, request.conversationId);
-    if (event.type === 'phase') {
+    if (event.type === 'goal-state') {
+      updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.status, rounds: event.rounds, maxRequests: event.maxRequests } }), request.conversationId);
+    } else if (event.type === 'phase') {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, phase: event.phase } : item));
     } else if (event.type === 'operation') {
       updateRequestMessages((items) => items.map((item) => {
@@ -409,16 +413,19 @@ function App() {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: item.content + event.text } : item));
       setApiState('connected');
     } else if (event.type === 'complete') {
+      if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.goalStatus || 'paused', summary: event.goalSummary || '' } }), request.conversationId);
       finishRequest(event.requestId);
       setApiState('connected');
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: event.text, pending: false, approval: null, phase: '', ...settledTiming(item) } : item));
       window.scodex.notify('complete').catch(() => {});
     } else if (event.type === 'cancelled') {
+      if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'paused', summary: '已停止或到达时间预算；已执行结果保留。' } }), request.conversationId);
       finishRequest(event.requestId);
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId
         ? { ...item, pending: false, approval: null, operations: item.operations?.map((operation) => operation.status === 'running' ? { ...operation, status: 'cancelled' } : operation), cancelled: true, stoppedAfter: Math.max(0, Math.floor((Date.now() - (item.startedAt || Date.now())) / 1000)), ...settledTiming(item) }
         : item));
     } else if (event.type === 'error') {
+      if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'blocked', summary: event.message } }), request.conversationId);
       finishRequest(event.requestId);
       if (/HTTP 401|HTTP 403/.test(event.message)) setApiState('invalid');
       else if (/HTTP 503/.test(event.message)) setApiState('unavailable');
@@ -426,7 +433,7 @@ function App() {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, pending: false, approval: null, operations: item.operations?.map((operation) => operation.status === 'running' ? { ...operation, status: 'interrupted' } : operation), error: event.message, ...settledTiming(item) } : item));
       window.scodex.notify('issue').catch(() => {});
     }
-  }), [setMessages, finishRequest]);
+  }), [setMessages, finishRequest, updateChat]);
 
   useEffect(() => {
     if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ block: 'end', behavior: 'instant' });
@@ -518,6 +525,22 @@ function App() {
   const modelConnectionSaved = (connection) => {
     setAppState((current) => ({ ...current, connection, model: connection.model, endpoint: connection.baseUrl, profile: connection.name, hasCredential: connection.hasCredential }));
     setApiState('configured');
+  };
+
+  const supabaseSyncSaved = (sync) => {
+    setAppState((current) => current ? { ...current, supabaseSync: sync } : current);
+  };
+
+  const synchronizeApp = async () => {
+    if (storageBusyRef.current || activeRequestsRef.current.size || !libraryRef.current || appState?.historyError) throw new Error('当前聊天或存储仍在使用中。');
+    storageBusyRef.current = true; setStorageBusy(true);
+    const operation = window.scodex.syncSupabase({ library: libraryRef.current });
+    storageOperationRef.current = operation;
+    try {
+      const result = await operation;
+      if (result.status === 'synced') { setLibrary(result.library); setPreferences(result.preferences); setHistoryStatus('saved'); }
+      return result;
+    } finally { storageOperationRef.current = null; storageBusyRef.current = false; setStorageBusy(false); }
   };
 
   const configureChatStorage = async (update) => {
@@ -968,14 +991,15 @@ function App() {
 
   const openWorkspaceFile = async (filePath) => {
     const extension = filePath.split('.').pop().toLowerCase();
+    if (['docx', 'pptx', 'pdf'].includes(extension)) { try { const result = await window.scodex.previewOffice(filePath); setOfficeDocument(result); } catch (error) { showNotice(readableError(error)); } return; }
     if (['xlsx', 'csv', 'tsv'].includes(extension)) { await loadTableFile(filePath); return; }
     if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(extension)) { await loadImageFile(filePath); return; }
     if (extension === 'xlsm') { showNotice('含宏的工作簿请先另存为 XLSX；不会作为文本编辑。'); return; }
     const embeddedFormats = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'xlsx', 'csv', 'tsv', 'xlsm'];
-    if (preferences.defaultFileOpen === 'system' && !embeddedFormats.includes(extension)) {
+    if (!embeddedFormats.includes(extension)) {
       try {
-        await window.scodex.openExternalFile(filePath);
-        showNotice('已交给 Windows 默认程序打开');
+        const opened = await window.scodex.openExternalFile(filePath);
+        showNotice(`已使用${opened?.label || '所选程序'}打开`);
       } catch (error) { showNotice(readableError(error)); }
       return;
     }
@@ -1072,7 +1096,7 @@ function App() {
   const requestImageHelp = () => {
     if (!canShareContext) { showNotice('请先允许项目访问，再启用AI图片处理'); return; }
     if (imageDirty) { showNotice('请先导出或重置图片修改，再让AI处理'); return; }
-    updateChat((chat) => ({ executionEnabled: true, draft: chat.draft || (imagePath ? '请先查看项目图片 ' + imagePath + '，然后按我的要求修改：' : '请查看并处理当前项目的图片：') }));
+    updateChat((chat) => ({ draft: chat.draft || (imagePath ? '请先查看项目图片 ' + imagePath + '，然后按我的要求修改：' : '请查看并处理当前项目的图片：') }));
     navigateView('assistant');
   };
 
@@ -1189,7 +1213,7 @@ function App() {
   const requestTableHelp = () => {
     if (!canShareContext) { showNotice('请先允许项目访问，再启用 AI 表格处理'); return; }
     if (tableDirty) { showNotice('请先保存表格，再让 AI 读取和修改'); return; }
-    updateChat((chat) => ({ executionEnabled: true, draft: chat.draft || (tablePath ? '请先读取项目表格 ' + tablePath + '，然后按我的要求修改：' : '请在当前项目中新建一个 Excel 表格：') }));
+    updateChat((chat) => ({ draft: chat.draft || (tablePath ? '请先读取项目表格 ' + tablePath + '，然后按我的要求修改：' : '请在当前项目中新建一个 Excel 表格：') }));
     navigateView('assistant');
   };
 
@@ -1424,7 +1448,7 @@ function App() {
     if (type === 'drop') { dragDepth.current = 0; setFileDragActive(false); attachChatFiles(event.dataTransfer.files); }
   };
 
-  const sendMessage = async (message = prompt, retryContent = null, targetId = null, revisionAction = null, handoff = null) => {
+  const sendMessage = async (message = prompt, retryContent = null, targetId = null, revisionAction = null, handoff = null, goalExecution = null) => {
     const detached = Boolean(targetId);
     const targetChat = libraryRef.current?.conversations.find(c=>c.id === (targetId || libraryRef.current.activeId));
     if (!targetChat || targetChat.archivedAt) throw Error('聊天不可用，请先恢复归档。');
@@ -1457,14 +1481,8 @@ function App() {
     // Infer each message mode unless the composer menu sets a one-shot override.
     const requestMode = retryContent?.mode || (!detached && pendingModeOverride?.conversationId === targetChat?.id ? pendingModeOverride.mode : inferWorkMode(text, Boolean(!detached && fileContext || outgoingImages.length || outgoingAttachments.length)));
     const automaticSkill = findAutomaticSkill(text, enabledSkills);
-    let context = canShareContext && !detached ? fileContext : null;
-    if (!detached && canShareContext && requestMode === 'code' && activeFile && !context && !targetChat.executionEnabled) {
-      window.scodex.notify('permission').catch(() => {});
-      if (window.confirm(`将当前文件“${activeFile.split(/[\\/]/).pop()}”的内容发送给 Grok，作为修改上下文？`)) {
-        context = { path: activeFile, content: truncateUtf8(editorValue, 128 * 1024) };
-      }
-    }
-    const executionEnabled = canShareContext && (handoff ? handoff.executionEnabled === true : (retryContent?.executionEnabled ?? targetChat.executionEnabled) === true);
+    const context = canShareContext && !detached ? fileContext : null;
+    const executionEnabled = canShareContext && (handoff ? handoff.executionEnabled === true : revisionAction ? revisionAction.executionEnabled === true : true);
     const requestId = window.crypto.randomUUID();
     const retrySkill = retryContent?.skillId ? enabledSkills.find((item) => item.id === retryContent.skillId) : null;
     const outgoingSkill = canShareContext ? retrySkill || (!detached ? activeSkill : null) || automaticSkill : null;
@@ -1479,7 +1497,8 @@ function App() {
     if (!revisionPlan) updateChat(() => ({ draft: '' }), targetChat.id);
     if (!detached) { setImageAttachments([]); setAttachments([]); setFileContext(null); }
     const requestProjectId = targetChat.projectId || appState?.activeProjectId || '';
-    activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId });
+    activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId, goalExecution });
+    if (goalExecution) updateChat(() => ({ goalRun: { ...goalExecution, status: 'running', rounds: 0, summary: '' } }), targetChat.id);
     setLiveRequests([...activeRequestsRef.current.values()]);
     const dispatch = async () => { try {
       const retryIndex = revisionPlan ? targetMessages.length : retryContent ? targetMessages.findIndex((item) => item.id === retryContent.userId) : targetMessages.length;
@@ -1491,12 +1510,13 @@ function App() {
         conversationId: targetChat.id,
         projectId: requestProjectId,
         executionEnabled,
-        ...(handoff ? { requestKind: 'collaboration' } : {}),
+        ...(handoff ? { requestKind: 'collaboration' } : revisionAction ? { requestKind: 'revision' } : {}),
         mode: requestMode,
         goal: targetChat.goal || '',
+        ...(goalExecution ? { goalExecution } : {}),
         reasoningEffort: requestEffort,
         model: requestModel,
-        prompt: [text || (outgoingImages.length ? '请描述这些图片。' : outgoingAttachments.length ? '请查看这些附件。' : ''), requestMode === 'code' ? `${executionEnabled ? '请直接在项目中完成文件修改并验证。' : '请在代码围栏中提供完整内容。'}${canShareContext && !detached ? `当前编辑文件：${activeFile || '无'}。` : ''}` : ''].filter(Boolean).join('\n\n'),
+        prompt: text || (outgoingImages.length ? '请描述这些图片。' : outgoingAttachments.length ? '请查看这些附件。' : ''),
         messages: history,
         skill: outgoingSkill?.content || '',
         skillId: outgoingSkill?.id || '',
@@ -1507,6 +1527,7 @@ function App() {
     } catch (error) {
       if (activeRequestsRef.current.has(requestId)) {
         finishRequest(requestId);
+        if (goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'blocked', summary: readableError(error) } }), targetChat.id);
         setMessages((items) => items.map((item) => item.id === requestId ? { ...item, pending: false, approval: null, error: readableError(error), ...settledTiming(item) } : item), targetChat.id);
       }
     } };
@@ -1592,7 +1613,7 @@ function App() {
     const chat = kind==='chat' ? libraryRef.current?.conversations.find(c=>c.id===id) : null;
     const project = appState?.projects?.find(p=>p.id===(kind==='project'?id:chat?.projectId));
     if (kind==='chat'&&!chat || kind==='project'&&!project) throw Error('项目或聊天已不存在。');
-    if (['send','draft','execution','new-chat','revise','revision'].includes(action.type) && (chat?.archivedAt||project?.archivedAt)) throw Error('请先恢复已归档的项目或聊天。');
+    if (['send','draft','new-chat','revise','revision'].includes(action.type) && (chat?.archivedAt||project?.archivedAt)) throw Error('请先恢复已归档的项目或聊天。');
     const switchProject = async () => {
       if (!project || project.id===appState.activeProjectId) return;
       if ((fileDirty||tableDirty||imageDirty) && !window.confirm('有未保存编辑。切换到此项目会清空编辑内容，是否继续？')) throw Error('已取消项目切换。');
@@ -1602,11 +1623,6 @@ function App() {
     if (action.type==='revise') return sendMessage('',null,id,action);
     if (action.type==='revision') return chooseConversationVersion(action.versionId,action.stamp,id);
     if (action.type==='draft') { updateChat(()=>({draft:action.text}),id); return true; }
-    if (action.type==='execution') {
-      if (!canShareContext) throw Error('请先在主工作台启用项目访问权限。');
-      if ([...activeRequestsRef.current.values()].some(r=>r.conversationId===id)) throw Error('请先停止此聊天任务。');
-      updateChat(c=>({executionEnabled:!c.executionEnabled}),id); return true;
-    }
     if (action.type==='stop') {
       const request=[...activeRequestsRef.current.values()].find(r=>r.conversationId===id);
       if (!request) throw Error('此任务已结束。');
@@ -1703,8 +1719,7 @@ function App() {
     if (storageBusyRef.current || settingsDialogOpen) return;
     if (id === 'agent-task') {
       navigateView('assistant');
-      if (!canShareContext) { showNotice('请先将权限切换为完全访问，再启用执行任务'); return; }
-      updateChat(() => ({ executionEnabled: true }));
+      if (!canShareContext) showNotice('当前仅对话；如需操作本机，请将权限切换为完全访问');
       document.querySelector('[aria-label=输入工作内容]')?.focus(); return;
     }
     if (id === 'new-chat') { newConversation(); return; }
@@ -1841,7 +1856,7 @@ function App() {
                     const sendWithControl = preferences.sendShortcut !== 'enter' && event.key === 'Enter' && (event.ctrlKey || event.metaKey);
                     if (sendWithEnter || sendWithControl) { event.preventDefault(); sendMessage(); }
                   }}
-                  placeholder={currentChat?.executionEnabled && canShareContext ? "描述目标，Scodex 将在当前项目中执行…" : "和 Scodex 一起工作"}
+                  placeholder={canShareContext ? "提问，或描述要完成的工作，Scodex 自动衔接处理…" : "和 Scodex 对话"}
                   disabled={!library}
                   maxLength={64_000}
                   rows={2}
@@ -1849,7 +1864,6 @@ function App() {
                 />
                 <div className="composer-toolbar">
                   <div className="composer-tools">
-                    <button className={"agent-execution-toggle " + (currentChat?.executionEnabled && canShareContext ? "active" : "")} aria-label="执行任务" aria-pressed={Boolean(currentChat?.executionEnabled && canShareContext)} disabled={!currentChat || sending || storageBusy || !canShareContext} title="启用后允许模型使用项目文件与命令工具；具体权限遵循设置" onClick={() => updateChat(() => ({ executionEnabled: !currentChat.executionEnabled }))}><Braces size={17} /><span>{currentChat?.executionEnabled && canShareContext ? "执行任务" : "对话模式"}</span></button>
                     <ComposerTools
                       workspaceRoot={workspaceRoot}
                       directory={currentDirectory}
@@ -1859,6 +1873,8 @@ function App() {
                       activeSkill={activeSkill}
                       mode={composerMode}
                       goal={currentChat?.goal || ''}
+                      goalRun={currentChat?.goalRun}
+                      onGoalStart={(text, budget) => { updateChat(() => ({ goal: text })); return sendMessage('继续此目标：' + text + '\n先核对已有结果，保留已完成的修改，完成或受阻时提供证据。', null, null, null, null, budget); }}
                       contextAccess={preferences.contextAccess}
                       busy={!currentChat || sending || storageBusy || attachmentLoading}
                       onFile={(filePath) => filePath ? attachFilePath(filePath) : attachmentInputRef.current?.click()}
@@ -1868,7 +1884,7 @@ function App() {
                       onMode={(mode) => {
                         setPendingModeOverride({ conversationId: currentChat?.id, mode });
                       }}
-                      onGoal={(goal) => updateChat(() => ({ goal }))}
+                      onGoal={(goal) => updateChat(() => ({ goal, goalRun: undefined }))}
                       onSkill={selectSkill}
                       onChat={selectConversation}
                       onView={navigateView}
@@ -1943,7 +1959,7 @@ function App() {
         {activeView === 'tables' && (
           <section className="tool-view table-view">
             <div className="tool-heading"><div><h1>表格</h1><p>{tablePath ? `${tablePath.split(/[\\/]/).pop()}  ·  ${tableKind.toUpperCase()}` : tableSheets.length ? `未保存工作簿 · ${tableKind.toUpperCase()}` : '编辑 CSV 与 Excel 工作簿'}</p></div><div className="heading-actions"><button className="secondary-button" disabled={sending || storageBusy} onClick={requestTableHelp}><Braces size={16} />让 AI 处理表格</button><button className="secondary-button" onClick={openTableFromDialog}><FileSpreadsheet size={16} />打开表格</button><button className="secondary-button" onClick={() => createBlankTable('xlsx')}><Plus size={16} />新建 XLSX</button>{currentSheet && <button className="secondary-button attach-table" onClick={addTableContext}><Paperclip size={15} />附加到对话</button>}<button className="primary-button" onClick={saveTable} disabled={!tableDirty}><Save size={15} />保存</button></div></div>
-            <p className="table-ai-help">在对话中启用执行任务，AI 可读取、批量修改并经你批准后保存。支持常用 XLSX、UTF-8 CSV／TSV；公式需在 Excel 等软件重算，复杂图表等文件会停止覆盖。</p>
+            <p className="table-ai-help">直接在对话中描述要求，AI 按当前权限读取、批量修改并保存。支持常用 XLSX、UTF-8 CSV／TSV；公式需在 Excel 等软件重算，复杂图表等文件会停止覆盖。</p>
             {tableSheets.length ? <>
               <div className="table-toolbar"><div className="sheet-tabs">{tableSheets.map((sheet, index) => <button key={`${sheet.name}-${index}`} className={`sheet-tab ${activeSheetIndex === index ? 'active' : ''}`} onClick={() => setActiveSheetIndex(index)}>{sheet.name}</button>)}{tableKind === 'xlsx' && <button className="icon-button sheet-add" title="添加工作表" aria-label="添加工作表" onClick={addTableSheet}><Plus size={15} /></button>}</div><div className="table-actions"><button className="secondary-button compact" onClick={addTableRow}><Plus size={14} />行</button><button className="secondary-button compact" onClick={addTableColumn}><Plus size={14} />列</button><label className="table-search"><Search size={15} /><input aria-label="查找单元格" value={tableSearch} onChange={(event) => setTableSearch(event.target.value)} placeholder="查找单元格" /></label><span className="table-dimensions">{currentSheet?.rowCount || 0} × {currentSheet?.columnCount || 0}{tableDirty && <i className="dirty-dot" />}</span></div></div>
               <div className="spreadsheet-shell"><div className="spreadsheet-scroll"><table className="spreadsheet"><thead><tr><th className="row-header corner">#</th>{Array.from({ length: currentSheet?.columnCount || 0 }, (_, index) => <th key={index}>{columnLabel(index + 1)}</th>)}</tr></thead><tbody>{Array.from({ length: Math.max(currentSheet?.rowCount || 0, 1) }, (_, rowIndex) => <tr key={rowIndex}><th className="row-header">{rowIndex + 1}</th>{Array.from({ length: currentSheet?.columnCount || 0 }, (_, columnIndex) => {
@@ -1959,9 +1975,10 @@ function App() {
         {activeView === 'tools' && <ToolsPanel inventory={inventory} loading={inventoryBusy} error={inventoryError} onRefresh={refreshSkills} onAction={runToolAction} onRevealSource={(id) => window.scodex.revealCapabilitySource(id).catch((error) => showNotice(readableError(error)))} />}
         {activeView === 'tasks' && <ScheduledTasksPanel state={scheduledState} projects={appState?.projects || []} activeProjectId={appState?.activeProjectId || ''} backgroundBusy={scheduledBackgroundBusy} onBackground={setScheduledBackgroundEnabled} onRefresh={refreshScheduledTasks} onCreate={(input) => saveScheduledTask(input)} onUpdate={(id, input) => saveScheduledTask(input, id)} onRemove={removeScheduledTask} onEnable={setScheduledTaskEnabled} onRun={runScheduledTask} />}
         {(activeView === 'plugins' || activeView === 'skills') && <PluginCenterPanel section={activeView} skills={skills} plugins={plugins} preferences={preferences} selectedSkill={selectedSkill} activeSkill={activeSkill} onSelectSkill={setSelectedSkill} onToggleSkill={toggleSkill} onRefresh={refreshSkills} onInstallSkill={() => window.scodex.installSkill().then((installed) => installed && refreshSkills()).catch((error) => showNotice(readableError(error)))} onOpenConfig={() => window.scodex.openPluginConfig().catch((error) => showNotice(readableError(error)))} onUseSkill={selectSkill} onUseMcpContext={useMcpContext} />}
-        {activeView === 'settings' && <SettingsPanel onOpenWorktree={openManagedWorktree} initialCategory={settingsSection} onModelConnectionSaved={modelConnectionSaved} onModalChange={setSettingsDialogOpen} library={library} chatBusy={anySending || storageBusy} onManageChats={manageStoredChats} appState={appState} workspaceRoot={workspaceRoot} preferences={preferences} resolvedTheme={resolvedTheme} agentSettings={agentSettings} onPreference={savePreferences} onAgentSetting={saveAgentSettings} onConfigureConversationStorage={configureChatStorage} onOpenCodexConfig={(scope) => window.scodex.openCodexConfig(scope).catch((error) => showNotice(readableError(error)))} onDiagnoseCodex={() => window.scodex.diagnoseCodex()} onOpenCodexDiagnostic={() => window.scodex.openCodexDiagnostic().catch((error) => showNotice(readableError(error)))} onUpdateCodex={() => window.scodex.updateCodex()} onReinstallTools={() => window.scodex.reinstallWorkspaceTools()} onChooseWorkspace={handleChooseWorkspace} onReveal={revealWorkspace} onCopyPath={() => navigator.clipboard.writeText(workspaceRoot).then(() => showNotice('工作区路径已复制')).catch(() => showNotice('复制失败'))} onRefreshSkills={refreshSkills} skills={skills} connectionLabel={apiStateLabel(apiState, appState?.hasCredential)} onView={navigateView} />}
+        {activeView === 'settings' && <SettingsPanel onAppSync={synchronizeApp} onOpenWorktree={openManagedWorktree} initialCategory={settingsSection} onModelConnectionSaved={modelConnectionSaved} onSupabaseSyncSaved={supabaseSyncSaved} onModalChange={setSettingsDialogOpen} library={library} chatBusy={anySending || storageBusy} onManageChats={manageStoredChats} appState={appState} workspaceRoot={workspaceRoot} preferences={preferences} resolvedTheme={resolvedTheme} agentSettings={agentSettings} onPreference={savePreferences} onAgentSetting={saveAgentSettings} onConfigureConversationStorage={configureChatStorage} onOpenCodexConfig={(scope) => window.scodex.openCodexConfig(scope).catch((error) => showNotice(readableError(error)))} onDiagnoseCodex={() => window.scodex.diagnoseCodex()} onOpenCodexDiagnostic={() => window.scodex.openCodexDiagnostic().catch((error) => showNotice(readableError(error)))} onUpdateCodex={() => window.scodex.updateCodex()} onReinstallTools={() => window.scodex.reinstallWorkspaceTools()} onChooseWorkspace={handleChooseWorkspace} onReveal={revealWorkspace} onCopyPath={() => navigator.clipboard.writeText(workspaceRoot).then(() => showNotice('工作区路径已复制')).catch(() => showNotice('复制失败'))} onRefreshSkills={refreshSkills} skills={skills} connectionLabel={apiStateLabel(apiState, appState?.hasCredential)} onView={navigateView} />}
       </main>
-      <BrowserPanel requestedTool={panelRequest} panelWidth={panelWidth ?? preferences.browserPanelWidth ?? 400} onWidthChange={setPanelWidth} onWidthCommit={(width) => { setPanelWidth(null); savePreferences({ browserPanelWidth: width }); }} preferences={preferences} onAiOpen={() => runToolAction('browser')} suspended={storageBusy || settingsDialogOpen || commandOpen || projectDialogOpen || Boolean(collaborationSource) || Boolean(library?.conversations.some((chat) => chat.messages.some((message) => message.approval)))} open={browserOpen} expanded={browserExpanded} workspaceRoot={workspaceRoot} model={appState?.model || 'grok-4.7'} reasoningOptions={availableReasoningEfforts.map((effort) => ({ value: effort, label: REASONING_EFFORT_LABELS[effort] || effort }))} defaultReasoningEffort={reasoningEffort} contextAccess={preferences.contextAccess} onContextPermission={changeContextPermission} onOpenFile={openWorkspaceFile} onReveal={revealWorkspace} onToggle={toggleBrowser} onExpand={() => savePreferences({ browserPanelExpanded: !browserExpanded })} onView={navigateView} onTerminal={openTerminal} onError={(error) => showNotice(readableError(error))} />
+      {officeDocument && <DocumentPreview document={officeDocument} onClose={() => setOfficeDocument(null)} />}
+      <BrowserPanel requestedTool={panelRequest} panelWidth={panelWidth ?? preferences.browserPanelWidth ?? 400} onWidthChange={setPanelWidth} onWidthCommit={(width) => { setPanelWidth(null); savePreferences({ browserPanelWidth: width }); }} preferences={preferences} onAiOpen={() => runToolAction('browser')} suspended={Boolean(officeDocument) || storageBusy || settingsDialogOpen || commandOpen || projectDialogOpen || Boolean(collaborationSource) || Boolean(library?.conversations.some((chat) => chat.messages.some((message) => message.approval)))} open={browserOpen} expanded={browserExpanded} workspaceRoot={workspaceRoot} model={appState?.model || 'grok-4.7'} reasoningOptions={availableReasoningEfforts.map((effort) => ({ value: effort, label: REASONING_EFFORT_LABELS[effort] || effort }))} defaultReasoningEffort={reasoningEffort} contextAccess={preferences.contextAccess} onContextPermission={changeContextPermission} onOpenFile={openWorkspaceFile} onReveal={revealWorkspace} onToggle={toggleBrowser} onExpand={() => savePreferences({ browserPanelExpanded: !browserExpanded })} onView={navigateView} onTerminal={openTerminal} onError={(error) => showNotice(readableError(error))} />
       {commandOpen && <CommandPalette onAction={runToolAction} onClose={() => setCommandOpen(false)} />}
       {collaborationSource && library && <TaskCollaborationDialog library={library} projects={appState?.projects || []} runningIds={liveRequests.map(r => r.conversationId)} sourceId={collaborationSource} canExecute={canShareContext} onClose={() => setCollaborationSource('')}
         onSubmit={input => collaborationActionRef.current({ action: 'send', input: { ...input, sourceId: collaborationSource } })}
@@ -2101,3 +2118,4 @@ export function MessageBubble({ message, copied, onCopy, onRetry, onApplyCode, o
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}
     <div className="message-actions">{onRegenerate && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="重新生成此回答" disabled={actionsDisabled} onClick={onRegenerate}><RotateCw size={15}/>重新生成</button>}{message.content && <button className="icon-button small" title="复制回答" aria-label="复制回答" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}{(message.error || message.cancelled) && <button className="text-tool retry-message" onClick={onRetry}><RotateCw size={14} />{message.operations?.length ? '继续任务' : '重试'}</button>}</div></div></article>;
 }
+
