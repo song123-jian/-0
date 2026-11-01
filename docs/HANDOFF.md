@@ -1,26 +1,29 @@
-# 项目交接
+# Project Handoff
 
-## 当前检查点（2026-11-01）
+## Current State — 1.3.31
 
-- 目标：将候选源码整理并交付到用户指定的空仓库 `https://github.com/song123-jian/-0`；本轮验收范围为编程与文件工作流，目标质量 95%–100%，并确保本地构建路径可复现。
-- 仓库状态：本地候选为 Git 仓库 `main`，远端 `origin` 指向 `song123-jian/-0`；首次提交 `79dc314f85151269d736cf21847e86780465a73c` 已推送，远端 `main` 与本地 HEAD 一致。另一个 `repo-0-staging` 副本不属于本轮修改范围。
-- 已确认与修复：工作流说明现补齐编程、文件、Git／PR、SKILL、MCP 的可执行步骤和验收边界。三个固定摘要匹配的 Node/Python/pip 离线归档已从 `resources/` 根目录移至打包器要求的 `resources/workspace-tools-bundle/`；新增回归测试覆盖 extraResources 路径和摘要。
-- 关键约束：只修改本候选；保留已暂存基线和用户数据；不提交凭据、运行时数据或测试产物；首次提交只在远端仍为空且本轮差异检查通过后推送到 `main`。空仓库初始化不产生 PR。
-- 验收范围：本轮聚焦代码编辑与文件读写/保存回读；其余集成能力不作为本次验收项。
-- 已完成：工作流文档、归档包路径和对话默认字段修复；定向逻辑 116/116、对话与存储 17/17、全套测试 316/316 及 Windows x64 打包均通过。最终 `SCODEX_SMOKE_SCOPE=programming-files npm run smoke` 已通过真实便携 EXE 的代码编辑保存回读、CSV/XLSX 保存回读、表格上下文附件、图片旋转/PNG 导出、工作区边界和偏好持久化。归档包三项 SHA-256、文档 UTF-8 无 BOM/链接和当前 smoke 差异已核对。
-- 已完成交付：使用公开账号对应的 GitHub noreply 作者 `song123-jian <283100163+song123-jian@users.noreply.github.com>` 创建首次 `main` 提交并推送到 `song123-jian/-0`；已回读远端分支和提交一致性。
-- 风险：npm audit 报告锁定依赖树有 24 项告警（22 moderate、2 high），本轮不做无关升级；`gh` CLI 不可用。公网 MCP 未指定服务端点及授权，不能核验真实公网往返。
+The desktop workbench supports ordinary conversations and local tasks without a registered project. Projects remain optional. An explicitly empty project registry survives restart; deleting or archiving the last project returns to Ordinary Chat. Legacy workspace migration remains supported.
 
-## 已完成需求
-
-| 需求 | 变更与影响 | 状态 |
+| Completed requirement | Change and scope | Validation |
 | --- | --- | --- |
-| 仓库初始化与工作流核对 | 指向用户指定的 `-0` 仓库；首次 `main` 提交已推送并完成远端回读。 | `79dc314f85151269d736cf21847e86780465a73c` 已核验 |
-| 编程/文件工作流与构建可复现性 | 工作流文档、离线资源路径和 smoke 入口已修正；构建产物已生成。 | `programming-files` EXE smoke 通过 |
-| 对话规范化幂等性 | 新建对话显式持久化 `unreadResult:false`，与规范化默认形状保持一致。 | 定向验证 17/17、全套测试 316/316 通过 |
+| Optional projects | Project registry, main-process request binding, and Ordinary Chat navigation | 19 focused logical cases passed |
+| Projectless file tasks | A general workspace outside protected app data, retaining existing permission and binding checks | Actual installed 1.3.31: real file write and Chinese text readback passed |
+| Persistence and project lifecycle | Empty startup, ordinary message save, optional-project switching, last-project deletion, and restart | Six actual installed-app scenarios passed; candidate archive/restore also passed |
+| Windows 1.3.31 installer | Fixed build inputs, renderer build, unpacked Electron build, NSIS, installation over 1.3.30 | Build/install succeeded; 81 installed files matched the accepted candidate |
 
-## 决策与运行说明
+## Decisions and Constraints
 
-- 以 `-0-import-candidate-20261031` 为唯一修改目录；不合并 `repo-0-staging`。
-- 根据服务端现状，本轮若完成外部 Git 写入，采用首次 `main` 初始化推送，不创建无基线 PR。
-- 详细验证状态见 [`TEST_HANDOFF.md`](TEST_HANDOFF.md)。
+- Public source retains the 1.3.30 packaging conventions. Unfinished mobile changes and mobile-only npm scripts are excluded from this release.
+- Dependencies are unchanged. Only root version metadata in the lockfile changes.
+- Existing user profiles and disk project files are preserved. New computers still require model service and key configuration.
+- The installer is distributed as a GitHub Release asset: [v1.3.31](https://github.com/song123-jian/-0/releases/tag/v1.3.31). Its SHA-256 is `4701036f0ef136ad67e5353a8e067168a53478fb9add514dcab1bd42d78474e9` (189910973 bytes).
+- Upgrade by running the installer and selecting the existing application directory. Keep the 1.3.30 installer or program backup for rollback; do not overwrite or delete user data during rollback.
+- Private credentials, profiles, local build artifacts, machine-specific evidence and backups are excluded from source uploads.
+
+## Existing Results and Limits
+
+Earlier 1.3.30 validation covered 403 distinct automated cases after a targeted test-helper cleanup repair. Those results remain valid only for unchanged scope; no full-suite rerun is claimed for 1.3.31. Earlier file/editor and packaging validation is historical evidence, not a new whole-system acceptance.
+
+Only model HTTP responses were replaced by a controlled loopback fixture during the 1.3.31 actual-app checks. Public model generation, unrelated integrations and unfinished mobile features are outside this acceptance. No further refactoring is required by this increment.
+
+See [Test Handoff](TEST_HANDOFF.md) and [Workflow](WORKFLOW.md).

@@ -38,7 +38,7 @@ function normalizeProjects(value, fallbackDirectory) {
       updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date(0).toISOString(),
     });
   }
-  if (typeof fallbackDirectory === 'string' && path.isAbsolute(fallbackDirectory) && !seen.has(projectPathKey(fallbackDirectory))) {
+  if (!Array.isArray(value) && typeof fallbackDirectory === 'string' && path.isAbsolute(fallbackDirectory) && !seen.has(projectPathKey(fallbackDirectory))) {
     const absolutePath = path.resolve(fallbackDirectory);
     projects.unshift({
       id: `project-${crypto.createHash('sha256').update(projectPathKey(absolutePath)).digest('hex').slice(0, 20)}`,
@@ -61,4 +61,21 @@ function upsertProject(projects, input, options = {}) {
   return { projects: [next, ...projects], project: next };
 }
 
-module.exports = { createProject, normalizeProjects, projectPathKey, upsertProject };
+function resolveChatProject(projects, payload = {}, conversation, selectedProjectId = '') {
+  const requested = typeof payload.projectId === 'string' ? payload.projectId : undefined;
+  if (conversation && requested !== undefined && (conversation.projectId || '') !== requested) throw new Error('聊天所属项目已变化，请重新打开聊天。');
+  const projectId = conversation ? (conversation.projectId || '') : (requested ?? selectedProjectId);
+  if (!projectId) return null;
+  const project = projects.find(item => item.id === projectId);
+  if (!project || project.archivedAt) throw new Error('聊天所属项目不存在或已归档。');
+  return project;
+}
+
+function conversationWorkspacePath(codexHome, userData) {
+  const directory = path.join(codexHome, 'workbench', 'workspace');
+  const dataKey = projectPathKey(userData), directoryKey = projectPathKey(directory);
+  return directoryKey === dataKey || directoryKey.startsWith(dataKey + path.sep)
+    ? path.join(path.dirname(userData), path.basename(userData) + '-workspace') : directory;
+}
+
+module.exports = { createProject, normalizeProjects, projectPathKey, upsertProject, resolveChatProject, conversationWorkspacePath };

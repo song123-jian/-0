@@ -5,11 +5,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createProject, normalizeProjects, projectPathKey, upsertProject } = require('../electron/project-registry.cjs');
 
-test('project registry preserves a legacy workspace and deduplicates paths', () => {
+test('project registry preserves registered projects and deduplicates paths', () => {
   const existing = [{ id: 'one', name: '项目 A', path: 'C:\\Work\\A', createdAt: '2026-01-01T00:00:00.000Z' }];
   const normalized = normalizeProjects([...existing, { ...existing[0], id: 'duplicate', name: '重复' }], 'C:\\Work\\B');
-  assert.equal(normalized.length, 2);
-  assert.equal(normalized[0].id.startsWith('project-'), true);
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].id, 'one');
   assert.equal(projectPathKey('C:\\Work\\A'), projectPathKey('c:\\work\\a'));
 });
 

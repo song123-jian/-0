@@ -654,7 +654,7 @@ function App() {
     setAppState((current) => ({ ...current, ...state }));
     setLibrary((current) => {
       if (!current) return current;
-      const nextChat = current.conversations.find((chat) => !chat.archivedAt && chat.projectId === state.activeProjectId);
+      const nextChat = current.conversations.find((chat) => !chat.archivedAt && (chat.projectId || '') === state.activeProjectId);
       if (nextChat) return { ...current, activeId: nextChat.id };
       const created = newChatRecord(state.activeProjectId, preferences.defaultMode);
       return { ...current, activeId: created.id, conversations: [created, ...current.conversations] };
@@ -670,11 +670,12 @@ function App() {
     try {
       await applyProjectState(await window.scodex.selectProject(id));
       setProjectMenuOpen(false);
-      showNotice('已切换项目');
+      showNotice(id ? '已切换项目' : '已切换到普通对话');
     } catch (error) { showNotice(readableError(error)); }
   };
   const ensureProjectSelected = async (id) => {
-    if (!id || id === appState?.activeProjectId) return;
+    id ||= '';
+    if (id === appState?.activeProjectId) return;
     if ((fileDirty || tableDirty || imageDirty) && !window.confirm('当前项目有未保存编辑。切换项目会清空编辑内容，是否继续？')) throw Error('已取消项目切换。');
     const state = await window.scodex.selectProject(id);
     await applyProjectState(state);
@@ -830,7 +831,7 @@ function App() {
       if (structural) storageOperationRef.current = operation;
       const state = await operation;
       if (state.library) setLibrary(state.library);
-      if (state.workspaceRoot !== oldRoot) await applyProjectState(state);
+      if (state.workspaceRoot !== oldRoot || state.activeProjectId !== appState?.activeProjectId) await applyProjectState(state);
       else setAppState(current => ({ ...current, ...state }));
       return state;
     } catch(error) {
@@ -1497,7 +1498,7 @@ function App() {
     else setMessages((current) => retryContent ? [...current.filter((item) => item.id !== retryContent.userId && item.id !== retryContent.assistantId), userEntry, assistantEntry] : [...current, userEntry, assistantEntry], targetChat.id);
     if (!revisionPlan) updateChat(() => ({ draft: '' }), targetChat.id);
     if (!detached) { setImageAttachments([]); setAttachments([]); setFileContext(null); }
-    const requestProjectId = targetChat.projectId || appState?.activeProjectId || '';
+    const requestProjectId = targetChat.projectId || '';
     activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId, goalExecution });
     if (goalExecution) updateChat(() => ({ goalRun: { ...goalExecution, status: 'running', rounds: 0, summary: '' } }), targetChat.id);
     setLiveRequests([...activeRequestsRef.current.values()]);
@@ -1740,7 +1741,7 @@ function App() {
 
   const currentTitle = activeView === 'settings' ? '设置' : NAVIGATION.find((item) => item.id === activeView)?.label || '助手';
   const currentProjectName = appState?.projects?.find((project) => project.id === appState.activeProjectId)?.name
-    || displayPath(workspaceRoot).split('/').filter(Boolean).at(-1) || '默认项目';
+    || '普通对话';
 
   return (
     <React.Fragment>
@@ -1775,6 +1776,7 @@ function App() {
         <nav className="workbench-primary-nav shell-secondary-entry" aria-label="工作台功能">{NAVIGATION.filter((item) => ['tasks', 'plugins', 'skills', 'tools'].includes(item.id)).map(({ id, label, icon: Icon }) => <button key={id} className={'nav-item ' + (activeView === id ? 'active' : '')} title={label} aria-label={label} aria-current={activeView === id ? 'page' : undefined} onClick={() => navigateView(id)}><Icon size={18} /><span>{label}</span></button>)}</nav>
         <div className="rail-section-head project-section-heading"><span>项目</span><button className="icon-button small" aria-label="创建项目" title="创建项目" onClick={() => { setProjectNameDraft(''); setProjectPathDraft(''); setProjectDialogOpen(true); }}><Plus size={15} /></button></div>
         <div className="recent-list project-list" aria-label="项目列表">
+          <button type="button" className={'recent-item ' + (!appState?.activeProjectId ? 'active' : '')} aria-label="普通对话（无需项目）" aria-current={!appState?.activeProjectId ? 'true' : undefined} onClick={() => { selectProject(''); navigateView('assistant'); }}><MessageSquare size={16}/><span>普通对话</span>{!appState?.activeProjectId && <Check size={14}/>}</button>
           {(appState?.projects || []).filter(p=>Boolean(p.archivedAt)===showArchivedProjects).sort((a,b)=>Number(b.pinned)-Number(a.pinned)||a.name.localeCompare(b.name,'zh-CN')).map((project) => <button key={project.id} data-project-id={project.id} className={'recent-item project-item '+(project.id===appState?.activeProjectId?'active ':'')+(project.archivedAt?'archived':'')}
             onClick={() => { if(project.archivedAt) { showNotice('右键点击可恢复已归档项目'); return; } selectProject(project.id); navigateView('assistant'); }} onContextMenu={e=>openContextMenu(e,'project',project.id)} onKeyDown={e=>contextKeys(e,'project',project.id)} title={project.path} aria-current={project.id===appState?.activeProjectId?'true':undefined}>
             <FolderOpen size={16}/><span>{project.name}</span>{project.pinned&&<Pin size={14}/>} {project.unread&&<i className="chat-unread-dot" aria-label="未读项目"/>}{project.id===appState?.activeProjectId&&<Check size={14}/>}
