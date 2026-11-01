@@ -16,17 +16,17 @@ function normalizeAddress(value, website = false) {
   }
   return url.href.replace(/\/+$/, '');
 }
-function normalizeConnection(input = DEFAULT_CONNECTION) {
+function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('模型配置格式无效。');
   const value = { ...DEFAULT_CONNECTION, ...input };
   const name = clean(value.name, 80); if (!name) throw new Error('请填写服务名称。');
   const baseUrl = normalizeAddress(value.baseUrl);
   const subagentBaseUrl = normalizeAddress(input.subagentBaseUrl || baseUrl);
-  const model = modelId(value.model); if (!model) throw new Error('请填写默认模型。');
+  const model = modelId(value.model); if (requireModel && !model) throw new Error('请填写默认模型。');
   if (!EFFORTS.includes(value.reasoningEffort) || !EFFORTS.includes(value.subagentReasoningEffort)) throw new Error('推理强度无效。');
   if (!['native', 'json'].includes(value.toolProtocol)) throw new Error('工具执行通道无效。');
   if (!['', 'native', 'json'].includes(value.subagentToolProtocol)) throw new Error('子模型工具执行通道无效。');
-  const models = [...new Set([...(Array.isArray(value.models) ? value.models : []).slice(0, 500).map(modelId).filter(Boolean), model])];
+  const models = [...new Set([...(Array.isArray(value.models) ? value.models : []).slice(0, 500).map(modelId).filter(Boolean), ...(model ? [model] : [])])];
   const subagentModels = [...new Set([...(Array.isArray(input.subagentModels) ? input.subagentModels : subagentBaseUrl === baseUrl ? models : []).slice(0, 500).map(modelId).filter(Boolean)])];
   const subagentModel = modelId(input.subagentModel || (subagentBaseUrl === baseUrl ? model : ''));
   if (subagentModel && !subagentModels.includes(subagentModel)) subagentModels.push(subagentModel);
@@ -36,7 +36,7 @@ function normalizeConnection(input = DEFAULT_CONNECTION) {
   const maxOutputTokens = Number.isInteger(value.maxOutputTokens) && value.maxOutputTokens >= 128 && value.maxOutputTokens <= 128000 ? value.maxOutputTokens : 0;
   return { retryLimit, maxOutputTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol };
 }
-function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch }) {
+function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch, blankOnMissing = false }) {
   let state; let readError = ''; let queue = Promise.resolve();
   const ensure = async () => {
     if (state) return;
@@ -45,10 +45,11 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch 
       state = { config: normalizeConnection(saved.config), encryptedKey: clean(saved.encryptedKey, 32000), keyOrigin: saved.keyOrigin || '', encryptedSubagentKey: clean(saved.encryptedSubagentKey, 32000), subagentKeyOrigin: saved.subagentKeyOrigin || '' };
     } catch (error) {
       if (error.code !== 'ENOENT') readError = '模型配置无法读取；原文件已保留，请修正后重启程序。';
-      state = { config: normalizeConnection(), encryptedKey: '', keyOrigin: '', encryptedSubagentKey: '', subagentKeyOrigin: '' };
+      const config = blankOnMissing ? { ...DEFAULT_CONNECTION, name: '', website: '', baseUrl: '', addresses: [], models: [], model: '', subagentBaseUrl: '', subagentModels: [], subagentModel: '', reasoningEffort: '', subagentReasoningEffort: '', subagentToolProtocol: '' } : normalizeConnection();
+      state = { config, encryptedKey: '', keyOrigin: '', encryptedSubagentKey: '', subagentKeyOrigin: '' };
     }
   };
-  const origin = (config) => new URL(config.baseUrl).origin;
+  const origin = (config) => config.baseUrl ? new URL(config.baseUrl).origin : '';
   const hasMainKey = (config) => (state.encryptedKey && state.keyOrigin === origin(config)) || (!state.encryptedKey && origin(config) === 'https://catbee.online' && Boolean(legacyKey));
   const hasStoredSubagentKey = (config) => state.encryptedSubagentKey && state.subagentKeyOrigin === origin({ baseUrl: config.subagentBaseUrl }) && state.config.subagentBaseUrl === config.subagentBaseUrl;
   const hasSubagentKey = (config) => hasStoredSubagentKey(config) || (config.subagentBaseUrl === config.baseUrl && hasMainKey(config));
@@ -123,7 +124,7 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch 
       }); queue = operation.catch(() => {}); return operation;
     },
     async models(input, profile = 'main') {
-      await ensure(); const config = normalizeConnection(input);
+      await ensure(); const config = normalizeConnection(input, { requireModel: false });
       if (profile !== 'subagent') return list(config, input.apiKey);
       const childConfig = { ...config, baseUrl: config.subagentBaseUrl };
       return list(childConfig, input.subagentApiKey || (config.subagentBaseUrl === config.baseUrl ? input.apiKey : undefined), config, 'subagent');

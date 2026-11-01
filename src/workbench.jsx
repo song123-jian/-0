@@ -1,3 +1,4 @@
+import { connectionModels } from './lib/model-list.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DocumentPreview } from './components/document-preview.jsx';
 import CodeMirror from '@uiw/react-codemirror';
@@ -210,7 +211,7 @@ function App() {
   const reasoningEffort = availableReasoningEfforts.includes(currentChat?.reasoningEffort)
     ? currentChat.reasoningEffort
     : agentSettings.defaultReasoningEffort;
-  const availableModels = appState?.connection?.models?.length ? appState.connection.models : [appState?.model || 'grok-4.7'];
+  const availableModels = connectionModels(appState);
   const selectedModel = availableModels.includes(currentChat?.model) ? currentChat.model
     : availableModels.includes(appState?.connection?.model) ? appState.connection.model : availableModels[0];
   const composerMode = pendingModeOverride && pendingModeOverride.conversationId === currentChat?.id ? pendingModeOverride.mode : 'answer';
@@ -1893,6 +1894,7 @@ function App() {
                   </div>
                   <div className="composer-submit">
                     <select className="composer-model-button" aria-label="选择模型" title="选择模型" value={selectedModel || ''} disabled={!availableModels.length || sending || storageBusy} onChange={(event) => selectChatModel(event.target.value)}>
+                      {!availableModels.length && <option value="">请先配置模型</option>}
                       {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
                     </select>
                     <label className="composer-effort">
@@ -1978,7 +1980,7 @@ function App() {
         {activeView === 'settings' && <SettingsPanel onAppSync={synchronizeApp} onOpenWorktree={openManagedWorktree} initialCategory={settingsSection} onModelConnectionSaved={modelConnectionSaved} onSupabaseSyncSaved={supabaseSyncSaved} onModalChange={setSettingsDialogOpen} library={library} chatBusy={anySending || storageBusy} onManageChats={manageStoredChats} appState={appState} workspaceRoot={workspaceRoot} preferences={preferences} resolvedTheme={resolvedTheme} agentSettings={agentSettings} onPreference={savePreferences} onAgentSetting={saveAgentSettings} onConfigureConversationStorage={configureChatStorage} onOpenCodexConfig={(scope) => window.scodex.openCodexConfig(scope).catch((error) => showNotice(readableError(error)))} onDiagnoseCodex={() => window.scodex.diagnoseCodex()} onOpenCodexDiagnostic={() => window.scodex.openCodexDiagnostic().catch((error) => showNotice(readableError(error)))} onUpdateCodex={() => window.scodex.updateCodex()} onReinstallTools={() => window.scodex.reinstallWorkspaceTools()} onChooseWorkspace={handleChooseWorkspace} onReveal={revealWorkspace} onCopyPath={() => navigator.clipboard.writeText(workspaceRoot).then(() => showNotice('工作区路径已复制')).catch(() => showNotice('复制失败'))} onRefreshSkills={refreshSkills} skills={skills} connectionLabel={apiStateLabel(apiState, appState?.hasCredential)} onView={navigateView} />}
       </main>
       {officeDocument && <DocumentPreview document={officeDocument} onClose={() => setOfficeDocument(null)} />}
-      <BrowserPanel requestedTool={panelRequest} panelWidth={panelWidth ?? preferences.browserPanelWidth ?? 400} onWidthChange={setPanelWidth} onWidthCommit={(width) => { setPanelWidth(null); savePreferences({ browserPanelWidth: width }); }} preferences={preferences} onAiOpen={() => runToolAction('browser')} suspended={Boolean(officeDocument) || storageBusy || settingsDialogOpen || commandOpen || projectDialogOpen || Boolean(collaborationSource) || Boolean(library?.conversations.some((chat) => chat.messages.some((message) => message.approval)))} open={browserOpen} expanded={browserExpanded} workspaceRoot={workspaceRoot} model={appState?.model || 'grok-4.7'} reasoningOptions={availableReasoningEfforts.map((effort) => ({ value: effort, label: REASONING_EFFORT_LABELS[effort] || effort }))} defaultReasoningEffort={reasoningEffort} contextAccess={preferences.contextAccess} onContextPermission={changeContextPermission} onOpenFile={openWorkspaceFile} onReveal={revealWorkspace} onToggle={toggleBrowser} onExpand={() => savePreferences({ browserPanelExpanded: !browserExpanded })} onView={navigateView} onTerminal={openTerminal} onError={(error) => showNotice(readableError(error))} />
+      <BrowserPanel requestedTool={panelRequest} panelWidth={panelWidth ?? preferences.browserPanelWidth ?? 400} onWidthChange={setPanelWidth} onWidthCommit={(width) => { setPanelWidth(null); savePreferences({ browserPanelWidth: width }); }} preferences={preferences} onAiOpen={() => runToolAction('browser')} suspended={Boolean(officeDocument) || storageBusy || settingsDialogOpen || commandOpen || projectDialogOpen || Boolean(collaborationSource) || Boolean(library?.conversations.some((chat) => chat.messages.some((message) => message.approval)))} open={browserOpen} expanded={browserExpanded} workspaceRoot={workspaceRoot} model={appState?.model || ''} reasoningOptions={availableReasoningEfforts.map((effort) => ({ value: effort, label: REASONING_EFFORT_LABELS[effort] || effort }))} defaultReasoningEffort={reasoningEffort} contextAccess={preferences.contextAccess} onContextPermission={changeContextPermission} onOpenFile={openWorkspaceFile} onReveal={revealWorkspace} onToggle={toggleBrowser} onExpand={() => savePreferences({ browserPanelExpanded: !browserExpanded })} onView={navigateView} onTerminal={openTerminal} onError={(error) => showNotice(readableError(error))} />
       {commandOpen && <CommandPalette onAction={runToolAction} onClose={() => setCommandOpen(false)} />}
       {collaborationSource && library && <TaskCollaborationDialog library={library} projects={appState?.projects || []} runningIds={liveRequests.map(r => r.conversationId)} sourceId={collaborationSource} canExecute={canShareContext} onClose={() => setCollaborationSource('')}
         onSubmit={input => collaborationActionRef.current({ action: 'send', input: { ...input, sourceId: collaborationSource } })}

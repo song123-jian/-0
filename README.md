@@ -4,9 +4,11 @@ A Windows desktop workbench built with Electron, React, and Vite. It brings proj
 
 ## Download
 
-The Windows x64 installer is available from the [Scodex Workbench 1.3.29 release](https://github.com/song123-jian/-0/releases/tag/v1.3.29), or [download the installer directly](https://github.com/song123-jian/-0/releases/download/v1.3.29/Scodex-Workbench-Setup-1.3.29-x64.exe).
+The Windows x64 installer is available from the [Scodex Workbench 1.3.30 release](https://github.com/song123-jian/-0/releases/tag/v1.3.30), or [download the installer directly](https://github.com/song123-jian/-0/releases/download/v1.3.30/Scodex-Workbench-Setup-1.3.30-x64.exe).
 
-SHA-256: `a2cdd94f8f08fd39223a48ebe80d06bfad24dedec0bbb19fed662d0e43318fa9`
+SHA-256: `0eded7ad986368d264070805ea3045545365282aafb6f0172e86431be503f39f`
+
+On a new computer, model settings start blank. Saved settings remain associated with their computer, and transferring a marked profile does not load the original computer's credentials or chats.
 
 During desktop automation, a non-activating status bar lets you stop the current run with Esc or the Stop button, including while another app has focus.
 

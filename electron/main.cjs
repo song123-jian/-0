@@ -4,10 +4,17 @@ const { discoverLocalCapabilities } = require('./local-capabilities.cjs');
 const { createPluginMarketplace } = require('./plugin-marketplace.cjs');
 const path = require('node:path');
 const { readLaunchOptions, createInProcessBackground, createScheduledBackground } = require('./scheduled-background.cjs');
+const { prepareDeviceProfile } = require('./device-profile.cjs');
 const launchOptions = readLaunchOptions(process.argv);
-if (launchOptions.profile) app.setPath('userData', launchOptions.profile);
-const singleInstance = app.requestSingleInstanceLock({ background: launchOptions.background });
-if (!singleInstance) app.quit();
+let deviceProfile;
+try {
+  deviceProfile = prepareDeviceProfile(launchOptions.profile || app.getPath('userData'));
+  app.setPath('userData', deviceProfile.profile);
+} catch (error) {
+  app.whenReady().then(() => { dialog.showErrorBox('电脑初始化未完成', String(error.message || error)); app.exit(1); });
+}
+const singleInstance = Boolean(deviceProfile) && app.requestSingleInstanceLock({ background: launchOptions.background });
+if (!singleInstance && deviceProfile) app.quit();
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
@@ -1916,9 +1923,10 @@ function wakeScheduledTasks() {
 app.whenReady().then(async () => {
   if (!singleInstance) return;
   desktopControl = createDesktopControl({ BrowserWindow, ipcMain, screen });
-  codexRoot = launchOptions.codexHome || process.env.SCODEX_HOME
-    || (process.env.PORTABLE_EXECUTABLE_DIR && findScodexRoot(process.env.PORTABLE_EXECUTABLE_DIR))
-    || findScodexRoot(path.dirname(app.getPath('exe'))) || findScodexRoot(__dirname);
+  codexRoot = launchOptions.codexHome || (deviceProfile.isolatedHome ? path.join(app.getPath('userData'), 'codex-home')
+    : process.env.SCODEX_HOME || (process.env.PORTABLE_EXECUTABLE_DIR && findScodexRoot(process.env.PORTABLE_EXECUTABLE_DIR))
+      || findScodexRoot(path.dirname(app.getPath('exe'))) || findScodexRoot(__dirname));
+  if (deviceProfile.isolatedHome && !launchOptions.codexHome) await fs.mkdir(codexRoot, { recursive: true });
   settingsPath = path.join(app.getPath('userData'), 'settings.json');
   await fs.mkdir(app.getPath('userData'), { recursive: true });
   await loadSettings();
@@ -1935,10 +1943,10 @@ app.whenReady().then(async () => {
     onChanged: () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dev-services:state', devServices.snapshot(workspaceRoot)); },
   });
   let legacyKey;
-  if (codexRoot) {
+  if (deviceProfile.allowLegacy && codexRoot) {
     try { await fs.access(path.join(codexRoot, 'secrets', 'catbee-module-2.dpapi')); legacyKey = unprotectModule2Key; } catch {}
   }
-  modelConnection = createModelConnection(path.join(app.getPath('userData'), 'model-connection.json'), { encryption: safeStorage, legacyKey });
+  modelConnection = createModelConnection(path.join(app.getPath('userData'), 'model-connection.json'), { encryption: safeStorage, legacyKey, blankOnMissing: deviceProfile.isolatedHome });
   await modelConnection.get();
   modelUsage = createUsageLedger(path.join(app.getPath('userData'), 'model-usage.json'));
   supabaseSync = createSupabaseSync(path.join(app.getPath('userData'), 'supabase-sync.json'), { encryption: safeStorage });

@@ -1,3 +1,8 @@
+export function connectionModels(state) {
+  if (state?.connection) return Array.isArray(state.connection.models) ? state.connection.models : [];
+  return state?.model ? [state.model] : [];
+}
+
 export function replaceModelList(connection, fetched) {
   const models = [...new Set(fetched)];
   if (!models.length) throw new Error('服务返回的模型列表为空。');
