@@ -75,7 +75,7 @@ const {
   TASK_IMAGE_BYTES,
 } = require('./scheduled-tasks.cjs');
 const { loadScheduledTaskAttachments } = require('./scheduled-task-attachments.cjs');
-const { normalizeProjects, projectPathKey, upsertProject } = require('./project-registry.cjs');
+const { normalizeProjects, projectPathKey, upsertProject, resolveChatProject, conversationWorkspacePath } = require('./project-registry.cjs');
 const { createPermissionAudit, evaluatePermission, normalizePermissionSettings, permissionInstruction, networkAllowed, unrestrictedCommandAllowed, readWindowsSecurityContext, toolPolicyAllowed } = require('./permission-policy.cjs');
 
 const MAX_TEXT_BYTES = 8 * 1024 * 1024;
@@ -150,7 +150,7 @@ function currentPermissionSettings(settings = agentSettings) {
 function hasRunningRequestForProject(projectId) {
   for (const requestId of runningRequests.keys()) {
     const scope = requestScopes.get(requestId);
-    if (!scope?.projectId || scope.projectId === projectId) return true;
+    if (!scope || scope.projectId === projectId) return true;
   }
   return false;
 }
@@ -271,6 +271,12 @@ async function atomicWrite(target, data) {
   }
 }
 
+async function conversationWorkspace() {
+  const directory = conversationWorkspacePath(codexRoot || app.getPath('documents'), app.getPath('userData'));
+  await fs.mkdir(directory, { recursive: true });
+  return fs.realpath(directory);
+}
+
 async function loadSettings() {
   let saved = {};
   try {
@@ -282,17 +288,17 @@ async function loadSettings() {
     }
   } catch {}
   if (!workspaceRoot) {
-    const defaultRoot = path.join(codexRoot || app.getPath('documents'), 'workbench', 'workspace');
-    await fs.mkdir(defaultRoot, { recursive: true });
-    workspaceRoot = await fs.realpath(defaultRoot);
+    workspaceRoot = await conversationWorkspace();
   }
-  projects = normalizeProjects(saved.projects, workspaceRoot);
-  const active = projects.find((project) => project.id === saved.activeProjectId)
-    || projects.find((project) => projectPathKey(project.path) === projectPathKey(workspaceRoot));
-  activeProjectId = active?.id || projects[0]?.id || '';
+  projects = normalizeProjects(saved.projects, saved.workspaceRoot);
+  const active = saved.activeProjectId === '' ? null : projects.find((project) => project.id === saved.activeProjectId && !project.archivedAt)
+    || projects.find((project) => !project.archivedAt && projectPathKey(project.path) === projectPathKey(workspaceRoot));
+  activeProjectId = active?.id || '';
+  workspaceRoot = active ? await fs.realpath(active.path) : await conversationWorkspace();
 }
 
 async function selectProject(project) {
+  project ||= { id: '', name: '普通对话', path: await conversationWorkspace() };
   if (project.archivedAt) throw new Error('项目已归档，请先恢复。');
   if ((sourceControl?.isBusy() || githubPulls?.isBusy())) throw new Error('Git 写入正在进行，请稍候再切换项目。');
   if (projectChanging) throw new Error('项目正在切换，请稍候。');
@@ -427,7 +433,6 @@ function getWorkspaceRoot() {
 }
 
 async function resolveChatRequestScope(payload = {}, selectedProjectId = activeProjectId) {
-  const requestedProjectId = typeof payload.projectId === 'string' && payload.projectId ? payload.projectId : '';
   const conversationId = typeof payload.conversationId === 'string' ? payload.conversationId : '';
   let conversation;
   if (conversationId) {
@@ -436,13 +441,10 @@ async function resolveChatRequestScope(payload = {}, selectedProjectId = activeP
     conversation = library.conversations.find((item) => item.id === conversationId);
     if (conversation?.archivedAt) throw new Error('聊天已归档，请先恢复。');
   }
-  if (conversation?.projectId && requestedProjectId && conversation.projectId !== requestedProjectId) throw new Error('聊天所属项目已变化，请重新打开聊天。');
-  const projectId = conversation?.projectId || requestedProjectId || selectedProjectId;
-  const project = projects.find((item) => item.id === projectId);
-  if (!project || project.archivedAt) throw new Error('聊天所属项目不存在或已归档。');
-  const root = await fs.realpath(project.path);
+  const project = resolveChatProject(projects, payload, conversation, selectedProjectId);
+  const root = project ? await fs.realpath(project.path) : await conversationWorkspace();
   if (!(await fs.stat(root)).isDirectory()) throw new Error('聊天所属项目文件夹不可用。');
-  return { projectId, projectName: project.name, workspaceRoot: root };
+  return { projectId: project?.id || '', projectName: project?.name || '', workspaceRoot: root };
 }
 
 function resolveScheduledProjectId(value = {}) {
@@ -567,7 +569,7 @@ async function callModel(webContents, requestId, payload, controller = new Abort
       if (managedWorkspace && !await worktreeService.isManagedWorkspace(requestWorkspace)) throw new Error('工作树路径或登记已变化，任务已停止。');
       if (controller.signal.aborted) throw new Error('任务已停止。');
       const registered = projects.find((item) => item.id === requestScope.projectId);
-      if (!registered || registered.archivedAt || projectPathKey(registered.path) !== projectPathKey(requestWorkspace)) throw new Error('任务所属项目已变化，操作已停止。');
+      if (requestScope.projectId && (!registered || registered.archivedAt || projectPathKey(registered.path) !== projectPathKey(requestWorkspace))) throw new Error('任务所属项目已变化，操作已停止。');
       if (requestPreferences.contextAccess !== 'chat-only' && preferences.contextAccess === 'chat-only') throw new Error('已切换为仅对话，本机工具访问已停止。');
     };
     const fullAccess = () => requestPermissionSettings.sandboxMode === 'danger-full-access';
@@ -1505,6 +1507,7 @@ function installHandlers() {
   });
 
   localHandle('projects:select', async (id) => {
+    if (id === '') return selectProject(null);
     const project = projects.find((item) => item.id === id);
     if (!project) throw new Error('找不到这个项目。');
     return selectProject(project);
@@ -1523,8 +1526,7 @@ function installHandlers() {
     if (action === 'rename') { title = String(value || '').replace(/[\r\n\x00-\x1f]+/g, ' ').trim().slice(0,80); if (!title) throw new Error('请输入项目名称。'); }
     if (structural && project.id === activeProjectId) {
       const next = projects.find(item => item.id !== id && !item.archivedAt);
-      if (!next) throw new Error('请先创建另一个项目，再归档或删除当前项目。');
-      await selectProject(next);
+      await selectProject(next || null);
     }
     projectChanging = true;
     const previousProjects = projects;
