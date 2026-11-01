@@ -10,7 +10,7 @@ const TITLES = { list_directory: '查看目录', read_file: '读取文件', sear
 const field = (description, extra = {}) => ({ type: 'string', description, ...extra });
 const tool = (name, description, properties, required = []) => ({ type: 'function', function: { name, description, parameters: { type: 'object', properties, required, additionalProperties: false } } });
 const AGENT_TOOLS = [
-  tool('list_directory', '列出项目目录。默认排除依赖、缓存、构建和 Git 内部目录；不跨越工作区或符号链接。', { path: field('相对项目根目录的路径，默认 .') }),
+  tool('list_directory', '列出项目目录。默认排除依赖、缓存、构建和 Git 内部目录；完整访问可用绝对路径访问项目外；不跨越符号链接。', { path: field('相对项目根目录的路径，默认 .') }),
   tool('read_file', '读取 UTF-8 文本并返回完整文件 SHA256。修改已有文件前必须读取；大文件可分页。自动附带沿途 AGENTS.md 项目规则。', { path: field('相对项目路径'), start_line: { type: 'integer', minimum: 1 }, max_lines: { type: 'integer', minimum: 1, maximum: 400 } }, ['path']),
   tool('search_text', '在指定目录或文件内搜索字面文本，返回路径、行号和片段；有明确目标时先限定 path。', { query: field('区分大小写的字面文本，最多200字符'), path: field('相对项目目录或文件，默认 .') }, ['query']),
   tool('write_file', '创建或完整替换 UTF-8 无 BOM 文本。已有文件必须先 read_file 并提供原 SHA256；新文件 expected_hash 为 new。拒绝未保存编辑或并发变化。优先小范围 edit_file。', { path: field('相对项目文件路径'), content: field('完整文件内容'), expected_hash: field('read_file 返回的完整 hash；新建文件填 new') }, ['path', 'content', 'expected_hash']),
@@ -41,25 +41,30 @@ function fileDiff(relative, before, after) {
   const value = lines.join('\n'); return value.length > 24_000 ? value.slice(0, 24_000) + '\n[差异显示已截断；请打开文件检查完整内容]' : value;
 }
 
-function createAgentTools({ workspaceRoot, readOnly = false, guard = async () => {}, authorize = async () => {},
+function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false, allowedPaths = [], allowedTools = null, guard = async () => {}, authorize = async () => {},
   isDirty = () => false, protectedPaths = [], environment = async () => process.env, onFileChanged = () => {} }) {
   const observed = new Map();
   const rootPromise = fs.realpath(workspaceRoot);
+  const scopes = allowedPaths.map((value) => path.resolve(workspaceRoot, value));
+  const scoped = (target) => !scopes.length || scopes.some((scope) => inside(scope, target));
   async function resolve(value = '.', allowMissing = false) {
     const root = await rootPromise;
     if (typeof value !== 'string' || !value.trim() || value.length > 4096 || /[\x00-\x1f]/.test(value)) throw new Error('项目路径无效。');
     const absolute = path.resolve(root, value); const rel = path.relative(root, absolute);
-    if (!inside(root, absolute)) throw new Error('模型工具只能访问当前项目内的路径。');
-    if (sensitive(rel) || protectedPaths.some((value) => value && inside(path.resolve(value), absolute))) throw new Error('模型工具不读取或修改凭据、应用配置及受保护目录。');
+    const inWorkspace = inside(root, absolute);
+    if (!inWorkspace && !fullAccess) throw new Error('模型工具只能访问当前项目内的路径。');
+    if (!scoped(absolute)) throw new Error('目标路径不在主模型分配范围内。');
+    if (sensitive(inWorkspace ? rel : absolute) || protectedPaths.some((value) => value && inside(path.resolve(value), absolute))) throw new Error('模型工具不读取或修改凭据、应用配置及受保护目录。');
     if (rel.split(path.sep).some((s) => s.toLowerCase() === '.git')) throw new Error('不直接读写 Git 内部数据；请使用经过权限检查的 Git 命令。');
-    let ancestor = root;
-    const parts = rel ? rel.split(path.sep) : [];
+    let ancestor = inWorkspace ? root : path.parse(absolute).root;
+    const suffix = path.relative(ancestor, absolute);
+    const parts = suffix ? suffix.split(path.sep) : [];
     for (let i = 0; i < parts.length; i += 1) {
       ancestor = path.join(ancestor, parts[i]);
       try { const info = await fs.lstat(ancestor); if (info.isSymbolicLink()) throw new Error('模型工具不跨越符号链接或目录联接。'); }
       catch (error) { if (error.code === 'ENOENT' && allowMissing) break; throw error; }
     }
-    return { root, target: absolute, relative: rel.replaceAll(path.sep, '/') || '.' };
+    return { root, target: absolute, relative: (inWorkspace ? rel : absolute).replaceAll(path.sep, '/') || '.' };
   }
   async function read(target) {
     const info = await fs.stat(target); if (!info.isFile() || info.size > MAX_FILE_BYTES) throw new Error('文本工具只处理 2 MB 以内的普通文件。');
@@ -69,7 +74,8 @@ function createAgentTools({ workspaceRoot, readOnly = false, guard = async () =>
   async function instructions(target) {
     const root = await rootPromise; const result = [];
     let directory = path.dirname(target); const dirs = [];
-    while (inside(root, directory)) { dirs.unshift(directory); if (directory === root) break; directory = path.dirname(directory); }
+    const boundary = inside(root, target) ? root : fullAccess ? path.parse(target).root : root;
+    while (inside(boundary, directory)) { dirs.unshift(directory); if (directory === boundary) break; directory = path.dirname(directory); }
     let remaining = 24_000;
     for (const dir of dirs) {
       const file = path.join(dir, 'AGENTS.md');
@@ -119,6 +125,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, guard = async () =>
     });
   }
   async function execute(name, args, context = {}) {
+    if (Array.isArray(allowedTools) && !allowedTools.includes(name)) throw new Error('当前子任务未开放此工具。');
     await guard(); if (context.signal?.aborted) throw new Error('任务已停止。');
     context.onProgress?.({ title: TITLES[name] || name, detail: typeof args.path === 'string' ? args.path : '' });
     if (name === 'write_file' || name === 'edit_file') return save(args, name === 'edit_file', context);
@@ -176,7 +183,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, guard = async () =>
     }
     throw new Error('未知工具。');
   }
-  return { execute, projectFiles: { resolve, instructions }, definitions: AGENT_TOOLS.filter((t) => !readOnly || !['write_file', 'edit_file', 'run_command'].includes(t.function.name)),
+  return { execute, projectFiles: { resolve, instructions }, definitions: AGENT_TOOLS.filter((t) => (!readOnly || !['write_file', 'edit_file', 'run_command'].includes(t.function.name)) && (!Array.isArray(allowedTools) || allowedTools.includes(t.function.name))).map((definition) => fullAccess ? { ...definition, function: { ...definition.function, description: definition.function.description + ' 完整访问已启用，可按当前 Windows 账号权限使用项目外绝对路径；凭据与受保护目录仍不开放。' } } : definition),
     async projectInstructions() { try { const item = await resolve('AGENTS.md'); return (await read(item.target)).content.slice(0, 24_000); } catch { return ''; } } };
 }
 

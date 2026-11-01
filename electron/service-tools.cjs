@@ -1,4 +1,5 @@
 const { normalizeInput } = require('./dev-services.cjs');
+const { toolPolicyAllowed } = require('./permission-policy.cjs');
 const string = (description, maxLength = 100) => ({ type: 'string', description, maxLength });
 const def = (name, description, properties, required = []) => ({ type: 'function', function: { name, description, parameters: { type: 'object', properties, required, additionalProperties: false } } });
 const DEFINITIONS = [
@@ -16,8 +17,9 @@ function validate(name, args) {
     if (rule.type === 'string' ? typeof val !== 'string' || val.length > rule.maxLength || val.includes('\0') : !Number.isInteger(val) || val < rule.minimum || val > rule.maximum) throw new Error('服务参数格式不正确：' + key);
   }
 }
-function createServiceTools({ manager, root, readOnly = false, guard = async () => {}, policy = () => 'never', approve, onStarted = () => {} }) {
-  const definitions = DEFINITIONS.filter((d) => ['service_list', 'service_logs'].includes(d.function.name) || !readOnly && policy() === 'on-request');
+function createServiceTools({ manager, root, readOnly = false, guard = async () => {}, startGuard = async () => {}, policy = () => 'never', fullAccess = () => false, approve, onStarted = () => {} }) {
+  const allowed = () => toolPolicyAllowed(policy(), fullAccess()) && !readOnly;
+  const definitions = DEFINITIONS.filter((d) => ['service_list', 'service_logs'].includes(d.function.name) || allowed());
   const check = async (signal) => { await guard(); if (signal?.aborted) throw new Error('任务已停止。'); };
   return { definitions,
     async execute(name, args, context = {}) {
@@ -27,7 +29,7 @@ function createServiceTools({ manager, root, readOnly = false, guard = async () 
       let result, input, existing;
       if (name === 'service_start') input = normalizeInput({ name: args.name, command: args.command, cwd: args.cwd, previewUrl: args.preview_url });
       if (mutation) {
-        if (policy() !== 'on-request' || readOnly) throw new Error('启动或停止开发服务必须逐次审批。');
+        if (!allowed()) throw new Error('当前权限不允许启动或停止开发服务。');
         const directory = name === 'service_start' ? await manager.resolve(root, input.cwd) : null;
         existing = name === 'service_stop' ? manager.describe(root, args.service_id) : null;
         context.onProgress?.({ title: TITLES[name], detail: input?.command || existing.command, path: directory?.target || existing.cwd });
@@ -35,9 +37,9 @@ function createServiceTools({ manager, root, readOnly = false, guard = async () 
         await approve({ kind: 'service', title: TITLES[name], path: directory?.target || existing.cwd, command: JSON.stringify(input || existing, null, 2),
           note: name === 'service_start' ? '服务使用当前 Windows 账号持续运行。请核对命令、目录与预览地址；完整退出或切换项目将停止。' : '这会停止所示托管服务及其子进程，正在进行的请求也会中断。', allowLabel: '允许本次服务操作' }, context.signal);
         await check(context.signal);
-        if (policy() !== 'on-request' || readOnly) throw new Error('审批期间服务权限已变化。');
+        if (!allowed()) throw new Error('审批期间服务权限已变化。');
       }
-      if (name === 'service_start') { const service = await manager.start(root, input, { signal: context.signal, guard: async () => { await check(context.signal); if (policy() !== 'on-request' || readOnly) throw new Error('服务权限已变化。'); }, source: '模型任务' }); result = { service, ...manager.logs(root, service.id) }; onStarted(service); }
+      if (name === 'service_start') { const service = await manager.start(root, input, { signal: context.signal, guard: async () => { await check(context.signal); await startGuard(); if (!allowed()) throw new Error('服务权限已变化。'); }, source: '模型任务' }); result = { service, ...manager.logs(root, service.id) }; onStarted(service); }
       else if (name === 'service_stop') result = { service: await manager.stop(root, args.service_id) };
       else if (name === 'service_logs') result = manager.logs(root, args.service_id, args.max_chars);
       else result = manager.snapshot(root);

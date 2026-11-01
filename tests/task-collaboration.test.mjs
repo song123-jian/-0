@@ -52,13 +52,18 @@ for (const [name, mutate, running, pattern, extra] of [
   ['项目归档', t => { t.projectId = 'old'; }, [], /归档/],
   ['目标运行', () => {}, ['target'], /仍在运行/],
   ['并发上限', () => {}, ['source', 'x', 'y'], /最多同时运行3/],
-  ['执行开关', t => { t.executionEnabled = false; }, [], /未启用项目工具/, { freshStamp: true, executionEnabled: true }],
   ['未分组目标', t => { delete t.projectId; }, [], /未绑定项目/],
 ]) test('交接拒绝：' + name, () => {
   const { library, target } = fixture(); const input = inputFor(target); mutate(target);
   if (extra?.freshStamp) input.expectedStamp = taskStamp(target);
   if (extra?.executionEnabled) input.executionEnabled = true;
   assert.throws(() => prepareTaskHandoff(library, projects, running, input), pattern);
+});
+
+test('本次明确授权允许旧执行开关关闭的目标使用工具', () => {
+  const { library, target } = fixture(); target.executionEnabled = false;
+  const result = prepareTaskHandoff(library, projects, [], { ...inputFor(target), executionEnabled: true });
+  assert.equal(result.target.id, target.id); assert.equal(target.executionEnabled, false);
 });
 
 test('自身、空白及超长交接不会通过；删除后的任务不可读', () => {

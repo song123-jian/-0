@@ -68,6 +68,12 @@ function networkAllowed(settings, hostname) {
   return value.networkDomains.some((rule) => domainMatches(hostname, rule));
 }
 
+function unrestrictedCommandAllowed(settings) {
+  const value = normalizePermissionSettings(settings);
+  return value.sandboxMode === 'danger-full-access' && (!value.networkConfigured
+    || value.networkAccess && value.allowLocalBinding && value.networkDomains.includes('*'));
+}
+
 function operationDescription(operation) {
   return ({
     'file-read': '读取工作区文件',
@@ -79,6 +85,7 @@ function operationDescription(operation) {
     'worktree-write': '创建或删除 Git 工作树',
     'network': '访问网络地址',
     'system-admin': '请求 Windows 管理员权限',
+    'desktop-control': '查看或操控 Windows 桌面',
   }[operation] || operation || '执行本机操作');
 }
 
@@ -110,6 +117,9 @@ function evaluatePermission(settings, input = {}) {
     if (networkAllowed(value, input.hostname)) allowed = true;
     else reasons.push(value.networkAccess ? '网络地址不在允许列表中' : '沙箱网络访问未启用');
     if (!allowed && value.approvalPolicy === 'on-request') needsApproval = true;
+  } else if (operation === 'desktop-control') {
+    if (value.sandboxMode === 'danger-full-access') allowed = true;
+    else reasons.push('桌面操控需要完整访问权限');
   } else if (operation === 'system-admin') {
     reasons.push('此操作需要 Windows UAC 管理员确认');
     needsApproval = value.approvalPolicy === 'on-request';
@@ -131,7 +141,7 @@ function evaluatePermission(settings, input = {}) {
 function permissionInstruction(settings) {
   const value = normalizePermissionSettings(settings);
   const sandbox = value.sandboxMode === 'read-only' ? '只读沙箱' : value.sandboxMode === 'workspace-write' ? '工作空间写入沙箱' : '完整访问沙箱';
-  const approval = value.approvalPolicy === 'on-request' ? '需要时逐项请求用户审批' : '不弹出审批；超出沙箱的操作直接拒绝';
+  const approval = value.approvalPolicy === 'on-request' ? '需要时逐项请求用户审批' : value.sandboxMode === 'danger-full-access' ? '按已授予权限直接执行，不弹出工作台审批；使用当前 Windows 账号权限' : '不弹出审批；超出沙箱的操作直接拒绝';
   const network = !value.networkConfigured && value.sandboxMode === 'danger-full-access'
     ? '网络随完整访问策略开放'
     : value.networkAccess ? `网络已启用，仅允许：${value.networkDomains.join('、') || '未配置地址'}` : '网络访问关闭';
@@ -167,7 +177,12 @@ function createPermissionAudit(file, maxItems = MAX_AUDIT_ITEMS) {
   return { record, recent: () => recent.map((item) => ({ ...item, reason: [...item.reason] })) };
 }
 
+function toolPolicyAllowed(policy, fullAccess = false) {
+  return policy === 'on-request' || policy === 'never' && fullAccess === true;
+}
+
 module.exports = {
+  toolPolicyAllowed,
   APPROVAL_POLICIES,
   SANDBOX_MODES,
   domainMatches,
@@ -176,6 +191,7 @@ module.exports = {
   isLocalHost,
   isWithin,
   networkAllowed,
+  unrestrictedCommandAllowed,
   normalizeDomain,
   normalizePermissionSettings,
   operationDescription,

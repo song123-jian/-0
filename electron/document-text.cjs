@@ -336,4 +336,4 @@ async function extractAttachment(item) {
   }
 }
 
-module.exports = { extractAttachment };
+module.exports = { extractAttachment, archive };

@@ -17,6 +17,14 @@ async function fixture(t, extra = {}) {
   return { root, tools, approvals, changed, read: (p, rest = {}) => tools.execute('spreadsheet_read', { path: p, ...rest }), edit: (p, h, operations, context) => tools.execute('spreadsheet_edit', { path: p, expected_hash: h, operations }, context) };
 }
 const cells = (values, sheet) => [{ type: 'set_cells', sheet, cells: values }];
+
+test('full access with never saves a real workbook and reads the saved cells', async t => {
+  const f = await fixture(t, { policy: () => 'never', fullAccess: () => true });
+  assert.ok(f.tools.definitions.some(d => d.function.name === 'spreadsheet_edit'));
+  await f.edit('auto.xlsx', 'new', cells([{ address: 'A1', value: '真实写入' }]));
+  const saved = await f.read('auto.xlsx');
+  assert.equal(saved.cells.find(c => c.address === 'A1').value, '真实写入');
+});
 test('XLSX creates, reads, modifies values/formula/style, preserves other sheets and emits saved hash', async (t) => {
   const f = await fixture(t);
   let r = await f.edit('book.xlsx', 'new', [{ type: 'add_sheet', name: '保留' }, ...cells([{ address: 'A1', value: '中文标题', style: { bold: true, fill_color: 'ABCDEF', font_size: 16 } }, { address: 'B2', value: 12 }, { address: 'C2', formula: 'B2*2', style: { num_format: '0.00' } }]), ...cells([{ address: 'A1', value: '另一个表' }], '保留')]);
@@ -63,7 +71,7 @@ test('read-only, never, denied, cancellation and changed policy cannot save', as
   const f = await fixture(t, { policy: () => policy, approve: async () => control.abort() });
   await assert.rejects(f.edit('no.csv', 'new', cells([{ address: 'A1', value: '不写' }]), { signal: control.signal }), /停止/);
   const g = await fixture(t, { policy: () => policy, approve: async () => { policy = 'never'; } });
-  await assert.rejects(g.edit('no.csv', 'new', cells([{ address: 'A1', value: '不写' }])), /逐次审批/);
+  await assert.rejects(g.edit('no.csv', 'new', cells([{ address: 'A1', value: '不写' }])), /当前权限不允许表格修改/);
   await assert.rejects(fs.access(path.join(g.root, 'no.csv')));
 });
 test('paths, junctions, parameters and bounded ranges are checked at runtime', async (t) => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUp, BookOpen, Check, ChevronRight, FileCode2, FileSpreadsheet, FileText, FolderOpen, Globe, Image, ListChecks, LoaderCircle, MessageSquare, Monitor, Paintbrush, PanelTop, Paperclip, Plus, Presentation, Search, ShieldAlert, ShieldCheck, Target, WandSparkles, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, BookOpen, Check, ChevronRight, FileCode2, FileSpreadsheet, FileText, FolderOpen, Globe, Image, ListChecks, LoaderCircle, MessageSquare, Monitor, Paintbrush, PanelTop, Paperclip, Plus, Presentation, Search, ShieldAlert, ShieldCheck, Goal, WandSparkles, X } from 'lucide-react';
 
 const FEATURED = [
   ['documents', 'Documents', '创建和编辑文档', FileText, 'blue'],
@@ -14,15 +14,15 @@ const FEATURED = [
 const errorText = (error) => String(error?.message || error || '操作失败').replace(/^Error invoking remote method '[^']+': /, '');
 const parentPath = (value) => value.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '');
 
-function ToolItem({ icon: Icon, label, description, tone = '', checked, trailing, ...props }) {
-  return <button type="button" className="composer-menu-item" title={description ? `${label} · ${description}` : label} {...props}>
+function ToolItem({ icon: Icon, label, description, tone = '', checked, trailing, className = '', ...props }) {
+  return <button type="button" className={'composer-menu-item ' + className} title={description ? `${label} · ${description}` : label} {...props}>
     <span className={'composer-item-icon ' + tone}><Icon size={18} /></span>
     <span className="composer-item-copy"><span>{label}</span>{description && <small>{description}</small>}</span>
     {checked ? <Check size={16} className="composer-item-check" /> : trailing ? <ChevronRight size={16} /> : null}
   </button>;
 }
 
-export function ComposerTools({ workspaceRoot, directory, skills, conversations, activeId, activeSkill, mode, goal, contextAccess, busy, onFile, onImage, onFolder, onWorkbench, onMode, onGoal, onSkill, onChat, onView, onPermission }) {
+export function ComposerTools({ workspaceRoot, directory, skills, conversations, activeId, activeSkill, mode, goal, goalRun, onGoalStart, contextAccess, busy, onFile, onImage, onFolder, onWorkbench, onMode, onGoal, onSkill, onChat, onView, onPermission }) {
   const [panel, setPanel] = useState(null);
   const [page, setPage] = useState('tools');
   const [query, setQuery] = useState('');
@@ -32,6 +32,8 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
   const [searchResult, setSearchResult] = useState({ items: [], truncated: false });
   const [searching, setSearching] = useState(false);
   const [goalDraft, setGoalDraft] = useState('');
+  const [goalRequests, setGoalRequests] = useState(8);
+  const [goalMinutes, setGoalMinutes] = useState(10);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const rootRef = useRef(null);
@@ -125,15 +127,15 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
 
   return <div className="composer-tool-picker" ref={rootRef}>
     <button ref={triggerRef} type="button" className={'icon-button composer-action composer-plus ' + (panel === 'tools' ? 'selected' : '')} aria-label="添加工具和上下文" title="添加工具和上下文" aria-haspopup="dialog" aria-expanded={panel === 'tools'} aria-controls={panel === 'tools' ? 'composer-tools-popover' : undefined} onClick={() => open('tools')}><Plus size={22} /></button>
-    <button ref={permissionsRef} type="button" className={'icon-button composer-action composer-permission ' + (restricted ? 'restricted' : '')} aria-label="更改权限" title={restricted ? '仅对话：只发送对话内容' : '完全访问：允许附加本机内容；启用执行任务后可调用项目工具'} aria-haspopup="dialog" aria-expanded={panel === 'permissions'} aria-controls={panel === 'permissions' ? 'composer-permissions-popover' : undefined} onClick={() => open('permissions')}>{restricted ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />}<span>{restricted ? '仅对话' : '完全访问'}</span></button>
+    <button ref={permissionsRef} type="button" className={'icon-button composer-action composer-permission ' + (restricted ? 'restricted' : '')} aria-label="更改权限" title={restricted ? '仅对话：只发送对话内容' : '完全访问：按当前设置自动衔接回答和本机工具'} aria-haspopup="dialog" aria-expanded={panel === 'permissions'} aria-controls={panel === 'permissions' ? 'composer-permissions-popover' : undefined} onClick={() => open('permissions')}>{restricted ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />}<span>{restricted ? '仅对话' : '完全访问'}</span></button>
 
     {panel && <div className={'composer-popover ' + (panel === 'permissions' ? 'permission-popover' : '')} id={panel === 'permissions' ? 'composer-permissions-popover' : 'composer-tools-popover'} ref={popoverRef} role="dialog" aria-label={panel === 'permissions' ? '权限与访问' : '添加工具和上下文'} aria-modal="false" onKeyDown={handleKeys} onBlur={(event) => { if (event.relatedTarget && !rootRef.current?.contains(event.relatedTarget)) setPanel(null); }}>
       {panel === 'permissions' ? <>
         <div className="composer-popover-heading"><strong>权限与访问</strong><button className="icon-button" aria-label="关闭权限面板" onClick={() => dismiss(true)}><X size={17} /></button></div>
         <div className="composer-menu-scroll permission-options" role="radiogroup" aria-label="模型内容权限">
-          <button role="radio" aria-checked={!restricted} className={'permission-option ' + (!restricted ? 'selected' : '')} disabled={working || busy} onClick={() => run(() => onPermission('manual'))}><ShieldAlert size={20} /><span><strong>完全访问（默认）</strong><small>允许附加文件、图片和技能。启用“执行任务”后，模型可按设置读取项目、修改文件并运行命令。</small></span>{!restricted && <Check size={17} />}</button>
+          <button role="radio" aria-checked={!restricted} className={'permission-option ' + (!restricted ? 'selected' : '')} disabled={working || busy} onClick={() => run(() => onPermission('manual'))}><ShieldAlert size={20} /><span><strong>完全访问（默认）</strong><small>允许附加文件、图片和技能；直接描述要求，模型按权限设置调用工具完成工作，无需切换执行模式。</small></span>{!restricted && <Check size={17} />}</button>
           <button role="radio" aria-checked={restricted} className={'permission-option ' + (restricted ? 'selected' : '')} disabled={working || busy} onClick={() => run(() => onPermission('chat-only'))}><ShieldCheck size={20} /><span><strong>仅对话</strong><small>不附加本机文件、工作台快照或技能内容。</small></span>{restricted && <Check size={17} />}</button>
-          <p className="composer-permission-note">对话模式只提供回答；执行任务按“权限与配置”使用项目工具。规划只读。任意 Shell 不具备系统级沙箱；按请求审批时需逐条确认命令。</p>
+          <p className="composer-permission-note">普通消息自动衔接回答和操作；仅对话不开放本机工具，规划只读。完整访问且不请求审批时直接执行；按请求审批时逐项确认。Windows 账号和明确网络限制仍生效。</p>
         </div>
       </> : <>
         {page !== 'tools' && <div className="composer-popover-heading"><button className="icon-button" aria-label="返回工具菜单" onClick={() => { setPage('tools'); setError(''); }}><ArrowLeft size={17} /></button><strong>{page === 'files' ? '文件和文件夹' : '对话目标'}</strong><button className="icon-button" aria-label="关闭工具菜单" onClick={() => dismiss(true)}><X size={17} /></button></div>}
@@ -143,7 +145,7 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
               <ToolItem icon={Paperclip} label="文件和文件夹" description="附加工作区内容" trailing disabled={working || restricted || busy} onClick={() => browse()} />
               <ToolItem icon={Image} tone="blue" label="图片" description="附加图片到当前消息" disabled={working || restricted || busy} onClick={() => run(onImage)} />
               <ToolItem icon={PanelTop} tone="green" label="附加 Scodex 工作台" description="当前工作状态快照" disabled={working || restricted || busy} onClick={() => run(onWorkbench)} />
-              <ToolItem icon={Target} label="目标" description={goal ? '编辑本次对话目标' : '设置本次对话目标'} checked={Boolean(goal)} disabled={busy} onClick={() => { setGoalDraft(goal || ''); setPage('goal'); }} />
+              <ToolItem icon={Goal} className="composer-goal-entry" label="目标" description={goal ? '编辑要持续追求的目标' : '设置要持续追求的目标'} checked={Boolean(goal)} disabled={busy} onClick={() => { setGoalDraft(goal || ''); setPage('goal'); }} />
               <ToolItem icon={ListChecks} label="计划模式" description={mode === 'plan' ? '已开启，点击返回问答' : '开启计划模式'} checked={mode === 'plan'} disabled={busy} onClick={() => run(() => onMode(mode === 'plan' ? 'answer' : 'plan'))} />
               <ToolItem icon={Paintbrush} tone="green" label="绘图" description="打开本地图片编辑" onClick={() => run(() => onView('images'))} />
             </div>}
@@ -173,7 +175,11 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
           {page === 'goal' && <form className="composer-goal-form" onSubmit={(event) => { event.preventDefault(); run(() => onGoal(goalDraft.trim())); }}>
             <label htmlFor="composer-goal">希望这次对话达成什么？</label>
             <textarea id="composer-goal" value={goalDraft} onChange={(event) => setGoalDraft(event.target.value)} placeholder="例如：完成一个可运行的小程序，并说明验证方法。" maxLength={2000} rows={5} />
-            <p>目标随当前对话保存，并用于后续消息；任务由你逐步发起。</p>
+            <p>保存只记录目标；点击开始后在本轮预算内连续执行。可随时停止，关闭程序后暂停，恢复时先核对已有结果。</p>
+            <label>请求轮数上限<input aria-label="目标请求轮数" type="number" min="1" max="24" value={goalRequests} onChange={e => setGoalRequests(Number(e.target.value))} /></label>
+            <label>时间上限（分钟）<input aria-label="目标时间上限" type="number" min="1" max="15" value={goalMinutes} onChange={e => setGoalMinutes(Number(e.target.value))} /></label>
+            {goalRun && <p role="status">{({ running: '执行中', completed: '模型报告完成', blocked: '需要处理阻塞', budget: '达到预算', paused: '已暂停' })[goalRun.status]} · {goalRun.rounds}/{goalRun.maxRequests} 轮。{goalRun.summary}</p>}
+            <button type="button" className="primary-button" disabled={working || busy || restricted || mode === 'plan' || !goalDraft.trim()} onClick={() => { const text = goalDraft.trim(); dismiss(); Promise.resolve(onGoalStart(text, { maxRequests: goalRequests, minutes: goalMinutes })).catch(caught => setError(errorText(caught))); }}>{goalRun && goalRun.status !== 'completed' ? '恢复目标执行' : '开始目标执行'}</button>
             <div><button type="button" className="secondary-button" disabled={!goal || busy} onClick={() => run(() => onGoal(''))}>清除目标</button><button className="primary-button" type="submit" disabled={working || busy}>保存目标</button></div>
           </form>}
         </div>

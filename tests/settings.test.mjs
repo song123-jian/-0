@@ -23,6 +23,7 @@ function libraryWithDraft(draft = '中文草稿 🚀') {
 
 test('settings accept supported appearance and behavior values and reject malformed input', () => {
   const defaults = normalizePreferences();
+  assert.equal(defaults.defaultFileOpen, 'vscode');
   assert.equal(defaults.fontFamily, 'Microsoft YaHei');
   assert.equal(defaults.themeMode, 'system');
   assert.equal(defaults.compressHistory, false);
@@ -31,12 +32,13 @@ test('settings accept supported appearance and behavior values and reject malfor
   assert.equal(defaults.notifyOnPermissions, true);
   const saved = normalizePreferences({ themeMode: 'dark', themeStyle: 'high-contrast', accentColor: '#abcdef',
     backgroundColor: '#112233', foregroundColor: '#f1f2f3', fontFamily: 'SimSun', fontSize: 20,
-    defaultFileOpen: 'system', terminalShell: 'cmd', sendShortcut: 'enter', closeConfirmation: 'always',
+    defaultFileOpen: 'git-bash', terminalShell: 'cmd', sendShortcut: 'enter', closeConfirmation: 'always',
     defaultFullView: true, showEditorStatusBar: false, skillsEnabled: false, notifyOnPermissions: false,
     compressHistory: true, autoArchiveDays: 90, extra: 'discard' });
   assert.equal(saved.accentColor, '#ABCDEF');
   assert.equal(saved.foregroundColor, '#F1F2F3');
   assert.equal(saved.fontFamily, 'SimSun');
+  assert.equal(saved.defaultFileOpen, 'git-bash');
   assert.equal(saved.terminalShell, 'cmd');
   assert.equal(saved.sendShortcut, 'enter');
   assert.equal(saved.defaultFullView, true);
@@ -54,7 +56,9 @@ test('settings accept supported appearance and behavior values and reject malfor
   assert.equal(invalid.autoArchiveDays, 0);
   assert.equal(invalid.terminalShell, 'powershell');
   assert.equal(invalid.closeConfirmation, 'busy');
-  assert.equal(invalid.defaultFileOpen, 'builtin');
+  assert.equal(invalid.defaultFileOpen, 'vscode');
+  assert.equal(normalizePreferences({ defaultFileOpen: 'system' }).defaultFileOpen, 'default');
+  assert.equal(normalizePreferences({ defaultFileOpen: 'builtin' }).defaultFileOpen, 'vscode');
 });
 
 test('disabled SKILL and chat-only permissions reject attachments before execution', () => {

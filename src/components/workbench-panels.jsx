@@ -43,3 +43,4 @@ export function HistoryPanel({ conversations, activeId, busy, onSelect, onNew, o
       </article>)}</div>{!filtered.length && <div className="history-empty"><Search size={26} /><p>没有匹配的对话，试试其他关键词。</p></div>}
     </div></section>;
 }
+

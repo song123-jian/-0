@@ -27,7 +27,7 @@ function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
       {operation.name?.startsWith('browser_') && onBrowser && <button className="text-tool" onClick={onBrowser}>在第三工作台查看网页</button>}
       {operation.name?.startsWith('service_') && onServices && <button className="text-tool" onClick={onServices}>查看运行与预览</button>}
       {operation.exitCode !== undefined && <p className="agent-exit-code">退出码：{operation.exitCode === null ? '进程已终止' : operation.exitCode}{operation.truncated ? ' · 输出显示已截断' : ''}</p>}
-      {operation.path && ['write_file', 'edit_file', 'read_file', 'spreadsheet_read', 'spreadsheet_edit', 'image_read', 'image_edit'].includes(operation.name) && onOpenFile && <button className="text-tool" onClick={() => onOpenFile(operation.path)}><FileCode2 size={16} />{operation.name?.startsWith('spreadsheet_') ? '在表格中查看' : operation.name?.startsWith('image_') ? '在图片中查看' : '在编辑器查看'}</button>}
+      {operation.path && ['write_file', 'edit_file', 'read_file', 'spreadsheet_read', 'spreadsheet_edit', 'image_read', 'image_edit', 'artifact_read', 'artifact_write', 'artifact_image'].includes(operation.name) && onOpenFile && <button className="text-tool" onClick={() => onOpenFile(operation.path)}><FileCode2 size={16} />{operation.name?.startsWith('spreadsheet_') ? '在表格中查看' : operation.name === 'artifact_image' || operation.name?.startsWith('image_') ? '在图片中查看' : operation.name?.startsWith('artifact_') ? '查看文档内容' : '在编辑器查看'}</button>}
     </div>
   </details>;
 }

@@ -134,40 +134,6 @@ async function clickByText(cdp, selector, label) {
   await waitFor(() => cdp.evaluate(`(() => { const button = [...document.querySelectorAll(${JSON.stringify(selector)})].find((item) => item.textContent.includes(${encodedLabel})); if (!button || button.disabled) return false; button.click(); return true; })()`), `enabled ${label} control`);
 }
 
-async function clickNewConversation(cdp) {
-  await waitFor(() => cdp.evaluate("(() => { const button = document.querySelector('button[aria-label=\"新建对话\"]'); if (!button || button.disabled) return false; button.click(); return true; })()"), 'enabled new conversation control');
-}
-
-async function waitForNewConversationId(cdp, previousId, description) {
-  const encodedPreviousId = JSON.stringify(previousId || '');
-  return waitFor(() => cdp.evaluate("window.scodex.getAppState().then((state) => { const id = state?.library?.activeId || ''; return id && id !== " + encodedPreviousId + " ? id : false; })"), description);
-}
-
-async function openSmokeView(cdp, view) {
-  const railLabels = { assistant: '项目', recent: '最近', settings: '设置' };
-  const railLabel = railLabels[view];
-  if (railLabel) {
-    const selector = `button.activity-button[aria-label=${JSON.stringify(railLabel)}]`;
-    await waitFor(() => cdp.evaluate(`(() => { const button = document.querySelector(${JSON.stringify(selector)}); if (!button) return false; button.click(); return true; })()`), `open ${view} activity view`);
-  } else {
-    await waitFor(() => cdp.evaluate("(() => { const button = document.querySelector('button[aria-label=\"工具命令搜索\"]'); if (!button) return false; button.click(); return true; })()"), 'open tool command search');
-    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('dialog.command-palette[open]'))"), 'tool command palette');
-    const optionSelector = `#command-${view}`;
-    await waitFor(() => cdp.evaluate(`(() => { const option = document.querySelector(${JSON.stringify(optionSelector)}); if (!option) return false; option.click(); return true; })()`), `run ${view} tool command`);
-    await waitFor(() => cdp.evaluate("!document.querySelector('dialog.command-palette[open]')"), `${view} command palette closes`);
-  }
-  await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-}
-
-async function openRecentChatContextMenu(cdp, chatId) {
-  const encodedId = JSON.stringify(chatId);
-  const recentVisible = await cdp.evaluate("Boolean(document.querySelector('.recent-view'))");
-  if (!recentVisible) await openSmokeView(cdp, 'recent');
-  const expression = "(() => { const card = [...document.querySelectorAll('.recent-view [data-chat-id]')].find((item) => item.dataset.chatId === " + encodedId + "); if (!card) return false; const rect = card.getBoundingClientRect(); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 24, clientY: rect.top + 16 })); return true; })()";
-  await waitFor(() => cdp.evaluate(expression), 'recent chat context target');
-  await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.workspace-context-menu[aria-label=\"聊天右键菜单\"]'))"), 'recent chat context menu');
-}
-
 async function replaceFocusedText(cdp, selector, value) {
   const focused = await cdp.evaluate(`(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) return false; element.focus(); if (typeof element.select === 'function') { element.select(); return 'native'; } return 'editable'; })()`);
   assert.ok(focused, `Expected editable control ${selector}`);
@@ -344,7 +310,7 @@ async function main() {
       const navigation = await cdp.evaluate("[...document.querySelectorAll('.nav-item')].map((item) => item.textContent.trim())");
       assert.ok(navigation.some((label) => label.includes('定时任务')), 'Scheduled tasks must replace the old navigation entry.');
       assert.ok(!navigation.some((label) => label.includes('对话记录')), 'Conversation history must not remain as a navigation item.');
-      await clickNewConversation(cdp);
+      await clickByText(cdp, '.new-task-button', '新建对话');
 
       const checkWelcomeLayout = async (width, height) => {
         await cdp.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -358,7 +324,7 @@ async function main() {
         return layout;
       };
 
-      await openSmokeView(cdp, 'assistant');
+      await cdp.evaluate("document.querySelector('button[aria-label=\"工作台首页\"]').click()");
       await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.workspace-home-content h1'))"), 'screenshot-inspired assistant start screen');
       await checkWelcomeLayout(1440, 900);
       await checkWelcomeLayout(1064, 660);
@@ -436,97 +402,64 @@ async function main() {
       await cdp.evaluate("document.querySelector('.activity-more > button').click()");
       await clickByText(cdp, '.activity-menu button', '技能');
       await waitFor(() => cdp.evaluate(`[...document.querySelectorAll('.skill-enable-toggle')].some((button) => button.getAttribute('aria-label') === ${JSON.stringify(`停用技能 ${smokeSkillName}`)} && button.getAttribute('aria-checked') === 'true')`), 'enabled local skill visible after restart');
-      await openSmokeView(cdp, 'assistant');
+      await cdp.evaluate("document.querySelector('button[aria-label=\"工作台首页\"]').click()");
       await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.workspace-home-content h1'))"), 'assistant start screen after restart');
       await checkWelcomeLayout(1440, 900);
       await cdp.command('Emulation.clearDeviceMetricsOverride');
       console.log('Workbench-change scope passed: scheduled task create/pause/failure history, plugin/Skills status and toggle, project creation/switch/restart, preserved conversation data, and welcome layout at 1440 x 900 and 1064 x 660.');
     }
     if (['full', 'conversations'].includes(smokeScope)) {
-    await clickNewConversation(cdp);
-    await waitFor(() => cdp.evaluate("document.querySelector('.workspace-home-content h1')?.textContent === '我们应该在 Scodex 中做些什么？'"), 'new conversation welcome page');
-    await cdp.evaluate("document.querySelector('button[aria-label=\"添加工具和上下文\"]').click()");
-    await clickByText(cdp, '.composer-menu-item', '计划模式');
-    await cdp.evaluate("document.querySelector('button[aria-label=\"添加工具和上下文\"]').click()");
-    await waitFor(() => cdp.evaluate("[...document.querySelectorAll('.composer-menu-item')].some((button) => button.textContent.includes('计划模式') && button.title.includes('已开启'))"), 'plan mode enabled in composer menu');
-    await clickByText(cdp, '.composer-menu-item', '计划模式');
+    await clickByText(cdp, '.new-task-button', '新建对话');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.mode-card').length === 4"), 'four dashboard work modes');
+    for (const label of ['问答', '规划', '编程', '办公']) {
+      await clickByText(cdp, '.mode-card', label);
+      await waitFor(() => cdp.evaluate(`document.querySelector('.mode-switch .selected')?.textContent === ${JSON.stringify(label)}`), `${label} mode selection`);
+    }
+    await clickByText(cdp, '.mode-switch button', '规划');
     await replaceFocusedText(cdp, 'textarea[aria-label="输入工作内容"]', '规划草稿：中文与 emoji 🚀');
-    await cdp.evaluate("document.querySelector('summary[aria-label=\"聊天选项\"]').click()");
-    await clickByText(cdp, '.task-more-menu button', '最近聊天');
-    await waitFor(() => cdp.evaluate("document.querySelectorAll('.recent-view .history-card').length === 2"), 'recent conversations panel');
-    const draftConversationId = await cdp.evaluate("document.querySelector('.recent-view .history-card.selected')?.getAttribute('data-chat-id')");
-    assert.ok(draftConversationId, 'The draft conversation must remain active.');
-    await openRecentChatContextMenu(cdp, draftConversationId);
-    await cdp.evaluate("document.querySelector('.workspace-context-menu [data-action=\"rename\"]').click()");
-    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.workspace-action-dialog'))"), 'rename dialog');
-    await replaceFocusedText(cdp, 'input[aria-label=\"新名称\"]', '测试规划记录');
-    await clickByText(cdp, '.workspace-action-footer .primary-button', '保存');
-    await waitFor(() => cdp.evaluate("document.querySelector('.recent-view [data-chat-id] .history-open strong')?.textContent.includes('测试规划记录')"), 'conversation rename');
-    await openRecentChatContextMenu(cdp, draftConversationId);
-    await cdp.evaluate("document.querySelector('.workspace-context-menu [data-action=\"pin\"]').click()");
-    await waitFor(async () => {
-      const saved = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
-      return saved.conversations.find((chat) => chat.id === draftConversationId)?.pinned === true;
-    }, 'conversation pin persistence');
-    await clickByText(cdp, '.recent-view .history-open', '测试规划记录');
-    await waitFor(() => cdp.evaluate("window.scodex.getAppState().then((state) => state?.library?.activeId === " + JSON.stringify(draftConversationId) + ")"), 'renamed conversation selected');
-    await cdp.evaluate("document.querySelector('button[aria-label=\"添加工具和上下文\"]').click()");
-    await replaceFocusedText(cdp, 'input[aria-label=\"搜索文件或聊天\"]', '不存在的关键词');
-    await waitFor(() => cdp.evaluate("document.querySelector('.composer-search-results .composer-menu-empty')?.textContent === '没有匹配的文件或聊天'"), 'empty conversation search');
-    await replaceFocusedText(cdp, 'input[aria-label=\"搜索文件或聊天\"]', '测试规划记录');
-    await waitFor(() => cdp.evaluate("[...document.querySelectorAll('.composer-menu-item')].some((button) => button.textContent.includes('测试规划记录'))"), 'conversation found in composer search');
-    await clickByText(cdp, '.composer-menu-item', '测试规划记录');
-    await waitFor(() => cdp.evaluate("window.scodex.getAppState().then((state) => state?.library?.activeId === " + JSON.stringify(draftConversationId) + " && document.querySelector('textarea[aria-label=\"输入工作内容\"]')?.value === '规划草稿：中文与 emoji 🚀')"), 'search result restores conversation draft');
-    const previousConversationId = await cdp.evaluate("window.scodex.getAppState().then((state) => state?.library?.activeId || '')");
-    await clickNewConversation(cdp);
-    const deletedConversationId = await waitForNewConversationId(cdp, previousConversationId, 'new conversation active id');
-    assert.ok(deletedConversationId, 'New conversation must be active in the recent list.');
-    await cdp.evaluate("document.querySelector('summary[aria-label=\"聊天选项\"]').click()");
-    await clickByText(cdp, '.task-more-menu button', '最近聊天');
-    await waitFor(() => cdp.evaluate("document.querySelectorAll('.recent-view .history-card').length === 3"), 'new conversation in recent list');
-    await openRecentChatContextMenu(cdp, deletedConversationId);
-    await cdp.evaluate("document.querySelector('.workspace-context-menu [data-action=\"delete\"]').click()");
-    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.workspace-action-dialog'))"), 'delete confirmation dialog');
-    await clickByText(cdp, '.workspace-action-footer .primary-button', '永久删除');
-    await waitFor(async () => {
-      const saved = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
-      return saved.conversations.length === 2 && !saved.conversations.some((chat) => chat.id === deletedConversationId) && saved.conversations.some((chat) => chat.id === draftConversationId && chat.title === '测试规划记录');
-    }, 'conversation delete persistence');
-    await waitFor(() => cdp.evaluate("document.querySelectorAll('.recent-view .history-card').length === 2"), 'remaining conversations after delete');
-    await clickByText(cdp, '.recent-view .history-open', '测试规划记录');
-    await waitFor(() => cdp.evaluate("window.scodex.getAppState().then((state) => state?.library?.activeId === " + JSON.stringify(draftConversationId) + ")"), 'existing chat selected after delete');
-    await openSmokeView(cdp, 'settings');
-
+    await clickByText(cdp, '.nav-item', '对话记录');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.history-card').length === 2"), 'conversation list');
+    await cdp.evaluate("document.querySelector('.history-card.selected button[title=\"重命名\"]').click()");
+    await replaceFocusedText(cdp, 'input[aria-label="对话标题"]', '测试规划记录');
+    await cdp.evaluate("document.querySelector('button[aria-label=\"保存标题\"]').click()");
+    await waitFor(() => cdp.evaluate("document.querySelector('.history-card.selected .history-open strong')?.textContent.includes('测试规划记录')"), 'conversation rename');
+    await cdp.evaluate("document.querySelector('.history-card.selected button[aria-label=\"置顶对话\"]').click()");
+    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.history-card.selected .is-pinned'))"), 'conversation pin');
+    await replaceFocusedText(cdp, 'input[aria-label="搜索对话"]', '不存在的关键词');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.history-card').length === 0 && Boolean(document.querySelector('.history-empty'))"), 'empty conversation search');
+    await replaceFocusedText(cdp, 'input[aria-label="搜索对话"]', '测试规划');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.history-card').length === 1 && document.querySelector('.history-open')?.textContent.includes('测试规划记录')"), 'filtered conversation search result');
+    await clickByText(cdp, '.history-open', '测试规划记录');
+    await waitFor(() => cdp.evaluate("document.querySelector('textarea')?.value === '规划草稿：中文与 emoji 🚀'"), 'draft restoration');
+    await clickByText(cdp, '.new-task-button', '新建对话');
+    await clickByText(cdp, '.nav-item', '对话记录');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.history-card').length === 3"), 'new conversation');
+    await cdp.evaluate("document.querySelector('.history-card.selected button[title=\"删除\"]').click()");
+    await clickByText(cdp, '.history-actions .danger-button', '确认删除');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.history-card').length === 2"), 'conversation delete');
+    await cdp.evaluate("document.querySelector('button[aria-label=\"工作台设置\"]').click()");
     await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.settings-detail'))"), 'settings panel');
-    await cdp.evaluate("const select = document.querySelector('select[aria-label=\"新对话默认模式\"]'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, 'office'); select.dispatchEvent(new Event('change', { bubbles: true }));");
-    const defaultModes = await cdp.evaluate("[...document.querySelector('select[aria-label=\"新对话默认模式\"]').options].map((option) => option.value)");
-    assert.deepEqual(defaultModes, ['answer', 'plan', 'code', 'office'], 'Settings must expose all four default modes.');
+    await cdp.evaluate("const select = document.querySelector('select[aria-label=\"新对话默认模式\"]'); select.value = 'office'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     await waitFor(async () => JSON.parse(await fs.readFile(path.join(profileRoot, 'settings.json'), 'utf8')).preferences?.defaultMode === 'office', 'saved mode preference');
     await clickByText(cdp, '.settings-category', '工作台与标签');
     await cdp.evaluate("document.querySelector('button[aria-label=\"收起左侧导航\"]').click()");
     await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.app-shell.rail-collapsed'))"), 'collapsed navigation');
     await cdp.evaluate("document.querySelector('button[aria-label=\"收起左侧导航\"]').click()");
     await waitFor(() => cdp.evaluate("!document.querySelector('.app-shell.rail-collapsed')"), 'expanded navigation');
-    await openSmokeView(cdp, 'assistant');
-    const previousDefaultConversationId = await cdp.evaluate("window.scodex.getAppState().then((state) => state?.library?.activeId || '')");
-    await clickNewConversation(cdp);
-    const activeConversationId = await waitForNewConversationId(cdp, previousDefaultConversationId, 'default-mode conversation active id');
-    assert.ok(activeConversationId, 'New conversation must be active in the recent list.');
-    await waitFor(async () => {
-      const saved = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
-      return saved.conversations.some((chat) => chat.id === activeConversationId && chat.mode === 'office');
-    }, 'new conversation uses the configured default mode');
+    await cdp.evaluate("document.querySelector('button[aria-label=\"工作台首页\"]').click()");
+    await clickByText(cdp, '.new-task-button', '新建对话');
+    await waitFor(() => cdp.evaluate("document.querySelector('.mode-switch .selected')?.textContent === '办公'"), 'default mode in new conversation');
     await waitFor(async () => {
       const saved = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
       const renamed = saved.conversations.find((chat) => chat.title === '测试规划记录');
-      return saved.conversations.length === 3 && renamed?.pinned && renamed.draft.includes('🚀') && renamed.mode === 'answer' && saved.conversations.some((chat) => chat.id === activeConversationId && chat.mode === 'office');
+      return saved.conversations.length === 3 && renamed?.pinned && renamed.draft.includes('🚀') && renamed.mode === 'plan';
     }, 'persisted conversations, pin and Unicode draft');
     assert.equal(await fs.readFile(path.join(profileRoot, 'conversation.json'), 'utf8'), legacyHistory, 'Legacy source must remain intact.');
     await cdp.command('Page.reload');
-    await waitFor(() => cdp.evaluate("document.querySelector('.workspace-home-content h1')?.textContent === '我们应该在 Scodex 中做些什么？' && document.querySelectorAll('.recent-item[data-chat-id]').length === 3"), 'conversation list and welcome page after reload');
+    await waitFor(() => cdp.evaluate("document.querySelector('.mode-switch .selected')?.textContent === '办公' && document.querySelectorAll('.recent-item').length === 3"), 'conversation and preference persistence after reload');
 
-    if (['full', 'programming-files'].includes(smokeScope)) {
-    await openSmokeView(cdp, 'files');
+    if (smokeScope === 'full') {
+    await clickByText(cdp, '.nav-item', '文件与代码');
     await waitFor(() => cdp.evaluate("document.querySelector('.file-workspace')?.textContent.includes('文件')"), 'file workspace');
 
     await clickByText(cdp, '.file-tree-item', 'editor-check.txt');
@@ -542,10 +475,10 @@ async function main() {
     await waitFor(() => cdp.evaluate("document.querySelector('.toast')?.textContent.includes('表格已保存') && !document.querySelector('.table-dimensions .dirty-dot')"), 'CSV save completion in UI');
     await waitFor(async () => (await fs.readFile(csvFile, 'utf8')).includes(updatedCell), 'saved CSV cell');
     await clickByText(cdp, '.attach-table', '附加到对话');
-    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.composer-attachment-disclosure'))"), 'table context attachment');
-    await waitFor(() => cdp.evaluate("document.querySelector('.composer-attachment-list')?.textContent.includes('table-check.csv')"), 'table context attachment details');
+    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.file-chip')) && document.querySelector('.mode-switch .selected')?.textContent === '办公'"), 'table context attachment');
+    await cdp.evaluate("document.querySelector('.file-chip').click()");
 
-    await openSmokeView(cdp, 'files');
+    await clickByText(cdp, '.nav-item', '文件与代码');
     await clickByText(cdp, '.file-tree-item', 'table-check.xlsx');
     await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.spreadsheet input[aria-label=\"B2\"]'))"), 'XLSX table grid');
     await replaceFocusedText(cdp, '.spreadsheet input[aria-label="B2"]', '42');
@@ -556,13 +489,13 @@ async function main() {
       return savedWorkbook.getWorksheet('Smoke').getCell('B2').value === 42;
     }, 'saved XLSX cell');
 
-    await openSmokeView(cdp, 'files');
+    await clickByText(cdp, '.nav-item', '文件与代码');
     await clickByText(cdp, '.file-tree-item', 'image-check.png');
     await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.image-canvas')?.width === 2 && document.querySelector('.image-canvas')?.height === 1)"), 'image canvas render');
     await clickByText(cdp, '.image-controls button', '右转');
     await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.image-canvas')?.width === 1 && document.querySelector('.image-canvas')?.height === 2)"), 'image rotation');
-    await openSmokeView(cdp, 'assistant');
-    await openSmokeView(cdp, 'images');
+    await clickByText(cdp, '.nav-item', '助手');
+    await clickByText(cdp, '.nav-item', '图片');
     await waitFor(() => cdp.evaluate("document.querySelector('.image-canvas')?.width === 1 && document.querySelector('.image-canvas')?.height === 2"), 'image canvas restoration after navigation');
     const exportedImage = path.join(fixtureRoot, 'exported.png');
     await cdp.evaluate(`(async () => { const canvas = document.querySelector('.image-canvas'); const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')); return window.scodex.saveBinaryFile(${JSON.stringify(exportedImage)}, new Uint8Array(await blob.arrayBuffer())); })()`);
@@ -570,21 +503,19 @@ async function main() {
     assert.equal(imageBytes.readUInt32BE(16), 1);
     assert.equal(imageBytes.readUInt32BE(20), 2);
 
-    if (smokeScope === 'full') {
-      await openSmokeView(cdp, 'skills');
-      await waitFor(() => cdp.evaluate("document.querySelectorAll('.skill-row').length > 0"), 'skill library');
-      await cdp.evaluate("document.querySelector('.skill-row').click()");
-      await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.skill-detail-head h2'))"), 'skill detail');
-      await clickByText(cdp, '.skill-detail-actions .primary-button', '设为本轮技能');
-      await openSmokeView(cdp, 'assistant');
-      await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.context-chip.skill-chip'))"), 'active skill in assistant');
-      await cdp.evaluate("document.querySelector('.context-chip.skill-chip').click()");
-    }
+    await clickByText(cdp, '.nav-item', '技能');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.skill-row').length > 0"), 'skill library');
+    await cdp.evaluate("document.querySelector('.skill-row').click()");
+    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.skill-detail-head h2'))"), 'skill detail');
+    await clickByText(cdp, '.skill-detail-actions .primary-button', '设为本轮技能');
+    await clickByText(cdp, '.nav-item', '助手');
+    await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.context-chip.skill-chip'))"), 'active skill in assistant');
+    await cdp.evaluate("document.querySelector('.context-chip.skill-chip').click()");
     }
     } else if (!['workbench-changes', 'shell', 'polish', 'composer', 'composer-finish'].includes(smokeScope)) {
-      await clickNewConversation(cdp);
-      await waitFor(() => cdp.evaluate("document.querySelector('.workspace-home-content h1')?.textContent === '我们应该在 Scodex 中做些什么？'"), 'dashboard after review fixes');
-      await openSmokeView(cdp, 'settings');
+      await clickByText(cdp, '.new-task-button', '新建对话');
+      await waitFor(() => cdp.evaluate("document.querySelectorAll('.mode-card').length === 4"), 'dashboard after review fixes');
+      await cdp.evaluate("document.querySelector('button[aria-label=\"工作台设置\"]').click()");
       await waitFor(() => cdp.evaluate("Boolean(document.querySelector('.settings-detail'))"), 'settings after review fixes');
     }
 
@@ -596,30 +527,21 @@ async function main() {
     await cdp.evaluate("window.scodex.savePreferences({ defaultMode: 'answer', railCollapsed: false })");
     await waitFor(() => cdp.evaluate("document.querySelector('.history-save-state')?.textContent === '已保存到本机'"), 'new conversation saved before intentional renderer reload');
     await cdp.command('Page.reload');
-    await waitFor(() => cdp.evaluate("document.querySelector('.workspace-home-content h1')?.textContent === '我们应该在 Scodex 中做些什么？' && !document.querySelector('.app-shell.rail-collapsed')"), 'review-fix preferences persisted and reloaded');
-    const persistedReviewPreferences = JSON.parse(await fs.readFile(path.join(profileRoot, 'settings.json'), 'utf8')).preferences;
-    assert.equal(persistedReviewPreferences.defaultMode, 'answer', 'Default mode must persist after renderer reload.');
+    await waitFor(() => cdp.evaluate("document.querySelectorAll('.mode-card').length === 4 && !document.querySelector('.app-shell.rail-collapsed')"), 'review-fix preferences persisted and reloaded');
+    await clickByText(cdp, '.mode-switch button', '问答');
     }
 
     if (smokeScope === 'layout') {
       await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1064, height: 660, deviceScaleFactor: 1, mobile: false });
       await waitFor(() => cdp.evaluate('innerWidth === 1064 && innerHeight === 660'), 'minimum desktop renderer viewport');
-      const views = [
-        { id: 'assistant', label: '项目' },
-        { id: 'files', label: '文件与代码' },
-        { id: 'images', label: '图片' },
-        { id: 'tables', label: '表格' },
-        { id: 'skills', label: 'SKILL 技能' },
-        { id: 'recent', label: '最近' },
-        { id: 'settings', label: '设置' },
-      ];
-      for (const { id, label } of views) {
-        await openSmokeView(cdp, id);
+      for (const label of ['助手', '文件与代码', '图片', '表格', '技能', '对话记录', '工作台设置']) {
+        await clickByText(cdp, '.nav-item', label);
+        await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
         const overflow = await cdp.evaluate("[...document.querySelectorAll('.tool-heading button, .composer-box, .dashboard, .settings-detail, .history-search')].map(element => ({ label: element.textContent.slice(0, 24), right: element.getBoundingClientRect().right, left: element.getBoundingClientRect().left })).filter(item => item.right > innerWidth + 1 || item.left < -1)");
         assert.deepEqual(overflow, [], `Controls outside the minimum desktop viewport in ${label}`);
       }
       await cdp.command('Emulation.clearDeviceMetricsOverride');
-      await openSmokeView(cdp, 'assistant');
+      await clickByText(cdp, '.nav-item', '助手');
       console.log('Renderer viewport layout checks passed for all seven views at 1064 x 660 (native window resize was not available).');
     }
 
@@ -630,7 +552,7 @@ async function main() {
     if (smokeScope === 'polish') await require('./finish-checks.cjs')({ cdp, clickByText, replaceFocusedText, waitFor, profileRoot, stopProcessTree });
     if (smokeScope === 'composer') await require('./composer-checks.cjs')({ cdp, clickByText, replaceFocusedText, waitFor, profileRoot, fixtureRoot, codeFile, originalCode });
     if (smokeScope === 'composer-finish') {
-      await clickNewConversation(cdp);
+      await clickByText(cdp, '.new-task-button', '新建对话');
       await clickByText(cdp, '.composer-tools button', '');
       await clickByText(cdp, '.composer-menu-item', '目标');
       await replaceFocusedText(cdp, '#composer-goal', '收尾验证：目标与中文草稿保存 🚀');
@@ -648,25 +570,23 @@ async function main() {
     const screenshot = await cdp.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     await fs.writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
 
-    if (smokeScope !== 'programming-files') {
-      const closingDraft = '关闭前的草稿需要完整保存 🚀';
-      const closeSignalFile = path.join(fixtureRoot, 'close-signal.json');
-      await cdp.evaluate(`window.scodex.onPrepareClose(() => { window.scodex.saveTextFile(${JSON.stringify(closeSignalFile)}, JSON.stringify({ prepareClose: true, draft: document.querySelector('textarea')?.value, saveState: document.querySelector('.history-save-state')?.textContent })); })`);
-      nativeCloser = await prepareNativeCloser();
-      await replaceFocusedText(cdp, 'textarea[aria-label="输入工作内容"]', closingDraft);
-      await nativeCloser.close(applicationPid);
-      await waitFor(() => !isAlive(applicationPid), 'native app close after history flush', 10_000).catch(async (error) => {
-        console.error('Native-close diagnostic signal:', await fs.readFile(closeSignalFile, 'utf8').catch(() => 'not recorded'));
-        const diagnosticLibrary = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
-        console.error('Native-close persisted draft:', JSON.stringify(diagnosticLibrary.conversations.find(chat => chat.id === diagnosticLibrary.activeId)?.draft));
-        const { execFileSync } = require('node:child_process');
-        console.error('Native-close windows:', execFileSync('powershell.exe', ['-NoLogo','-NoProfile','-NonInteractive','-Command', `$testProcess=Get-Process -Id ${applicationPid}; $testProcess | Select-Object Id,MainWindowTitle,MainWindowHandle,Responding | ConvertTo-Json -Compress`], {windowsHide:true,encoding:'utf8'}).trim());
-        throw error;
-      });
-      console.log('Native-close signal:', await fs.readFile(closeSignalFile, 'utf8').catch(() => 'prepare-close signal not recorded'));
-      const closedLibrary = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
-      assert.equal(closedLibrary.conversations.find((chat) => chat.id === closedLibrary.activeId)?.draft, closingDraft);
-    }
+    const closingDraft = '关闭前的草稿需要完整保存 🚀';
+    const closeSignalFile = path.join(fixtureRoot, 'close-signal.json');
+    await cdp.evaluate(`window.scodex.onPrepareClose(() => { window.scodex.saveTextFile(${JSON.stringify(closeSignalFile)}, JSON.stringify({ prepareClose: true, draft: document.querySelector('textarea')?.value, saveState: document.querySelector('.history-save-state')?.textContent })); })`);
+    nativeCloser = await prepareNativeCloser();
+    await replaceFocusedText(cdp, 'textarea[aria-label="输入工作内容"]', closingDraft);
+    await nativeCloser.close(applicationPid);
+    await waitFor(() => !isAlive(applicationPid), 'native app close after history flush', 10_000).catch(async (error) => {
+      console.error('Native-close diagnostic signal:', await fs.readFile(closeSignalFile, 'utf8').catch(() => 'not recorded'));
+      const diagnosticLibrary = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
+      console.error('Native-close persisted draft:', JSON.stringify(diagnosticLibrary.conversations.find(chat => chat.id === diagnosticLibrary.activeId)?.draft));
+      const { execFileSync } = require('node:child_process');
+      console.error('Native-close windows:', execFileSync('powershell.exe', ['-NoLogo','-NoProfile','-NonInteractive','-Command', `$testProcess=Get-Process -Id ${applicationPid}; $testProcess | Select-Object Id,MainWindowTitle,MainWindowHandle,Responding | ConvertTo-Json -Compress`], {windowsHide:true,encoding:'utf8'}).trim());
+      throw error;
+    });
+    console.log('Native-close signal:', await fs.readFile(closeSignalFile, 'utf8').catch(() => 'prepare-close signal not recorded'));
+    const closedLibrary = JSON.parse(await fs.readFile(path.join(profileRoot, 'conversations.json'), 'utf8'));
+    assert.equal(closedLibrary.conversations.find((chat) => chat.id === closedLibrary.activeId)?.draft, closingDraft);
 
     console.log(smokeScope === 'workbench-changes'
       ? 'Workbench changes passed on the packaged 1.0.4 executable: scheduled task state and failed-run persistence, local plugin/Skills inventory and toggle, project switching after full restart, legacy conversation preservation, and assistant start-screen viewport checks.'
@@ -682,8 +602,6 @@ async function main() {
       ? 'Shell scope passed: activity rail, tab lifecycle and real isolated web content, categorized settings/search/preferences, single settings entry, Microsoft YaHei and desktop layout.'
       : smokeScope === 'full'
       ? 'Electron portable EXE checks passed: legacy migration, conversation CRUD/search/pin/drafts, four modes, settings/reload, code/CSV/XLSX save with readback, table context, image rotation/canvas export, skills, workspace boundary, concurrent preferences and native close/draft flush.'
-      : smokeScope === 'programming-files'
-      ? 'Programming/files scope passed: packaged EXE code editing, CSV/XLSX save/readback, table context attachment, image rotation/export, workspace boundary and preference persistence.'
       : `${smokeScope === 'conversations' ? 'Conversation regression and refinement' : 'Refinement'} checks passed: legacy load, dashboard/settings, concurrent preference merge/readback/reload, workspace boundary and native close/draft flush. Previous unchanged file/table/image/skill results remain valid.`);
     console.log('Native file-selection/save dialogs and real model generation are not automated in this run.');
     console.log(`Executable: ${executable}`);

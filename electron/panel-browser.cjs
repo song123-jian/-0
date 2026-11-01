@@ -3,6 +3,8 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
 const { WORLD_ID, domScript } = require('./browser-dom.cjs');
+const { createCdpEventCache, LIMITS: CDP_LIMITS } = require('./browser-cdp-cache.cjs');
+const { createCdpScope } = require('./browser-cdp-scope.cjs');
 
 const MAX_TABS = 10;
 
@@ -42,6 +44,7 @@ function browserPermissionAllowed(preferences, permission, details, fallbackUrl)
 }
 
 function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), shell, app, agentUrlAllowed = () => false }) {
+  const cdpEventCache = createCdpEventCache();
   const tabs = [];
   const history = [];
   const agentSessions = new Map();
@@ -241,7 +244,7 @@ function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), she
       switch (action?.type) {
         case 'clear-data': {
           detach();
-          for (const entry of tabs) if (entry.view && !entry.view.webContents.isDestroyed()) entry.view.webContents.close();
+          for (const entry of tabs) { detachCdp(entry); if (entry.view && !entry.view.webContents.isDestroyed()) entry.view.webContents.close(); }
           tabs.length = 0;
           return resetAgents().then(() => downloadSession.clearStorageData()).then(() => downloadSession.clearCache()).then(() => {
             history.length = 0;
@@ -293,7 +296,7 @@ function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), she
     resetAgents().catch(() => {});
     downloadSession?.removeListener('will-download', confirmDownload);
     for (const channel of Object.keys(handles)) ipcMain.removeHandler(channel);
-    for (const tab of tabs) if (tab.view && !tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+    for (const tab of tabs) { detachCdp(tab); if (tab.view && !tab.view.webContents.isDestroyed()) tab.view.webContents.close(); }
   });
   const agentPage = (owner, id) => {
     const tab = tabs.find((item) => item.id === id && item.owner === owner);
@@ -305,6 +308,52 @@ function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), she
     const tab = agentPage(owner, stamp.id);
     if (tab.generation !== stamp.generation || tab.view.webContents.getURL() !== stamp.url || tab.loading) throw new Error('审批期间页面已变化，请重新读取后再操作。');
     if (!agentUrlAllowed(stamp.url) || siteRuleFor(getPreferences(), stamp.url)?.browse === 'block') throw new Error('当前网络或网站规则禁止此页面。');
+    return tab;
+  };
+  const detachCdp = (tab) => {
+    const state = tab?.cdpState;
+    const contents = tab?.view?.webContents;
+    if (!state) return;
+    try {
+      if (contents && !contents.isDestroyed()) {
+        const debuggerApi = contents.debugger;
+        if (state.listener) debuggerApi.removeListener('message', state.listener);
+        if (state.attachedByApp && debuggerApi.isAttached()) debuggerApi.detach();
+      }
+    } catch {}
+    cdpEventCache.release(state);
+    tab.cdpState = null;
+  };
+  const cdpStateFor = (tab) => {
+    const contents = tab.view.webContents;
+    const debuggerApi = contents.debugger;
+    let state = tab.cdpState;
+    if (!debuggerApi.isAttached()) {
+      debuggerApi.attach('1.3');
+      if (state?.listener) debuggerApi.removeListener('message', state.listener);
+      const previous = state;
+      cdpEventCache.release(previous);
+      state = cdpEventCache.createState({ nextEventId: previous?.nextEventId || 0, droppedBefore: previous?.droppedBefore || 0, attachedByApp: true });
+      tab.cdpState = state;
+    }
+    if (!state) {
+      state = cdpEventCache.createState();
+      tab.cdpState = state;
+    }
+    if (!state.listener) {
+      state.scope = createCdpScope({ isActive: () => tab.cdpState === state && !contents.isDestroyed() && Boolean(getPreferences().browserAiEnabled && getPreferences().browserCdpEnabled) });
+      state.listener = (_event, method, params, sessionId) => {
+        if (state.scope.observe(method, params, sessionId)) cdpEventCache.append(state, method, params, sessionId);
+      };
+      debuggerApi.on('message', state.listener);
+    }
+    return { debuggerApi, state };
+  };
+  const verifyCdpStamp = (owner, stamp) => {
+    const tab = agentPage(owner, stamp.id);
+    const url = tab.view.webContents.getURL();
+    if (tab.generation !== stamp.generation || url !== stamp.url) throw new Error('审批期间页面已变化，请重新读取后再操作。');
+    if (!agentUrlAllowed(url, owner) || siteRuleFor(getPreferences(), url)?.browse === 'block') throw new Error('当前网络或网站规则禁止此页面。');
     return tab;
   };
   const bounded = (promise, contents, signal, milliseconds = 25000) => new Promise((resolve, reject) => {
@@ -321,7 +370,7 @@ function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), she
     return result;
   };
   const closeTab = (tab) => {
-    detach(); const index = tabs.indexOf(tab); if (index < 0) return;
+    detach(); detachCdp(tab); const index = tabs.indexOf(tab); if (index < 0) return;
     tabs.splice(index, 1);
     if (tab.view && !tab.view.webContents.isDestroyed()) tab.view.webContents.close();
     if (activeId === tab.id) activeId = tabs[Math.min(index, tabs.length - 1)]?.id;
@@ -405,6 +454,25 @@ function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), she
       return { image: { name: 'webpage.jpg', dataUrl }, preview: preview.length <= 96000 ? { name: 'webpage-preview.jpg', dataUrl: 'data:image/jpeg;base64,' + preview.toString('base64') } : null, original, size: image.getSize() };
     },
     close(owner, stamp) { const tab = verifyStamp(owner, stamp); closeTab(tab); return { closed: stamp.id }; },
+    async cdp(owner, stamp, method, params = {}, sessionId, signal) {
+      const tab = verifyStamp(owner, stamp);
+      if (typeof method !== 'string' || !/^[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*$/.test(method)) throw new Error('CDP 方法格式无效。');
+      if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error('CDP 参数必须是 JSON 对象。');
+      if (signal?.aborted) throw new Error('任务已停止。');
+      const { debuggerApi, state } = cdpStateFor(tab);
+      const result = await bounded(state.scope.execute(debuggerApi, method, params, sessionId, signal), tab.view.webContents, signal);
+      if (signal?.aborted) throw new Error('任务已停止。');
+      return { result, tab: this.describe(owner, stamp.id).tab };
+    },
+    async cdpEvents(owner, stamp, filter = {}, signal) {
+      const tab = verifyCdpStamp(owner, stamp);
+      if (signal?.aborted) throw new Error('任务已停止。');
+      const { state } = cdpStateFor(tab);
+      const after = Number.isSafeInteger(filter.after) && filter.after >= 0 ? filter.after : 0;
+      const limit = Number.isInteger(filter.limit) ? Math.max(1, Math.min(CDP_LIMITS.pageEvents, filter.limit)) : 100;
+      return cdpEventCache.page(state, { after, limit, method: filter.method, tab: this.describe(owner, stamp.id).tab });
+    },
+    disableAgentCdp() { for (const tab of tabs) if (tab.owner) detachCdp(tab); },
   };
 }
 

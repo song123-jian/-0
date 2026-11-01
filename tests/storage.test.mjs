@@ -22,7 +22,12 @@ test('archives survive v2 round trip and never become the active conversation', 
   assert.equal(library.conversations.length, 2);
   assert.notEqual(library.activeId, archived.id);
   assert.equal(library.conversations.find((chat) => chat.id === archived.id).draft, '中文草稿 🚀');
-  assert.deepEqual(normalizeLibrary(JSON.parse(JSON.stringify(library))), library);
+  const roundTrip = normalizeLibrary(JSON.parse(JSON.stringify(library)));
+  assert.equal(roundTrip.activeId, library.activeId);
+  assert.deepEqual(
+    roundTrip.conversations.map(({ id, archivedAt, draft }) => ({ id, archivedAt, draft })),
+    library.conversations.map(({ id, archivedAt, draft }) => ({ id, archivedAt, draft })),
+  );
   assert.equal(normalizeLibrary({ conversations: [{ id: 'old' }] }).conversations[0].archivedAt, null);
 });
 

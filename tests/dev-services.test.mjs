@@ -98,6 +98,16 @@ test('service tools enforce planning, approval, cancellation, current policy and
 });
 
 
+test('full access with never starts and stops a real managed service', async t => {
+  const { root, script, manager } = await fixture(t, 'setInterval(()=>{},1000)');
+  const tools = createServiceTools({ manager, root, policy: () => 'never', fullAccess: () => true, approve: async () => {} });
+  const result = await tools.execute('service_start', { command: commandFor(script) });
+  assert.equal(result.ok, true); assert.equal(manager.activeCount(), 1);
+  await tools.execute('service_stop', { service_id: result.service.id }); assert.equal(manager.activeCount(), 0);
+  const plan = createServiceTools({ manager, root, policy: () => 'never', fullAccess: () => true, readOnly: true });
+  assert.deepEqual(plan.definitions.map(d => d.function.name), ['service_list', 'service_logs']);
+});
+
 test('localhost supports IPv6 and Windows owner exit cleans service without a tree kill', { skip: process.platform !== 'win32' }, async (t) => {
   const { root, script, manager } = await fixture(t, ''); const port = await freePort();
   await fs.writeFile(script, "require('node:http').createServer((q,r)=>r.end('ipv6-ready')).listen(" + port + ",'::1');");

@@ -9,9 +9,17 @@ const {
   networkAllowed,
   normalizePermissionSettings,
   permissionInstruction,
+  toolPolicyAllowed,
 } = require('../electron/permission-policy.cjs');
 
 const workspace = 'C:\\work';
+
+test('automatic tool authorization requires full access plus never; other policies remain bounded', () => {
+  assert.equal(toolPolicyAllowed('never', true), true);
+  assert.equal(toolPolicyAllowed('never', false), false);
+  assert.equal(toolPolicyAllowed('on-request', false), true);
+  assert.equal(toolPolicyAllowed('unknown', true), false);
+});
 
 test('official sandbox and approval combinations produce stable decisions', () => {
   assert.equal(evaluatePermission({ sandboxMode: 'read-only', approvalPolicy: 'never' }, { operation: 'file-write', path: `${workspace}\\a.txt`, workspaceRoot: workspace }).decision, 'deny');
@@ -57,4 +65,14 @@ test('normalized policies remain idempotent through main-process permission chec
   const explicit = normalizePermissionSettings({ sandboxMode: 'danger-full-access', approvalPolicy: 'never', networkAccess: false });
   assert.deepEqual(normalizePermissionSettings(explicit), explicit);
   assert.equal(evaluatePermission(explicit, { operation: 'network', hostname: 'relay.example' }).decision, 'deny');
+});
+
+test('desktop control is explicitly denied outside full access and full access wording is accurate', () => {
+  for (const sandboxMode of ['read-only', 'workspace-write']) {
+    assert.equal(evaluatePermission({ sandboxMode, approvalPolicy: 'never' }, { operation: 'desktop-control' }).decision, 'deny');
+  }
+  assert.equal(evaluatePermission({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' }, { operation: 'desktop-control' }).decision, 'allow');
+  const instruction = permissionInstruction({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' });
+  assert.doesNotMatch(instruction, /超出沙箱的操作直接拒绝/);
+  assert.match(instruction, /Windows/);
 });

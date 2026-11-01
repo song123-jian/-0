@@ -45,6 +45,15 @@ test('MCP planning whitelist and never policy do not expose mutating tools', asy
   assert.match(toolAlias('id', '中文 tool-' + 'x'.repeat(100)), /^[a-zA-Z0-9_]{1,64}$/);
   assert.notEqual(toolAlias('a', 'echo'), toolAlias('b', 'echo'));
 });
+test('full access with never calls the connected MCP process and preserves plan whitelist', async t => {
+  const { runtime, saved, log } = await fixture(t);
+  const options = opts({ policy: () => 'never', fullAccess: () => true });
+  const result = await runtime.agentTools(options).execute(toolAlias(saved.id, 'echo'), { message: '自动授权真实往返' });
+  assert.equal(result.ok, true); assert.match(await fs.readFile(log, 'utf8'), /自动授权真实往返/);
+  const plan = runtime.agentTools({ ...options, readOnly: true });
+  assert.deepEqual(plan.definitions.map(d => d.function.name), [toolAlias(saved.id, 'echo')]);
+});
+
 test('MCP errors redact secrets and cancellation aborts the actual protocol request', async (t) => {
   const { runtime, saved, log } = await fixture(t); const toolbox = runtime.agentTools(opts());
   const failure = await toolbox.execute(toolAlias(saved.id, 'failure'), {}); assert.equal(failure.ok, false); assert.equal(JSON.stringify(failure).includes('never-expose'), false);

@@ -113,9 +113,14 @@ test('real Windows helper survives independent operation instances, launches onc
 
 test('real Windows helper records missing executables and applies a retry delay', { skip: process.platform !== 'win32' }, async t => {
   const f = await fixture(t), operate = createSessionBackground({ profile: f.profile });
-  f.cleanups.push(() => operate({ mode: 'remove' }));
-  await operate({ mode: 'register', name: taskNameForProfile(f.profile), nextRunAt: new Date(Date.now() - 1000).toISOString(),
+  let helperPid;
+  f.cleanups.push(async () => {
+    await operate({ mode: 'remove' });
+    if (helperPid) await wait(() => { try { process.kill(helperPid, 0); return false; } catch { return true; } }, 'Stopped helper process still exists');
+  });
+  const initial = await operate({ mode: 'register', name: taskNameForProfile(f.profile), nextRunAt: new Date(Date.now() - 1000).toISOString(),
     action: { executable: path.join(f.profile, 'missing.exe'), arguments: '', workingDirectory: f.profile } });
+  helperPid = initial.helperPid;
   const failed = await wait(async () => { const value = await operate({ mode: 'read' }); return value.lastResult === -1 && value; }, 'Missing executable not recorded');
   assert.match(failed.lastError, /Invalid background/); assert.equal(failed.launchCount, 0);
   assert.equal(failed.registered, true, 'The helper remains alive to observe plan updates');

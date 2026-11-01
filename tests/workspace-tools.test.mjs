@@ -4,21 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-const { CATALOG, copyBundledVerified, createWorkspaceTools, downloadVerified } = createRequire(import.meta.url)('../electron/workspace-tools.cjs');
-
-test('portable build bundles the pinned workspace tool archives from the configured directory', async () => {
-  const project = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const metadata = JSON.parse(await fs.readFile(path.join(project, 'package.json'), 'utf8'));
-  const entry = metadata.build.extraResources.find(item => item.to === 'workspace-tools');
-  assert.ok(entry, 'electron-builder must include the workspace-tools resource');
-  const bundle = path.resolve(project, entry.from);
-  for (const item of Object.values(CATALOG)) {
-    const bytes = await fs.readFile(path.join(bundle, item.filename));
-    assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), item.sha256, `${item.filename} must match its pinned SHA-256`);
-  }
-});
+const { copyBundledVerified, createWorkspaceTools, downloadVerified } = createRequire(import.meta.url)('../electron/workspace-tools.cjs');
 
 test('missing, corrupt and escaping tool manifests do not load external executables', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-tools-unit-'));

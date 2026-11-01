@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises'), path = require('node:path'), crypto = require('node:crypto');
 const { normalizeChatImages } = require('./chat-images.cjs');
 const { withFileCommit } = require('./file-commit.cjs');
+const { toolPolicyAllowed } = require('./permission-policy.cjs');
 const MAX_BYTES = 8 * 1024 * 1024, MAX_OUTPUT = MAX_BYTES;
 const hash = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const str = (description) => ({ type: 'string', description });
@@ -13,9 +14,9 @@ const operation = { type: 'object', additionalProperties: false, required: ['typ
   text: str('最多200字符的文字'), font_size: integer(14, 500), color: str('#RRGGBB'), outline: str('可选描边 #RRGGBB'), bold: { type: 'boolean' },
 } };
 const DEFINITIONS = [
-  def('image_read', '读取项目内8MB／2000万像素以内的静态PNG／JPEG／WebP；先展示审批，获准后将真实预览图片发送给所选模型并返回原图尺寸、SHA及沿途AGENTS。模型须支持图片；预览缩小不改变原文件。', { path: str('项目内图片路径') }, ['path']),
-  def('image_edit', '对刚image_read的图片顺序执行裁剪、旋转、缩放、翻转、亮度、中文文字叠加并经逐次审批保存PNG或JPEG，随后应重新读取核对。使用原图SHA，目标已有文件也必须先image_read并提供其SHA；新目标用new。检查dirty和并发变化，不是生成式重绘。坐标均以每步当前图片左上角为原点。', {
-    path: str('源图路径'), expected_hash: str('源图最新SHA256'), output_path: str('保存到项目内PNG／JPG／JPEG；可与原图相同'), output_expected_hash: str('目标最新SHA256；新文件为new'),
+  def('image_read', '读取授权路径内8MB／2000万像素以内的静态PNG／JPEG／WebP；按当前权限执行后将真实预览图片发送给所选模型并返回原图尺寸、SHA及沿途AGENTS。模型须支持图片；预览缩小不改变原文件。', { path: str('授权图片路径') }, ['path']),
+  def('image_edit', '对刚image_read的图片顺序执行裁剪、旋转、缩放、翻转、亮度、中文文字叠加并按当前权限保存PNG或JPEG，随后应重新读取核对。使用原图SHA，目标已有文件也必须先image_read并提供其SHA；新目标用new。检查dirty和并发变化，不是生成式重绘。坐标均以每步当前图片左上角为原点。', {
+    path: str('源图路径'), expected_hash: str('源图最新SHA256'), output_path: str('保存到授权路径PNG／JPG／JPEG；可与原图相同'), output_expected_hash: str('目标最新SHA256；新文件为new'),
     operations: { type: 'array', minItems: 1, maxItems: 12, items: operation },
   }, ['path', 'expected_hash', 'output_path', 'output_expected_hash', 'operations']),
 ];
@@ -75,9 +76,9 @@ function validate(name, args) {
     if (op.type === 'resize' || op.type === 'crop') dimensions(op.width,op.height);
   }
 }
-function createImageTools({ projectFiles, processor, guard = async () => {}, readOnly = false, policy = () => 'never', approve, authorize = async () => {}, isDirty = () => false, onFileChanged = () => {} }) {
+function createImageTools({ projectFiles, processor, guard = async () => {}, readOnly = false, policy = () => 'never', fullAccess = () => false, approve, authorize = async () => {}, isDirty = () => false, onFileChanged = () => {} }) {
   const observed = new Map();
-  const check = async (signal, write = false) => { await guard(); if (signal?.aborted) throw new Error('任务已停止。'); if (policy() !== 'on-request' || write && readOnly) throw new Error('图片操作需要逐次审批；规划只读。'); };
+  const check = async (signal, write = false) => { await guard(); if (signal?.aborted) throw new Error('任务已停止。'); if (!toolPolicyAllowed(policy(), fullAccess()) || write && readOnly) throw new Error('当前权限不允许图片操作；规划只读。'); };
   async function read(item) {
     if (!/\.(png|jpe?g|webp)$/i.test(item.target)) throw new Error('图片扩展名须为PNG／JPEG／WebP。');
     const info = await fs.stat(item.target); if (!info.isFile() || info.size > MAX_BYTES) throw new Error('图片须为8MB以内的普通文件。');
@@ -91,7 +92,7 @@ function createImageTools({ projectFiles, processor, guard = async () => {}, rea
     return { modelImages, activity: { title, path: item.target, detail: item.relative + ' · ' + capture.width + ' × ' + capture.height,
       output: '真实图片已准备供后续模型请求使用；本机保存结果以文件回读为准。', ...(thumbnail?.dataUrl.length <= 130000 ? { screenshot: thumbnail } : {}) } };
   };
-  return { definitions: DEFINITIONS.filter((d) => policy() === 'on-request' && (d.function.name === 'image_read' || !readOnly)),
+  return { definitions: DEFINITIONS.filter((d) => toolPolicyAllowed(policy(), fullAccess()) && (d.function.name === 'image_read' || !readOnly)),
     async execute(name, args, context = {}) {
       validate(name,args); const write = name === 'image_edit'; await check(context.signal,write);
       const source = await projectFiles.resolve(args.path); await authorize('file-read',{path:source.target},context);

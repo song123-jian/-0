@@ -1,8 +1,11 @@
 const { normalizeAddress } = require('./panel-browser.cjs');
+const { LIMITS: CDP_LIMITS } = require('./browser-cdp-cache.cjs');
+const { toolPolicyAllowed } = require('./permission-policy.cjs');
 
 const uuid = { type: 'string', pattern: '^[a-zA-Z0-9_-]{1,100}$' };
 const page = { tab_id: uuid };
 const target = { ...page, snapshot_id: uuid, ref: { type: 'string', pattern: '^e[1-9][0-9]{0,2}$' } };
+const cdpMethod = { type: 'string', maxLength: 128, pattern: '^[A-Za-z][A-Za-z0-9_]*\\.[A-Za-z][A-Za-z0-9_]*$' };
 const definition = (name, description, properties, required = Object.keys(properties)) => ({ type: 'function', function: { name, description, parameters: { type: 'object', properties, required, additionalProperties: false } } });
 const DEFINITIONS = [
   definition('browser_tabs', '列出当前项目和对话的 AI 专用标签，不包含用户手工页面。', {}),
@@ -15,8 +18,15 @@ const DEFINITIONS = [
   definition('browser_scroll', '经批准滚动当前 AI 页面，滚动会使旧引用失效；随后重新读取。', { ...page, x: { type: 'integer', minimum: -2000, maximum: 2000 }, y: { type: 'integer', minimum: -2000, maximum: 2000 } }, ['tab_id', 'y']),
   definition('browser_screenshot', '经用户批准截取当前网页视口并作为图片发送给所选模型；模型必须支持视觉。图片只作为证据，不代表任务已完成。', page),
   definition('browser_close', '经批准关闭当前对话的一个 AI 标签。', page),
+  definition('browser_cdp', '在当前对话的 AI 标签及受管子会话上执行页面 CDP 命令；可读取网页/存储数据、运行 JavaScript、改变页面、发送网络请求或触发提交。禁止跨标签及浏览器全局操作；子目标使用 flatten=true。每次调用遵循当前审批策略，单次完整结果最多 4 MiB。', {
+    ...page, method: cdpMethod, params: { type: 'object', maxBytes: CDP_LIMITS.parameterBytes }, session_id: { type: 'string', maxLength: 256 },
+  }, ['tab_id', 'method']),
+  definition('browser_cdp_events', '读取当前 AI 标签缓存的 CDP 事件；每标签最多缓存 10,000 条，全部 AI 标签合计最多 64 MiB。事件可能包含敏感页面或网络数据，并遵循当前审批策略。使用 next_after 分页，每页最多 1,000 条且不超过 4 MiB。', {
+    ...page, after: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, limit: { type: 'integer', minimum: 1, maximum: CDP_LIMITS.pageEvents }, method: cdpMethod,
+  }, ['tab_id']),
 ];
 const WRITES = new Set(['browser_click', 'browser_fill', 'browser_press_key']);
+const CDP_TOOLS = new Set(['browser_cdp', 'browser_cdp_events']);
 const TITLES = { browser_tabs: '查看 AI 标签', browser_open: '打开网页', browser_search: '搜索网页', browser_snapshot: '读取网页', browser_click: '点击网页元素', browser_fill: '填入网页内容', browser_press_key: '发送网页按键', browser_scroll: '滚动网页', browser_screenshot: '捕获网页截图', browser_close: '关闭 AI 标签' };
 
 function validate(name, args) {
@@ -27,11 +37,24 @@ function validate(name, args) {
     const rule = def.properties[key];
     if (rule.type === 'string' && (typeof value !== 'string' || value.length > (rule.maxLength || 100) || rule.minLength && value.trim().length < rule.minLength || rule.pattern && !new RegExp(rule.pattern).test(value) || rule.enum && !rule.enum.includes(value))) throw new Error('浏览器参数格式不正确：' + key);
     if (rule.type === 'integer' && (!Number.isInteger(value) || value < rule.minimum || value > rule.maximum)) throw new Error('滚动距离必须是 -2000 至 2000 的整数。');
+    if (rule.type === 'object') {
+      if (!value || typeof value !== 'object' || Array.isArray(value) || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new Error('CDP 参数必须是 JSON 对象。');
+      let serialized;
+      try { serialized = JSON.stringify(value); } catch { throw new Error('CDP 参数必须是有效 JSON。'); }
+      if (Buffer.byteLength(serialized, 'utf8') > rule.maxBytes) throw new Error('CDP 参数超过 4 MiB 限制。');
+    }
   }
 }
-function createBrowserTools({ browser, owner, readOnly = false, enabled = () => false, policy = () => 'never', guard = async () => {}, approve = async () => { throw new Error('没有浏览器审批处理器。'); }, urlAllowed = () => false }) {
-  const available = () => enabled() && policy() === 'on-request';
-  const definitions = available() ? DEFINITIONS.filter((item) => !readOnly || !WRITES.has(item.function.name)) : [];
+function boundedProtocolValue(value) {
+  let serialized = JSON.stringify(value);
+  if (typeof serialized !== 'string') serialized = 'null';
+  const bytes = Buffer.byteLength(serialized, 'utf8');
+  return bytes <= CDP_LIMITS.resultBytes - 64 * 1024 ? value ?? null : { truncated: true, original_bytes: bytes, preview: serialized.slice(0, 32000) };
+}
+function createBrowserTools({ browser, owner, readOnly = false, enabled = () => false, cdpEnabled = () => false, policy = () => 'never', fullAccess = () => false, guard = async () => {}, approve = async () => { throw new Error('没有浏览器审批处理器。'); }, urlAllowed = () => false }) {
+  const available = () => enabled() && toolPolicyAllowed(policy(), fullAccess());
+  const availableFor = (name) => available() && (!readOnly || !CDP_TOOLS.has(name)) && (!CDP_TOOLS.has(name) || cdpEnabled());
+  const definitions = available() ? DEFINITIONS.filter((item) => (!readOnly || !WRITES.has(item.function.name)) && availableFor(item.function.name)) : [];
   const check = async (signal) => {
     if (signal?.aborted) throw new Error('任务已停止。');
     await guard();
@@ -42,7 +65,38 @@ function createBrowserTools({ browser, owner, readOnly = false, enabled = () => 
     async execute(name, args, context = {}) {
       const { signal, onProgress } = context;
       await check(signal); validate(name, args);
-      if (!definitions.some((item) => item.function.name === name)) throw new Error('当前模式没有开放此浏览器工具。');
+      if (readOnly && CDP_TOOLS.has(name)) throw new Error('规划模式没有开放 CDP。');
+      if (!definitions.some((item) => item.function.name === name) || !availableFor(name)) throw new Error(CDP_TOOLS.has(name) ? '完整 CDP 访问权限已关闭。' : '当前模式没有开放此浏览器工具。');
+      if (CDP_TOOLS.has(name)) {
+        const { stamp } = browser.describe(owner, args.tab_id);
+        const url = stamp.url;
+        if (!urlAllowed(url)) throw new Error('当前网络或网站规则禁止此页面。');
+        const title = name === 'browser_cdp' ? '执行浏览器 CDP 命令' : '读取浏览器 CDP 事件';
+        const detail = name === 'browser_cdp' ? args.method : (args.method || '最近事件');
+        onProgress?.({ title, detail, path: url });
+        await approve({ kind: 'browser', title, path: url, command: JSON.stringify({ ...args, url }, null, 2),
+          note: name === 'browser_cdp' ? '此命令可读取敏感网页数据、运行脚本、修改页面、提交表单或发送网络请求。仅操作当前对话的独立 AI 标签；请核对完整命令与参数。' : '事件可能包含网页内容、请求信息或其他敏感数据；仅读取当前对话 AI 标签的有界事件记录。',
+          allowLabel: '允许本次网页操作' }, signal);
+        await check(signal);
+        if (!availableFor(name)) throw new Error('完整 CDP 访问权限已关闭。');
+        if (!urlAllowed(url)) throw new Error('审批期间网络或网站规则已变化。');
+        let output;
+        if (name === 'browser_cdp') {
+          browser.verify(owner, stamp);
+          const response = await browser.cdp(owner, stamp, args.method, args.params || {}, args.session_id, signal);
+          output = { cdp_result: boundedProtocolValue(response.result), tab: response.tab };
+        } else {
+          const response = await browser.cdpEvents(owner, stamp, { after: args.after || 0, limit: args.limit || 100, method: args.method }, signal);
+          output = { cdp_events: boundedProtocolValue(response) };
+        }
+        await check(signal);
+        const result = { ok: true, ...output, activity: { title, detail, path: url, output: JSON.stringify(output, null, 2).slice(0, 24000) } };
+        if (Buffer.byteLength(JSON.stringify(result), 'utf8') > CDP_LIMITS.resultBytes) {
+          result.activity.output = 'CDP 结果接近 4 MiB，省略操作记录预览；完整有界结果已返回模型。';
+        }
+        if (Buffer.byteLength(JSON.stringify(result), 'utf8') > CDP_LIMITS.resultBytes) throw new Error('CDP 结果元数据超过 4 MiB，请缩短网页标题或网址后重试。');
+        return result;
+      }
       const title = TITLES[name]; let detail = ''; let result;
       if (name === 'browser_tabs') { result = { tabs: browser.list(owner) }; }
       else {

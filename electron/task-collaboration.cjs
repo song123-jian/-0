@@ -76,7 +76,6 @@ function createCollaborationTools({ bridge, sourceId, readOnly = false, allowSen
       const target = await request('read', { conversationId: args.conversation_id, limit: 1 });
       if (!target.available || target.running || target.hasDraft) throw Error('目标任务不可用、正在运行或有未发送草稿。');
       if (target.stamp !== args.expected_stamp) throw Error('目标任务已变化，请重新读取并确认。');
-      if (args.execution_enabled && !target.executionEnabled) throw Error('目标任务未启用项目工具。');
       if (typeof approve !== 'function' || policy() !== 'on-request') throw Error('跨任务发送必须独立审批。');
       await approve({ kind: 'collaboration', title: '发送任务交接', command: args.text,
         path: `${target.projectName} / ${target.title}（${target.id}）`, allowLabel: '允许本次交接',

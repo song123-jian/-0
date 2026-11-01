@@ -121,3 +121,18 @@ test('service error details redact the configured credential and other bearer st
     assert.match(error.message,/HTTP 426/);assert.match(error.message,/Upgrade required/);assert.doesNotMatch(error.message,/test-only|sk-private-key|private-token/);return true;
   });
 });
+
+test('desktop screenshots are forwarded to the model as actual image evidence', async () => {
+  let requests = 0;
+  const desktopTools = [{ type: 'function', function: { name: 'desktop_screenshot', parameters: { type: 'object', properties: {} } } }];
+  await runModelTask({ connection, messages: [], tools: desktopTools,
+    executeTool: async () => ({ ok: true, screenshot_id: 'current', modelImages: [{ name: 'desktop.jpg', dataUrl: 'data:image/jpeg;base64,/9j/2Q==' }] }),
+    fetchImpl: async (_url, init) => {
+      if (++requests === 1) return toolReply('desktop_screenshot', '{}');
+      const messages = JSON.parse(init.body).messages;
+      assert.ok(messages.some(message => Array.isArray(message.content) && message.content.some(part => part.type === 'image_url')));
+      assert.ok(!messages.filter(message => message.role === 'tool').some(message => message.content.includes('base64')));
+      return stream([delta({ content: '已查看桌面。' }), delta({}, 'stop')]);
+    } });
+  assert.equal(requests, 2);
+});

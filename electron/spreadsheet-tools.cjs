@@ -142,11 +142,11 @@ function applyStyle(cell, s) {
   if (s.fill_color !== undefined) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + s.fill_color.toUpperCase() } };
   cell.alignment = { ...cell.alignment, ...(s.alignment !== undefined ? { horizontal: s.alignment } : {}), ...(s.wrap !== undefined ? { wrapText: s.wrap } : {}) };
 }
-function createSpreadsheetTools({ projectFiles, readOnly = false, guard = async () => {}, policy = () => 'never', approve, authorize = async () => {}, isDirty = () => false, onFileChanged = () => {} }) {
+function createSpreadsheetTools({ projectFiles, readOnly = false, guard = async () => {}, policy = () => 'never', fullAccess = () => false, approve, authorize = async () => {}, isDirty = () => false, onFileChanged = () => {} }) {
   const observed = new Map();
   const check = async (signal, writing = false) => {
     await guard(); if (signal?.aborted) throw new Error('任务已停止。');
-    if (writing && (readOnly || policy() !== 'on-request')) throw new Error('表格修改需要执行模式和逐次审批。');
+    if (writing && (readOnly || !require('./permission-policy.cjs').toolPolicyAllowed(policy(), fullAccess()))) throw new Error('当前权限不允许表格修改；规划只读。');
   };
   async function load(item) {
     const kind = path.extname(item.target).toLowerCase();
@@ -166,7 +166,7 @@ function createSpreadsheetTools({ projectFiles, readOnly = false, guard = async 
     return { bytes, hash: hash(bytes), workbook, kind, blocked };
   }
   return {
-    definitions: DEFINITIONS.filter((d) => d.function.name === 'spreadsheet_read' || !readOnly && policy() === 'on-request'),
+    definitions: DEFINITIONS.filter((d) => d.function.name === 'spreadsheet_read' || !readOnly && require('./permission-policy.cjs').toolPolicyAllowed(policy(), fullAccess())),
     async execute(name, args, context = {}) {
       validate(name, args); const writing = name === 'spreadsheet_edit'; await check(context.signal, writing);
       const item = await projectFiles.resolve(args.path, writing);

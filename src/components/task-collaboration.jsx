@@ -9,7 +9,7 @@ export function TaskCollaborationDialog({ library, projects, runningIds, sourceI
   useEffect(() => { const e = dialog.current; e.showModal(); return () => { if (e.open) e.close(); }; }, []);
   const { tasks, truncated } = listTasks(library, projects, runningIds, { sourceId, query, includeArchived: true });
   let target; try { if (targetId) target = readTask(library, projects, runningIds, { conversationId: targetId, limit: 8 }); } catch { /* Removed while dialog was open. */ }
-  useEffect(() => { if (!canExecute || !target?.executionEnabled) setExecute(false); }, [canExecute, target?.executionEnabled]);
+  useEffect(() => { setExecute(false); }, [canExecute, targetId]);
   const blocked = !target ? '请选择其他任务。' : !target.projectId ? '目标未绑定项目，请先通过聊天菜单选择项目。' : !target.available ? '目标任务或项目已归档或不可用。' : target.running ? '目标仍在运行，可以查看结果，结束后再发送。' : target.hasDraft ? '目标有未发送草稿，请先处理草稿。' : runningIds.length >= 3 ? '已有3个任务运行，请等待其中一项结束。' : '';
   async function submit(e) {
     e.preventDefault(); if (blocked || busy) return;
@@ -29,8 +29,8 @@ export function TaskCollaborationDialog({ library, projects, runningIds, sourceI
         <button type="button" className="secondary-button" disabled={busy || !target.messages.some(m => m.content)} onClick={() => { try { onReference(target); onClose(); } catch (e) { setError(e.message); } }}>引用到当前草稿</button>
       </section>}
       <label>交接内容<textarea aria-label="任务交接内容" value={text} maxLength={16000} rows={4} disabled={busy} onChange={e => setText(e.target.value)}/></label>
-      <label className="message-revision-execution"><input type="checkbox" checked={execute} disabled={busy || !canExecute || !target?.executionEnabled} onChange={e => setExecute(e.target.checked)}/>允许目标任务使用项目工具</label>
-      <p>{execute ? '目标使用自己的项目、工具权限和审批设置；提交后独立运行。' : '本次交接仅请求回答。目标已保存的执行设置保持原值。'}</p>
+      <label className="message-revision-execution"><input type="checkbox" checked={execute} disabled={busy || !canExecute || !target?.available} onChange={e => setExecute(e.target.checked)}/>允许目标任务本次使用项目工具</label>
+      <p>{execute ? '目标使用自己的项目、工具权限和审批设置；提交后独立运行。' : '本次交接仅请求回答，不授权本机操作。'}</p>
       {blocked && <p role="note">{blocked}</p>}{error && <p role="alert" className="message-error">{error}</p>}
       {receipt && <p role="status" className="collaboration-receipt">已提交至目标任务，尚不代表完成。可在上方查看状态和结果。</p>}
       <div className="message-revision-buttons"><button type="button" className="secondary-button" disabled={busy} onClick={onClose}>关闭</button><button className="primary-button" disabled={busy || Boolean(blocked) || !text.trim()}>{busy ? '正在保存交接…' : '确认并发送交接'}</button></div>

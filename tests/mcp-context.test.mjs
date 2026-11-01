@@ -42,6 +42,15 @@ test('model tools require this-task catalog and per-call approval; denied read n
   assert.equal(tools.definitions.length,3);await assert.rejects(tools.execute(contextAlias(f.saved.id,'read'),{catalog_id:f.catalog.catalogId,item_id:f.catalog.resources[0].id}),/先用本任务/);assert.equal(approvals,0);
   const cat=await tools.execute(contextAlias(f.saved.id,'list'),{});assert.equal(cat.ok,true);await assert.rejects(tools.execute(contextAlias(f.saved.id,'read'),{catalog_id:cat.catalogId,item_id:cat.resources[0].id}),/用户拒绝/);assert.equal((await logs(f)).filter(r=>r.method==='resources/read').length,0);
 });
+test('full access with never reads actual connected MCP resources', async t => {
+  const f = await fixture(t);
+  const tools = f.runtime.agentTools(opts({ policy: () => 'never', fullAccess: () => true }));
+  const cat = await tools.execute(contextAlias(f.saved.id, 'list'), {});
+  const item = cat.resources.find(r => r.name === '项目说明');
+  const result = await tools.execute(contextAlias(f.saved.id, 'read'), { catalog_id: cat.catalogId, item_id: item.id });
+  assert.equal(result.ok, true); assert.match(result.text, /C6142/);
+});
+
 test('changed policy and reconnected generation invalidate model approval',async t=>{
   const f=await fixture(t);let policy='on-request',stage='list';const tools=f.runtime.agentTools(opts({policy:()=>policy,approve:async()=>{if(stage==='read')policy='never';}}));const cat=await tools.execute(contextAlias(f.saved.id,'list'),{});stage='read';await assert.rejects(tools.execute(contextAlias(f.saved.id,'read'),{catalog_id:cat.catalogId,item_id:cat.resources[0].id}),/策略/);policy='on-request';await f.runtime.disconnect(f.saved.id);await f.runtime.connect(f.saved.id);await assert.rejects(tools.execute(contextAlias(f.saved.id,'list'),{}),/变化/);assert.deepEqual(f.runtime.agentTools(opts({policy:()=> 'never'})).definitions,[]);
 });
