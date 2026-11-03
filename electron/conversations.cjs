@@ -55,6 +55,12 @@ function normalizeMessage(message) {
   };
 }
 
+function normalizeRevisionOrigin(value) {
+  if (!value || !['edit', 'regenerate'].includes(value.kind)) return null;
+  const parentId = validProjectId(value.parentId), sourceMessageId = validProjectId(value.sourceMessageId), sourceUserMessageId = validProjectId(value.sourceUserMessageId);
+  return parentId && sourceMessageId && sourceUserMessageId ? { kind: value.kind, parentId, sourceMessageId, sourceUserMessageId } : null;
+}
+
 function createConversation(mode = 'answer', now = new Date().toISOString(), reasoningEffort) {
   return {
     id: crypto.randomUUID(), title: '新对话', createdAt: now, updatedAt: now,
@@ -73,11 +79,15 @@ function normalizeLibrary(value, now = new Date().toISOString()) {
     seen.add(id);
     const messages = (Array.isArray(entry.messages) ? entry.messages : []).map(normalizeMessage).filter(Boolean);
     const revisionId = validProjectId(entry.revisionId) || "initial", versionIds = new Set([revisionId]);
+    const revisionOrigin = normalizeRevisionOrigin(entry.revisionOrigin);
     const revisions = (Array.isArray(entry.revisions) ? entry.revisions : []).slice(0, 19).filter(item => {
       if (!item || !validProjectId(item.id) || versionIds.has(item.id)) return false; versionIds.add(item.id); return true;
-    }).map(item => ({ id: item.id, label: String(item.label || "历史版本").replace(/[\r\n\x00-\x1f]+/g, " ").slice(0, 100),
-      createdAt: Number.isFinite(Date.parse(item.createdAt)) ? item.createdAt : now,
-      messages: (Array.isArray(item.messages) ? item.messages : []).map(normalizeMessage).filter(Boolean) }));
+    }).map(item => {
+      const origin = normalizeRevisionOrigin(item.revisionOrigin);
+      return { id: item.id, label: String(item.label || "历史版本").replace(/[\r\n\x00-\x1f]+/g, " ").slice(0, 100),
+        createdAt: Number.isFinite(Date.parse(item.createdAt)) ? item.createdAt : now,
+        messages: (Array.isArray(item.messages) ? item.messages : []).map(normalizeMessage).filter(Boolean), ...(origin ? { revisionOrigin: origin } : {}) };
+    });
     return {
       id, title: String(entry.title || messages.find((item) => item.role === 'user')?.content || '新对话').replace(/[\r\n]+/g, ' ').slice(0, 100),
       createdAt: Number.isFinite(Date.parse(entry.createdAt)) ? entry.createdAt : now,
@@ -92,7 +102,7 @@ function normalizeLibrary(value, now = new Date().toISOString()) {
       ...(validProjectId(entry.parentId) && entry.parentId !== id ? { parentId: entry.parentId } : {}),
       pinned: Boolean(entry.pinned), unreadResult: entry.unreadResult === true, messages,
       ...(entry.revisionId || revisions.length ? { revisionId, revisionLabel: String(entry.revisionLabel || '初始版本').replace(/[\r\n\x00-\x1f]+/g, ' ').slice(0, 100),
-        revisionCreatedAt: Number.isFinite(Date.parse(entry.revisionCreatedAt)) ? entry.revisionCreatedAt : now, revisions } : {}),
+        revisionCreatedAt: Number.isFinite(Date.parse(entry.revisionCreatedAt)) ? entry.revisionCreatedAt : now, revisions, ...(revisionOrigin ? { revisionOrigin } : {}) } : {}),
       archivedAt: Number.isFinite(Date.parse(entry.archivedAt)) ? entry.archivedAt : null,
     };
   });

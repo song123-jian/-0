@@ -34,7 +34,7 @@ import { GitPanel } from './components/git-panel.jsx';
 import { ConversationVersions, MessageRevisionDialog } from './components/conversation-revisions.jsx';
 import { TaskCollaborationDialog } from './components/task-collaboration.jsx';
 import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboration.js';
-import { prepareRevision, selectRevision, revisionStamp, revisionSource } from './lib/conversation-revisions.js';
+import { prepareRevision, selectRevision, revisionStamp, revisionSource, discardFailedRegeneration } from './lib/conversation-revisions.js';
 import { MessageContent, MessageProgress } from './components/message-content.jsx';
 import { messageProgressState, settledTiming } from './lib/message-presentation.js';
 import { applyConversationAction, conversationText, forkChatAtMessage, newChatRecord } from './lib/conversation-actions.js';
@@ -1502,7 +1502,7 @@ function App() {
     const requestMode = retryContent?.mode || (!detached && pendingModeOverride?.conversationId === targetChat?.id ? pendingModeOverride.mode : inferWorkMode(text, Boolean(!detached && fileContext || outgoingImages.length || outgoingAttachments.length)));
     const automaticSkill = findAutomaticSkill(text, enabledSkills);
     const context = canShareContext && !detached ? fileContext : null;
-    const executionEnabled = canShareContext && (handoff ? handoff.executionEnabled === true : revisionAction ? revisionAction.executionEnabled === true : true);
+    const executionEnabled = canShareContext && (handoff ? handoff.executionEnabled === true : revisionAction ? revisionAction.executionEnabled === true : retryContent?.executionEnabled === false ? false : true);
     const requestId = window.crypto.randomUUID();
     const retrySkill = retryContent?.skillId ? enabledSkills.find((item) => item.id === retryContent.skillId) : null;
     const outgoingSkill = canShareContext ? retrySkill || (!detached ? activeSkill : null) || automaticSkill : null;
@@ -1693,6 +1693,21 @@ function App() {
   });
 
   const retryFailed = (assistantMessage) => {
+    const chat = libraryRef.current?.conversations.find((item) => item.id === libraryRef.current.activeId);
+    if (chat && !storageBusyRef.current && !(assistantMessage.executionEnabled && assistantMessage.operations?.length)) {
+      try {
+        const rollback = discardFailedRegeneration(chat, assistantMessage.id);
+        if (rollback) {
+          const restored = rollback.chat;
+          setLibrary((current) => current ? { ...current,
+            conversations: current.conversations.map((item) => item.id === restored.id ? restored : item),
+          } : current);
+          sendMessage('', null, restored.id, { kind: 'regenerate', messageId: rollback.sourceMessageId, stamp: revisionStamp(restored) })
+            .catch((error) => showNotice(readableError(error)));
+          return;
+        }
+      } catch (error) { showNotice(readableError(error)); return; }
+    }
     if (assistantMessage.executionEnabled && assistantMessage.operations?.length) {
       const index = messages.findIndex((item) => item.id === assistantMessage.id);
       const original = messages[index - 1]?.content || '上一个任务';
@@ -1700,7 +1715,11 @@ function App() {
     }
     const index = messages.findIndex((item) => item.id === assistantMessage.id);
     const userMessage = messages[index - 1];
-    if (userMessage?.role === 'user') openMessageRevision('regenerate', assistantMessage.id);
+    if (userMessage?.role === 'user') {
+      const retryContent = { userId: userMessage.id, assistantId: assistantMessage.id, images: userMessage.images, attachments: userMessage.attachments,
+        model: userMessage.model, reasoningEffort: userMessage.reasoningEffort, mode: userMessage.mode, skillId: userMessage.skillId, executionEnabled: false };
+      sendMessage(userMessage.content, retryContent, chat?.id || null).catch((error) => showNotice(readableError(error)));
+    }
   };
 
   const applyCodeToEditor = (code) => {

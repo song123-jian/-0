@@ -22,7 +22,7 @@ export function revisionSource(chat, type, messageId) {
 }
 function snapshot(chat) {
   return { id: revisionId(chat), label: label(chat.revisionLabel), createdAt: chat.revisionCreatedAt || chat.createdAt,
-    messages: structuredClone(chat.messages) };
+    messages: structuredClone(chat.messages), ...(chat.revisionOrigin ? { revisionOrigin: structuredClone(chat.revisionOrigin) } : {}) };
 }
 export function prepareRevision(chat, action, now = new Date().toISOString()) {
   assertRevisionIdle(chat);
@@ -33,7 +33,8 @@ export function prepareRevision(chat, action, now = new Date().toISOString()) {
   const revisions = chat.revisions || [];
   if (revisions.length >= MAX_CONVERSATION_VERSIONS - 1) throw Error('此聊天已达到20个版本，请导出需要的内容并新建聊天后继续；已有版本保持。');
   const next = { ...chat, revisionId: crypto.randomUUID(), revisionLabel: label((action.kind === 'edit' ? '编辑：' : '重新生成：') + (text || user.attachments?.[0]?.name || '图片消息')),
-    revisionCreatedAt: now, revisions: [...revisions, snapshot(chat)], messages: structuredClone(chat.messages.slice(0, index)) };
+    revisionCreatedAt: now, revisionOrigin: { kind: action.kind, parentId: revisionId(chat), sourceMessageId: action.messageId, sourceUserMessageId: user.id },
+    revisions: [...revisions, snapshot(chat)], messages: structuredClone(chat.messages.slice(0, index)) };
   return { chat: next, user: { ...structuredClone(user), content: text.trim(), executionEnabled: action.executionEnabled === true } };
 }
 export function selectRevision(chat, id, stamp, now = new Date().toISOString()) {
@@ -43,5 +44,50 @@ export function selectRevision(chat, id, stamp, now = new Date().toISOString()) 
   const selected = chat.revisions?.find(v => v.id === id);
   if (!selected) throw Error('此版本已不存在。');
   return { ...chat, revisionId: selected.id, revisionLabel: selected.label, revisionCreatedAt: selected.createdAt,
+    revisionOrigin: selected.revisionOrigin ? structuredClone(selected.revisionOrigin) : undefined,
     messages: structuredClone(selected.messages), revisions: [...chat.revisions.filter(v => v.id !== id), snapshot(chat)], updatedAt: now };
+}
+
+function sameRecordFields(left, right, fields) {
+  const first = left == null ? [] : left, second = right == null ? [] : right;
+  if (!Array.isArray(first) || !Array.isArray(second) || first.length !== second.length) return false;
+  return first.every((item, index) => item && second[index] && fields.every(field => item[field] === second[index][field]));
+}
+
+function sameRegenerationInput(left, right) {
+  if (left?.role !== 'user' || right?.role !== 'user' || left.content !== right.content
+    || (left.mode || 'answer') !== (right.mode || 'answer')) return false;
+  return sameRecordFields(left.images, right.images, ['name', 'mimeType', 'dataUrl'])
+    && sameRecordFields(left.attachments, right.attachments, ['name', 'mimeType', 'size', 'parsed', 'text', 'truncated', 'format', 'parseStatus', 'parseMessage']);
+}
+
+export function discardFailedRegeneration(chat, assistantMessageId, now = new Date().toISOString()) {
+  assertRevisionIdle(chat);
+  let origin = chat.revisionOrigin;
+  if (!origin && chat.revisionLabel?.startsWith('重新生成：')) {
+    const failedIndex = chat.messages.findIndex(message => message.id === assistantMessageId);
+    const activeUser = chat.messages[failedIndex - 1];
+    const candidates = (chat.revisions || []).filter(version => version.messages[failedIndex]?.role === 'assistant'
+      && sameRegenerationInput(version.messages[failedIndex - 1], activeUser));
+    if (candidates.length === 1) {
+      const parent = candidates[0], source = parent.messages[failedIndex];
+      origin = { kind: 'regenerate', parentId: parent.id, sourceMessageId: source.id, sourceUserMessageId: parent.messages[failedIndex - 1].id };
+    }
+  }
+  if (origin?.kind !== 'regenerate') return null;
+  const parent = chat.revisions?.find(version => version.id === origin.parentId);
+  if (!parent) return null;
+  const sourceIndex = parent.messages.findIndex(message => message.id === origin.sourceMessageId);
+  const failedIndex = chat.messages.findIndex(message => message.id === assistantMessageId);
+  const failed = chat.messages[failedIndex];
+  if (sourceIndex < 1 || parent.messages[sourceIndex].role !== 'assistant' || parent.messages[sourceIndex - 1]?.role !== 'user'
+    || parent.messages[sourceIndex - 1].id !== origin.sourceUserMessageId
+    || failedIndex !== sourceIndex || failed?.role !== 'assistant' || (!failed.error && !failed.cancelled)
+    || !sameRegenerationInput(chat.messages[failedIndex - 1], parent.messages[sourceIndex - 1])) return null;
+  return {
+    sourceMessageId: origin.sourceMessageId,
+    chat: { ...chat, revisionId: parent.id, revisionLabel: label(parent.label), revisionCreatedAt: parent.createdAt,
+      revisionOrigin: parent.revisionOrigin ? structuredClone(parent.revisionOrigin) : undefined,
+      revisions: chat.revisions.filter(version => version.id !== parent.id), messages: structuredClone(parent.messages), updatedAt: now },
+  };
 }

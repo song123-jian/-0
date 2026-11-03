@@ -14,6 +14,12 @@ export function forkChatRecord(source, projectId = source.projectId || '', now =
     ...(m.operations ? { operations: m.operations.map(o => o.status === 'running' ? { ...o, status: 'interrupted' } : o) } : {}) }); });
   next.messages = cloneMessages(next.messages);
   if (next.revisions) next.revisions = next.revisions.map(v => ({ ...v, messages: cloneMessages(v.messages) }));
+  const remapOrigin = origin => origin && ({ ...origin,
+    sourceMessageId: messageIds.get(origin.sourceMessageId) || origin.sourceMessageId,
+    sourceUserMessageId: messageIds.get(origin.sourceUserMessageId) || origin.sourceUserMessageId,
+  });
+  if (next.revisionOrigin) next.revisionOrigin = remapOrigin(next.revisionOrigin);
+  if (next.revisions) next.revisions = next.revisions.map(version => version.revisionOrigin ? { ...version, revisionOrigin: remapOrigin(version.revisionOrigin) } : version);
   return next;
 }
 
