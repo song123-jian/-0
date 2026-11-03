@@ -1,6 +1,6 @@
 # Project Handoff
 
-## Current State — 1.3.32 installed; source published to main
+## Current State — 1.3.32 installed; 1.3.33 source published, installation pending
 
 The desktop workbench supports ordinary conversations and local tasks without a registered project. Projects remain optional. An explicitly empty project registry survives restart; deleting or archiving the last project returns to Ordinary Chat. Legacy workspace migration remains supported.
 
@@ -14,13 +14,17 @@ The desktop workbench supports ordinary conversations and local tasks without a 
 | Running-task steering | Added bounded text-only steering queues, a preload/IPC bridge, next-model-round injection, expiry events, and a separate stop plus “提交引导但不中断模型运行” UI action | Steering queue/runtime tests passed; real Electron loopback model check confirmed a second request received the steering text and completed normally |
 | Completed progress and command disclosures | Completed progress is compact by default, operation details expose stable disclosure IDs and names, and command/output remain toggleable | Focused UI contract tests and real Electron DOM check passed |
 | Windows 1.3.32 installer and replacement | Rebuilt with the local Electron distribution and installed over `C:\Program Files\scodex-workbench` | Installer exit 0; installed EXE and ASAR match the accepted candidate hashes; actual startup loaded both existing chats without history errors |
+| Gateway 502 diagnosis | Detect an upstream-authentication failure detail on HTTP 502 and distinguish chat generation from `/models` latency checks; retain the failed prompt and completed operations | Runtime regression passed; 1.3.33 packaged-Electron/IPC check passed against a loopback `/models` success and matching `/chat/completions` 502 fixture |
+| Conversation version picker sizing | Show concise `编辑消息` or `重新生成` options while retaining the full source text in the selected selector tooltip; cap width at 360px | Logical regression and actual packaged Electron layout check passed; long-message picker measured about 123px at 1440px viewport |
+| Failed-answer retry | Retry removes the failed response without opening the revision editor; a failed first answer in a regenerated branch restores its parent version before retrying | `conversation-revisions.test.mjs` passed 16/16; actual 1.3.33 UI acceptance passed 4/4, including both retry paths |
+| Windows 1.3.33 installer build | Build renderer, unpacked Electron and NSIS using the local Electron distribution | Passed; packaged candidate passed 4/4 UI checks. Replacement is pending because the existing 1.3.32 app is still running; no process was stopped. |
 
 ## Decisions and Constraints
 
 - Public source retains the 1.3.30 packaging conventions. Unfinished mobile changes and mobile-only npm scripts are excluded from this release.
 - Dependencies are unchanged. Only root version metadata in the lockfile changes.
 - Existing user profiles and disk project files are preserved. New computers still require model service and key configuration.
-- The historical GitHub Release remains [v1.3.31](https://github.com/song123-jian/-0/releases/tag/v1.3.31). The accepted 1.3.32 installer is local at the path recorded in the test handoff; this increment publishes source to main and does not create a new GitHub Release.
+- The historical GitHub Release remains [v1.3.31](https://github.com/song123-jian/-0/releases/tag/v1.3.31). The 1.3.32 installer remains the current installed rollback baseline. The 1.3.33 installer is local at the path recorded in the test handoff; no new GitHub Release was created.
 - Upgrade by running the installer and selecting the existing application directory. Keep the 1.3.31 installer for rollback; do not overwrite or delete user data during rollback.
 - Private credentials, profiles, local build artifacts, machine-specific evidence and backups are excluded from source uploads.
 
@@ -49,4 +53,15 @@ See [Test Handoff](TEST_HANDOFF.md) and [Workflow](WORKFLOW.md).
 - Actual 1.3.32 candidate UI acceptance passed for completed progress, command/output disclosure, copy, edit, regenerate, and answer branching. Progress starts collapsed at 13px against 16px body text.
 - The 1.3.32 installer replaced `C:\Program Files\scodex-workbench`; actual startup reported version `1.3.32`, loaded two conversations and four visible messages, and returned no history error. Pre-install and post-install hashes matched for `conversations.json`, `settings.json`, `model-connection.json`, and `device-profile.json`. The old `repairs` directory is absent; all 27 candidate files are installed plus two uninstaller files.
 - Application source 1.3.32 was committed and pushed to `main` as `cf03d081937d8f12386aefbcb81ee30420b33e48` on 2026-11-03. Remote `refs/heads/main` equalled the local feature commit after push (exit 0). The direct attempt failed to connect to github.com:443 after 21139 ms; using the existing Windows proxy `127.0.0.1:7890` per Git command resolved publication without changing global Git settings. Final handoff synchronization is documentation-only.
+- The 1.3.33 failed-answer retry fix is committed as `179937a92fe75f227ecab187ef3a875353778755` and pushed to `main`; remote `refs/heads/main` was verified equal to local HEAD. The push fast-forwarded from `8e3b973a56ea8fbc506c8c423a8abaf53ec9b92a`.
+- The latest 1.3.33 candidate passed the 16/16 focused conversation-revision tests and 4/4 actual packaged-UI checks. No clean full-suite run is claimed; loopback fixtures supplied model responses.
+- The installed 1.3.32 application remains active in four processes. Replacement with the accepted 1.3.33 installer is pending normal app exit; no user process was stopped.
 - Cleanup remains a manual follow-up because automatic approval review rejected it; retained paths and the manual procedure are recorded in TEST_HANDOFF.md.
+
+## Retry Revalidation Checkpoint — 2026-11-03
+
+- Retry behavior is implemented in the 1.3.33 candidate: ordinary failed answers are removed and resent without opening the revision editor; failed first answers in regenerated branches restore the exact parent revision and then request a fresh answer, discarding the failed branch.
+- Legacy regeneration rollback now requires a unique parent match across prompt text, mode, images, and attachment data. The focused `conversation-revisions.test.mjs` suite passed 16/16, including mismatched-media cases.
+- Actual packaged-UI report `release/delivery-1.3.33-retry-revalidated-20261103/model-diagnostics-ui.json` passed 4/4. Both retry cases closed without opening the editor; the regenerated branch and failed answer were absent after rollback and the replacement answer persisted.
+- Candidate installer, executable, and ASAR are version 1.3.33; exact sizes and SHA-256 values are recorded in `TEST_HANDOFF.md`. The source commit is published and verified on `main`.
+- Installation over `C:\Program Files\scodex-workbench` remains pending because the installed 1.3.32 application is still running. Preserve the existing user profile and wait for normal exit before replacing it.
