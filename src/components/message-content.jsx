@@ -50,7 +50,7 @@ export function MessageContent({ content, onApplyCode }) {
   return <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} /></div>;
 }
 
-export function MessageProgress({ message }) {
+export function MessageProgress({ message, collapsed = false }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!message.pending) return undefined;
@@ -61,7 +61,7 @@ export function MessageProgress({ message }) {
   const elapsed = messageElapsedMs(message, now);
   const label = message.pending ? message.approval ? '等待审批' : message.phase === 'tool' ? '正在执行' : '正在处理' : message.error ? '处理失败' : message.cancelled ? '已停止' : '已处理';
   const inferred = !message.pending && !Number.isFinite(message.elapsedMs) && !Number.isFinite(message.stoppedAfter) && elapsed !== null;
-  return <div className="message-progress" data-state={message.pending ? 'running' : message.error ? 'failed' : message.cancelled ? 'cancelled' : 'complete'}>
+  return <div className="message-progress" data-state={message.pending ? 'running' : message.error ? 'failed' : message.cancelled ? 'cancelled' : 'complete'} data-collapsed={collapsed ? 'true' : 'false'}>
     <span className="message-progress-label" role="status">{message.pending && <LoaderCircle size={15} className="spin" />}{label}</span>
     {elapsed !== null && <time title={inferred ? '根据历史操作记录起止时间计算' : '本条回复的实际处理时长'}>{formatDuration(elapsed)}{inferred && <span className="message-time-note">（操作耗时）</span>}</time>}
     <span className="message-progress-line" />

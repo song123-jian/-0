@@ -20,6 +20,13 @@ export function settledTiming(message, now = Date.now()) {
   return { startedAt: undefined, ...(value !== null ? { elapsedMs: value } : {}) };
 }
 
+export function messageProgressState(message = {}) {
+  if (message.pending) return 'running';
+  if (message.error) return 'failed';
+  if (message.cancelled) return 'cancelled';
+  return 'complete';
+}
+
 export function formatDuration(value) {
   const bounded = boundedTime(value);
   if (bounded === null) return '';

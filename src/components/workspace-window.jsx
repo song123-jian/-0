@@ -34,7 +34,7 @@ export function WorkspaceWindow() {
       {revisionRequest && <MessageRevisionDialog chat={chat} request={revisionRequest} canExecute={snapshot.canExecute} onClose={()=>setRevisionRequest(null)} onSubmit={async input=>{const result=await action({...input,type:'revise'});if(result===false)throw Error('版本操作未执行，请查看窗口提示。');}}/>}
       <div className="detached-messages conversation-scroll"><div className="message-list">{chat.messages.map((m,index)=><MessageBubble key={m.id} message={m} copied={copied===m.id}
         onCopy={()=>navigator.clipboard.writeText(m.content||'').then(()=>setCopied(m.id)).catch(e=>setError(e.message))}
-        onEdit={()=>openRevision('edit',m.id)} onRegenerate={()=>openRevision('regenerate',m.id)} actionsDisabled={busy||archived||waiting}
+        onEdit={()=>openRevision('edit',m.id)} onRegenerate={()=>openRevision('regenerate',m.id)} onFork={()=>action({type:'fork',messageId:m.id})} actionsDisabled={busy||archived||waiting}
         onRetry={()=>{if(!m.operations?.length){openRevision('regenerate',m.id);return;}const original=chat.messages[index-1]?.content||'继续未完成任务';action({type:'send',text:'继续未完成的任务：'+original+'\n先检查已有操作和失败原因，保留已完成的修改。'});}}
         onApproval={(id,allowed)=>action({type:'approval',approvalId:id,allowed})}
         onOpenFile={path=>action({type:'file',path})} onBrowser={()=>action({type:'focus'})} onServices={()=>action({type:'focus'})}/>
@@ -43,7 +43,7 @@ export function WorkspaceWindow() {
         onChange={e=>{setDraft(e.target.value);draftRef.current=e.target.value;pendingDraftRef.current=e.target.value;action({type:'draft',text:e.target.value});}}
         onKeyDown={e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&!e.nativeEvent.isComposing){e.preventDefault();send();}}}/>
         <div><span>{chat.model||snapshot.model} · {chat.mode==='plan'?'规划只读':snapshot.canExecute?'自动衔接':'仅对话'}</span>
-        {busy?<button type="button" className="send-button stop-button" aria-label="独立窗口停止生成" onClick={()=>action({type:'stop'})}><Square size={15}/></button>:<button type="button" className="send-button" aria-label="独立窗口发送消息" disabled={!draft.trim()||waiting||archived} onClick={send}><ArrowUp size={18}/></button>}</div></div>
+        {busy?<><button type="button" className="send-button stop-button" aria-label="独立窗口停止生成" onClick={()=>action({type:'stop'})}><Square size={15}/></button><button type="button" className="send-button steering-send-button" aria-label="独立窗口提交引导但不中断模型运行" title="提交引导 · 不中断模型运行" disabled={!draft.trim()||waiting||archived} onClick={send}><ArrowUp size={18}/></button></>:<button type="button" className="send-button" aria-label="独立窗口发送消息" disabled={!draft.trim()||waiting||archived} onClick={send}><ArrowUp size={18}/></button>}</div></div>
     </>}
     {error&&<div className="detached-error" role="alert">{error}</div>}
     <footer className="detached-footer">本机实时窗口 · 任务与主工作台共享项目，关闭此窗口后任务继续运行。</footer>

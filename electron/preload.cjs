@@ -188,6 +188,7 @@ contextBridge.exposeInMainWorld('scodex', {
   approveAgentCommand: (id, allowed) => ipcRenderer.invoke('agent:approve', id, allowed),
   sendMessage: (payload) => ipcRenderer.invoke('chat:send', payload),
   cancelMessage: (requestId) => ipcRenderer.invoke('chat:cancel', requestId),
+  steerMessage: (payload) => ipcRenderer.invoke('chat:steer', payload),
   onChatEvent: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('chat:event', handler);

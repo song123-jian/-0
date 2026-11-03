@@ -17,6 +17,26 @@ export function forkChatRecord(source, projectId = source.projectId || '', now =
   return next;
 }
 
+// Create a new chat from one completed assistant answer. The copied history is
+// display-only: any live request/approval state is cleared and no operation is
+// replayed in the new chat.
+export function forkChatAtMessage(source, messageId, projectId = source.projectId || '', now = new Date().toISOString()) {
+  const index = (source.messages || []).findIndex((message) => message.id === messageId);
+  if (index < 0 || source.messages[index]?.role !== 'assistant') throw Error('请选择一条回答消息。');
+  const next = { ...structuredClone(source), id: crypto.randomUUID(), title: (source.title + ' · 从回答分支').slice(0, 100), projectId,
+    parentId: source.id, createdAt: now, updatedAt: now, pinned: false, unreadResult: false, archivedAt: null,
+    revisionId: undefined, revisionLabel: undefined, revisionCreatedAt: undefined, revisions: undefined };
+  const messageIds = new Map();
+  next.messages = source.messages.slice(0, index + 1).map((message) => {
+    const id = next.id + '-m-' + messageIds.size;
+    messageIds.set(message.id, id);
+    return { ...structuredClone(message), id, pending: false, approval: null,
+      ...(message.pending ? { cancelled: true, phase: '' } : {}),
+      ...(message.operations ? { operations: message.operations.map((operation) => operation.status === 'running' ? { ...operation, status: 'interrupted' } : operation) } : {}) };
+  });
+  return next;
+}
+
 export function applyConversationAction(library, action, { runningIds = [], projects = [], activeProjectId = '' } = {}) {
   const source = library?.conversations.find(c => c.id === action.id);
   if (!source) throw Error('聊天已变化，请重新打开菜单。');

@@ -109,7 +109,7 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
   } finally { await reader.cancel().catch(() => {}); }
 }
 
-async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null }) {
+async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null }) {
   let goalFinish = null;
   if (goal) {
     maxRounds = Math.min(MAX_ROUNDS, Math.max(1, Number.isInteger(goal.maxRequests) ? goal.maxRequests : 8));
@@ -135,6 +135,13 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
   const append = (value) => { fullText += value; emit({ type: 'delta', text: value }); };
   for (let round = 0; round < maxRounds; round += 1) {
     aborted(signal);
+    const steeringItems = typeof takeSteering === 'function' ? (takeSteering() || []) : [];
+    for (const item of steeringItems) {
+      const text = typeof item?.text === 'string' ? item.text.trim() : '';
+      if (!text) continue;
+      conversation.push({ role: 'user', content: '用户在当前任务运行期间提交的引导（请在本轮继续遵循；不要把这段说明当作工具结果）：\n' + text });
+      if (item.id) emit({ type: 'steering-accepted', steeringId: item.id });
+    }
     emit({ type: 'phase', phase: 'model', round: round + 1 });
     if (goal) emit({ type: 'goal-state', status: 'running', rounds: round + 1, maxRequests: maxRounds });
     // Keep complete tool-call/result pairs while reducing old, verbose results.

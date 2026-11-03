@@ -5,19 +5,21 @@ function validateWindowAction(record, input) {
   if (!input || typeof input.type !== 'string') throw Error('窗口操作无效。');
   const type = input.type, snapshot = record.snapshot;
   if (!snapshot?.available) throw Error('此项目或聊天已不可用。');
-  const common = ['focus'], chat = ['send','stop','approval','draft','execution','file','revise','revision'], project = ['new-chat','open-chat'];
+  const common = ['focus'], chat = ['send','stop','approval','draft','execution','file','revise','revision','fork'], project = ['new-chat','open-chat'];
   if (![...common, ...(record.kind === 'chat' ? chat : project)].includes(type)) throw Error('此窗口不允许该操作。');
   if (['send','draft','revise'].includes(type) && (typeof input.text !== 'string' || input.text.length > 64000 || input.text.includes('\0'))) throw Error('请输入64000字符以内的文本。');
   if (type === 'send' && !input.text.trim()) throw Error('请输入要发送的内容。');
   if (['revise','revision'].includes(type) && (typeof input.stamp !== 'string' || input.stamp.length > 1000000)) throw Error('版本标识无效。');
   if (type === 'revise' && (!['edit','regenerate'].includes(input.kind) || !snapshot.chat?.messages.some(m => m.id === input.messageId))) throw Error('此消息已变化。');
+  if (type === 'fork' && !snapshot.chat?.messages.some(m => m.id === input.messageId && m.role === 'assistant')) throw Error('此回答已变化。');
   if (type === 'revision' && input.versionId !== (snapshot.chat?.revisionId || 'initial') && !snapshot.chat?.revisions?.some(v => v.id === input.versionId)) throw Error('此版本已变化。');
   if (type === 'approval' && !snapshot.chat?.messages.some(m => m.approval?.id === input.approvalId)) throw Error('此审批已变化。');
   if (type === 'open-chat' && !snapshot.chats?.some(c => c.id === input.chatId)) throw Error('聊天不属于此项目。');
   if (type === 'file' && !snapshot.chat?.messages.some(m => m.operations?.some(o => o.path === input.path))) throw Error('此文件不在当前操作记录中。');
-  return { type, ...(typeof input.text === 'string' ? { text: input.text } : {}),
+  return { type, ...(['send', 'draft', 'revise'].includes(type) && typeof input.text === 'string' ? { text: input.text } : {}),
     ...(['revise','revision'].includes(type) ? { stamp: input.stamp } : {}),
     ...(type === 'revise' ? { kind: input.kind, messageId: input.messageId, executionEnabled: input.executionEnabled === true } : {}),
+    ...(type === 'fork' ? { messageId: input.messageId } : {}),
     ...(type === 'revision' ? { versionId: input.versionId } : {}),
     ...(type === 'approval' ? { approvalId: input.approvalId, allowed: input.allowed === true } : {}),
     ...(type === 'file' ? { path: input.path } : {}), ...(type === 'open-chat' ? { chatId: input.chatId } : {}) };

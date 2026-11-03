@@ -12,13 +12,14 @@ function Status({ status, name }) {
 function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
   const caption = operationCaption(operation);
   const preview = operation.detail?.split('\n')[0] || operation.path || '';
-  return <details className={'agent-operation ' + operation.status}>
-    <summary aria-label={caption + (preview ? ' ' + preview : '')}>
+  const bodyId = `agent-operation-body-${operation.id || index}`;
+  return <details className={'agent-operation ' + operation.status} data-operation-name={operation.name}>
+    <summary aria-label={caption + (preview ? ' ' + preview : '')} aria-controls={bodyId}>
       <span className="agent-operation-status"><Status status={operation.status} name={operation.name} /></span>
       <span className="agent-operation-title"><span>{caption}</span>{preview && <small title={preview}>{preview}</small>}</span>
       <ChevronRight size={15} className="agent-chevron" />
     </summary>
-    <div className="agent-operation-body">
+    <div className="agent-operation-body" id={bodyId}>
       {operation.name === 'run_command' && <div className="agent-command-line"><Terminal size={16} /><code>{operation.detail}</code></div>}
       {operation.path && <div className="agent-operation-path">{operation.path}</div>}
       {operation.diff && <pre className="agent-diff" aria-label={'文件差异 ' + (index + 1)}>{operation.diff.split('\n').map((line, i) => <span className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''} key={i}>{line}</span>)}</pre>}
@@ -32,15 +33,15 @@ function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
   </details>;
 }
 
-export function AgentActivity({ operations = [], approval, onApproval, onOpenFile, onBrowser, onServices }) {
+export function AgentActivity({ operations = [], approval, onApproval, onOpenFile, onBrowser, onServices, collapsed = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const hasUrgentActivity = Boolean(approval || operations.some((item) => item.status !== 'succeeded'));
-  const [expanded, setExpanded] = useState(hasUrgentActivity);
+  const [expanded, setExpanded] = useState(hasUrgentActivity && !collapsed);
   useEffect(() => {
     if (hasUrgentActivity) setExpanded(true);
     else setExpanded(false);
-  }, [hasUrgentActivity]);
+  }, [hasUrgentActivity, collapsed]);
   const plan = [...operations].reverse().find((item) => item.plan?.length)?.plan;
   const changes = new Map();
   for (const item of operations) {

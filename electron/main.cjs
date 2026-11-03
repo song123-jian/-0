@@ -30,6 +30,7 @@ const { normalizeAttachmentRecords, chatAttachmentContext } = require('./chat-at
 const { prepareChatAttachments } = require('./chat-attachment-parser.cjs');
 const { createTerminalSessions } = require('./terminal-session.cjs');
 const { runModelTask } = require('./agent-runtime.cjs');
+const { createSteeringQueue } = require('./steering-queue.cjs');
 const { createAgentTools } = require('./agent-tools.cjs');
 const { createDesktopTools } = require('./desktop-tools.cjs');
 const { createDesktopControl } = require('./desktop-control.cjs');
@@ -83,6 +84,8 @@ const MAX_CONTEXT_BYTES = 128 * 1024;
 const MAX_SKILL_BYTES = 128 * 1024;
 const MAX_SKILL_FILES = 1000;
 const runningRequests = new Map();
+const steeringQueues = new Map();
+const requestConversationIds = new Map();
 let desktopControl;
 const requestScopes = new Map();
 const browserRequestPolicies = new Map();
@@ -531,6 +534,9 @@ async function callModel(webContents, requestId, payload, controller = new Abort
   if (runningRequests.has(requestId)) throw new Error('此请求仍在运行。');
   const selectedProjectId = activeProjectId;
   runningRequests.set(requestId, controller);
+  const steeringQueue = createSteeringQueue();
+  steeringQueues.set(requestId, steeringQueue);
+  requestConversationIds.set(requestId, typeof payload.conversationId === 'string' ? payload.conversationId : '');
   requestScopes.set(requestId, null);
   let requestScope = { projectId: activeProjectId, projectName: projects.find((item) => item.id === activeProjectId)?.name || '', workspaceRoot };
   let requestWorkspace = workspaceRoot;
@@ -770,7 +776,7 @@ async function callModel(webContents, requestId, payload, controller = new Abort
     const result = await runModelTask({ connection, signal: controller.signal, goal: goalExecution,
       messages: [{ role: 'system', content: systemPrompt }, ...messages,
         { role: 'user', content: modelMessageContent([prompt, chatAttachmentContext(attachments)].filter(Boolean).join('\n\n'), images) }],
-      tools: executionTools, executeTool,
+      tools: executionTools, executeTool, takeSteering: () => steeringQueue.drain(),
       emit: (event) => { if (event.type === 'request-metrics') modelUsage.record(event).catch(() => sendChatEvent(webContents, { requestId, type: 'usage-warning', message: '用量记录未能保存。' })); sendChatEvent(webContents, { requestId, ...event }); },
     });
     terminalEvent = { type: 'complete', text: result.text, operations: result.operations, rounds: result.rounds, usage: result.usage, goalStatus: result.goalStatus, goalSummary: result.goalSummary };
@@ -778,6 +784,8 @@ async function callModel(webContents, requestId, payload, controller = new Abort
     const message = controller.signal.aborted ? '任务已停止；已完成的文件修改仍然保留，请查看操作记录。' : String(error?.message || '请求失败。').slice(0, 1000);
     terminalEvent = { type: controller.signal.aborted ? 'cancelled' : 'error', message };
   } finally {
+    const expiredSteering = steeringQueue.close();
+    for (const item of expiredSteering) sendChatEvent(webContents, { requestId, type: 'steering-expired', steeringId: item.id, message: '当前任务已结束，引导未能注入。' });
     if (delegatedCoordinator) {
       const outstanding = delegatedCoordinator.snapshot().filter((task) => ['running', 'queued'].includes(task.status));
       if (outstanding.length) {
@@ -790,6 +798,8 @@ async function callModel(webContents, requestId, payload, controller = new Abort
     if (terminalEvent) sendChatEvent(webContents, { requestId, ...terminalEvent });
     clearTimeout(timeout); if (connection) connection.apiKey = null;
     runningRequests.delete(requestId);
+    steeringQueues.delete(requestId);
+    requestConversationIds.delete(requestId);
     requestScopes.delete(requestId);
     if (payload.requestKind !== 'scheduled' && activeProjectId !== requestScope.projectId && !hasRunningRequestForProject(requestScope.projectId)) {
       await Promise.allSettled([devServices?.stopAll(requestWorkspace), panelBrowser?.resetAgentsForWorkspace(requestWorkspace)]);
@@ -1838,6 +1848,17 @@ function installHandlers() {
     const controller = runningRequests.get(requestId);
     if (controller) controller.abort();
     return Boolean(controller);
+  });
+  ipcMain.handle('chat:steer', async (event, payload = {}) => {
+    assertMainFrame(event);
+    const requestId = typeof payload.requestId === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload.requestId) ? payload.requestId : '';
+    const queue = requestId ? steeringQueues.get(requestId) : null;
+    if (!queue || !runningRequests.has(requestId)) throw new Error('当前任务已结束，无法提交引导。');
+    if (payload.conversationId && payload.conversationId !== requestConversationIds.get(requestId)) throw new Error('引导目标聊天已变化。');
+    const steeringId = typeof payload.steeringId === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload.steeringId) ? payload.steeringId : crypto.randomUUID();
+    queue.enqueue({ id: steeringId, text: payload.text });
+    sendChatEvent(event.sender, { requestId, type: 'steering-queued', steeringId });
+    return { requestId, steeringId, queued: true };
   });
 }
 
