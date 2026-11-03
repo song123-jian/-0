@@ -1873,7 +1873,7 @@ kbd { padding: 2px 7px; border: 1px solid #e3e7e8; border-radius: 5px; backgroun
 /* Conversation revisions */
 .conversation-versions { display:flex; align-items:center; gap:12px; padding:12px 28px; border-bottom:1px solid var(--line); flex-wrap:wrap; background:var(--surface); }
 .conversation-versions label { display:flex; align-items:center; gap:12px; font-size:16px; min-width:0; }
-.conversation-versions select { max-width:min(480px,55vw); font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); }
+.conversation-versions select { max-width:min(360px,55vw); text-overflow:ellipsis; font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); }
 .conversation-versions > span { font-size:14px; color:var(--muted); }
 .user-message-actions { display:flex; justify-content:flex-end; margin-top:6px; }
 .user-message-actions { align-items: center; gap: 4px; }

@@ -122,6 +122,15 @@ test('service error details redact the configured credential and other bearer st
   });
 });
 
+test('upstream authentication failures from a gateway explain why model-list latency still succeeds', async () => {
+  await assert.rejects(runModelTask({connection,messages:[{role:'user',content:'请修复'}],fetchImpl:async()=>Response.json({message:'Upstream authentication failed, please contact administrator'},{status:502})}),error=>{
+    assert.match(error.message,/上游鉴权失败（HTTP 502）/);
+    assert.match(error.message,/测速只检查 \/models/);
+    assert.match(error.message,/服务管理员检查上游密钥和模型路由/);
+    return true;
+  });
+});
+
 test('desktop screenshots are forwarded to the model as actual image evidence', async () => {
   let requests = 0;
   const desktopTools = [{ type: 'function', function: { name: 'desktop_screenshot', parameters: { type: 'object', properties: {} } } }];

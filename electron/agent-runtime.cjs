@@ -39,6 +39,9 @@ function structuredReply(message) {
 function httpError(response, usingTools, detail = '') {
   if ([401, 403].includes(response.status)) return new Error(`模型服务拒绝了当前密钥（HTTP ${response.status}）。请检查“模型与连接”。`);
   if (response.status === 503) return new Error('中转站暂时不可用（HTTP 503）。消息和已执行的操作已保留。');
+  if (response.status === 502 && /(?:upstream[\s\S]{0,120}(?:auth|credential)[\s\S]{0,120}(?:fail|invalid)|(?:auth|credential)[\s\S]{0,120}failed)/i.test(detail)) {
+    return new Error('模型服务网关的上游鉴权失败（HTTP 502）。测速只检查 /models，不会生成回答；请联系服务管理员检查上游密钥和模型路由。消息和已完成的操作已保留。');
+  }
   if (response.status === 400 && usingTools) return new Error('模型服务拒绝了工具请求（HTTP 400）。请确认所选模型支持 OpenAI 兼容 function tools；可以切回对话模式。');
   return new Error(`模型请求失败（HTTP ${response.status}）。${detail ? '服务信息：' + detail : '已执行的操作不会自动回滚。'}`);
 }

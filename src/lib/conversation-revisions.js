@@ -2,6 +2,12 @@ export const MAX_CONVERSATION_VERSIONS = 20;
 export const revisionId = chat => chat.revisionId || 'initial';
 export const revisionStamp = chat => JSON.stringify([revisionId(chat), chat.messages.map(m => m.id)]);
 const label = value => String(value || '初始版本').replace(/[\r\n\x00-\x1f]+/g, ' ').slice(0, 100);
+export function revisionOptionLabel(value) {
+  const text = label(value);
+  if (text.startsWith('编辑：')) return '编辑消息';
+  if (text.startsWith('重新生成：')) return '重新生成';
+  return text;
+}
 export function assertRevisionIdle(chat) {
   if (!chat || chat.archivedAt) throw Error('请先恢复此聊天。');
   if (chat.messages.some(m => m.pending || m.approval || m.operations?.some(o => o.status === 'running'))) throw Error('请先停止此聊天任务，再编辑或切换版本。');

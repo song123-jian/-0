@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GitFork, RotateCw } from 'lucide-react';
-import { revisionId, revisionStamp } from '../lib/conversation-revisions.js';
+import { revisionId, revisionStamp, revisionOptionLabel } from '../lib/conversation-revisions.js';
 export function ConversationVersions({ chat, disabled, onSelect }) {
   if (!chat?.revisions?.length) return null;
   const versions = [...chat.revisions, { id: revisionId(chat), label: chat.revisionLabel || '初始版本', createdAt: chat.revisionCreatedAt || chat.createdAt }].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return <div className="conversation-versions"><GitFork size={18}/><label>对话版本<select aria-label="对话版本" disabled={disabled} value={revisionId(chat)} onChange={e => onSelect(e.target.value, revisionStamp(chat))}>{versions.map((v, index) => <option key={v.id} value={v.id}>{index + 1}. {v.label}</option>)}</select></label><span>{versions.length} 个版本 · 切换保留各自后续对话</span></div>;
+  const currentVersion = versions.find(v => v.id === revisionId(chat));
+  return <div className="conversation-versions"><GitFork size={18}/><label>对话版本<select aria-label="对话版本" title={currentVersion?.label || '初始版本'} disabled={disabled} value={revisionId(chat)} onChange={e => onSelect(e.target.value, revisionStamp(chat))}>{versions.map((v, index) => <option key={v.id} value={v.id} title={v.label}>{index + 1}. {revisionOptionLabel(v.label)}</option>)}</select></label><span>{versions.length} 个版本 · 切换保留各自后续对话</span></div>;
 }
 export function MessageRevisionDialog({ chat, request, canExecute, onSubmit, onClose }) {
   const dialog = useRef(null), [text, setText] = useState(() => request.source.content), [execute, setExecute] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
