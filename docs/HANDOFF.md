@@ -2,10 +2,10 @@
 
 ## Current Checkpoint — 1.3.35, 2026-11-04
 
-- Goal: show actual task file changes below that task's completion answer, replacing the incorrect conversation-version cards. Local implementation, review, builds, installation and actual installed-app acceptance are complete. Source push and GitHub Release publication are pending and must be read back before claiming publication.
+- Goal: show actual task file changes below that task's completion answer, replacing the incorrect conversation-version cards. Local implementation, review, builds, installation and actual installed-app acceptance are complete. Source commit 7c2b1b3a9b2abf20938d176f51add537643f2f5b is pushed and remotely verified. GitHub v1.3.35 is published and marked Latest; tag target, asset size and server-side SHA-256 match the accepted installer.
 - Source: this checkout, branch main; pre-delivery HEAD f598df9a14a104cb87afaef040e34f04d00f5242. Existing authorized learning-memory changes are retained; the task baseline separates them from this file-card increment.
 - Actual entry: C:/Program Files/scodex-workbench/Scodex工作台.exe, version 1.3.35. User data: %APPDATA%/scodex-workbench. All verification applications exited normally; no build or test is pending.
-- Plan/checkpoint: implementation completed; candidate acceptance completed; installer/replacement completed; installed acceptance completed; source/Release publication pending; final dual-handoff publication update pending. No additional product refactor is justified by the reviewed scope.
+- Plan/checkpoint: implementation completed; candidate acceptance completed; installer/replacement completed; installed acceptance completed; source/Release publication completed; final dual-handoff records updated and validated. No additional product refactor is justified by the reviewed scope.
 - Skills: requirement-understanding 95/100 (30/20/16/15/9/5); code-write-review 94/100 (30/20/15/15/9/5). No subagent delegation.
 
 ## Completed Requirements
@@ -37,9 +37,9 @@
 - Recoverable exact old installation: release/delivery-1.3.35/rollback-1.3.34 (30 files, verified). Old installer retained: release/Scodex-Workbench-Setup-1.3.34-x64.exe, SHA-256 848D705FDD76D299F09AADC83AD276C08314CE2045E9EA3F7756B42425A01E0B. Rollback: quit normally and reinstall 1.3.34 or restore the verified application backup; preserve APPDATA. Do not restore profile caches over live user data.
 - Detailed local identity/profile manifest: release/delivery-1.3.35/installation.json. User-specific profiles, rollback copies, fixture data, credentials and build outputs stay out of Git.
 
-## Remaining Publication and Cleanup
+## Publication and Cleanup
 
-- Publish the reviewed authorized source to main, create v1.3.35 using the verified installer, then verify remote commit and Release asset. Authenticated GitHub access for song123-jian was confirmed; no publication has yet been claimed. Use the existing per-command proxy, without changing global Git settings.
+- Published source commit 7c2b1b3a9b2abf20938d176f51add537643f2f5b; remote main matched at source publication. Release [v1.3.35](https://github.com/song123-jian/-0/releases/tag/v1.3.35) is published and Latest. Tag points to that source commit; asset Scodex-Workbench-Setup-1.3.35-x64.exe is uploaded, 181099770 bytes, server digest sha256:489685a4c02b8aacd95904f7013f55e5b3f2f044df00ba7ac9d318995f3d1c94. Actual API readback: release-publication.json. Public release-page readback also displays v1.3.35 and Latest. A docs-only handoff synchronization follows the code commit; global Git settings are unchanged.
 - Automatic approval review rejected cleanup with “blocked by policy”. Six task-owned fixture directories remain in their original locations; no delete or move ran and none was retried. Reports, final screenshots, baseline and rollback remain deliberately retained. See [Test Handoff](TEST_HANDOFF.md) and local cleanup.json for exact manual paths.
 - No remaining high-confidence in-scope defect or justified extra refactor was identified. Outstanding manual cleanup does not affect the accepted executable.
 

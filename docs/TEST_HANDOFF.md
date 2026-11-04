@@ -31,7 +31,7 @@ Actual target: Scodex Workbench 1.3.35, Windows x64, Electron 45. Final entry C:
 - Final version 1.3.35 from 1.3.34 under the established patch mapping. Installer 181099770 bytes, SHA-256 489685A4C02B8AACD95904F7013F55E5B3F2F044DF00BA7AC9D318995F3D1C94.
 - Accepted and installed EXE SHA-256 2FB70D59D954B899FE439BEA80FF186F7A57FA08C2518EBA278174EDAA2AE71C; ASAR A8BD869DBF1D8405647E61958613910DB324E8E10433A53E0A90A5102FE9FD14. Installer exit 0; 27 candidate files match, no differing candidate file.
 - Exact old installation backup: rollback-1.3.34, 30 verified files; prior installer retained at release/Scodex-Workbench-Setup-1.3.34-x64.exe. Normal exit is required before rollback. Restore only application files or use the old installer; preserve the user profile. Details in installation.json and [Project Handoff](HANDOFF.md).
-- Public source and Release publication are pending; do not claim v1.3.35 is published until remote/asset readback. Build artifacts and machine-specific evidence are ignored by Git.
+- Source commit 7c2b1b3a9b2abf20938d176f51add537643f2f5b was pushed and remote main matched. Release v1.3.35 is published and Latest; tag commit, uploaded asset size (181099770 bytes) and server-side SHA-256 match the accepted installer. Evidence: source-publication.json, release-publication.json and public release-page readback. Documentation synchronization is separate from the code tag; build artifacts and machine-specific evidence remain ignored by Git.
 
 ## Cleanup and Limits
 
