@@ -3,7 +3,7 @@
 ## Active Increment — 1.3.36, 2026-11-04
 
 - Goal: improve bounded command capture and the reported ~47-second delay before model work. Delivery 1.3.36 replaces installed 1.3.35 using the established patch mapping; this round does not increment again.
-- Checkpoint: implementation, candidate/installed acceptance, build, replacement, incremental review and documentation checks completed. Publication remains the only delivery step pending.
+- Checkpoint: implementation, candidate/installed acceptance, build, replacement, incremental review and documentation checks completed. Publication completed; no finite operation pending.
 - Source/entry: this checkout on main; C:/Program Files/scodex-workbench/Scodex工作台.exe. Model, credential and chosen reasoning level were unchanged. Preserve user data, unrelated electron/third-party-licenses.json stat change and previous evidence.
 
 | Requirement | Actual result | Evidence under release/delivery-1.3.36 |
@@ -18,7 +18,7 @@
 - Installer: release/Scodex-Workbench-Setup-1.3.36-x64.exe, 181102112 bytes, SHA-256 177daacfbedad180aa9b5981594a10600c4a17d9a85eea4e10fad6646f3b622e. Installed EXE 8af5c8027b8e25cf9dbf173f35a11d607d40cb4b1593141290f21bfd3b5e0527; ASAR d329963fb8b9137968a23d083c06362e9427789f2f37e0644c41dfc93e2fba57.
 - Build: npm run build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist.
 - Rollback: delivery-1.3.36/rollback-1.3.35 contains 29 verified old application files. Quit normally before restoring application files or reinstalling the retained 1.3.35 installer; preserve APPDATA. Full identity/backup list: installation.json.
-- Source commit and GitHub v1.3.36 publication pending; installed delivery is accepted.
+- Published source 6587faa6dd207638e1ea0a7b29c1d893925547dd; GitHub v1.3.36 is Latest. Release/tag/asset size and SHA-256 readback passed; local evidence: release-publication.json and source-publication.json.
 - Limits: controlled benchmarks use an encryption stub; actual-app UI substitutes loopback model responses. One public glm-5.3/ultra short request is not the same input as the original 47-second task, so no 47-to-12-second speedup is claimed. Excluded/protected/external paths and capture guards remain intentional boundaries; remote inference waiting remains measurable.
 - Cleanup: automatic approval rejected deletion as “blocked by policy”; no delete/move executed or retried. Six task-owned fixtures remain in their original paths, enumerated in cleanup.json; reports, screenshots, baselines, installer and rollback are retained. Prior denied cleanup is untouched.
 - Incremental review: 21 code/test/version files passed; fingerprints in incremental-review.json. Unchanged results reused: 45/45 focused and 21/21 direct regression. No further high-confidence in-scope refactor is justified.
