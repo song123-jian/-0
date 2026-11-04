@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createGitHubPulls, githubRepository, branchName } = require('../electron/github-pulls.cjs');
 const { createGitService } = require('../electron/git-service.cjs');
+const { decryptMemory, emptyMemory, encryptMemory, mergeMemories } = require('../electron/learning-memory.cjs');
 const { startGitHubFixture } = require('./github-pulls-fixture.cjs');
 const execute = promisify(execFile);
 async function fixture(t) {
@@ -99,6 +100,38 @@ test('successful mutation without matching GET readback never claims completion'
   const p = f.api.state.pulls[0]; f.api.state.mismatch = true;
   await assert.rejects(f.action({ type: 'ready', number: p.number, headSha: p.head.sha }), /已接受操作.*尚未核对/);
   p.draft = false; await assert.rejects(f.action({ type: 'merge', number: p.number, headSha: p.head.sha, method: 'merge' }), /已接受操作.*尚未核对/); assert.equal(p.state, 'open');
+});
+test('learning memory creates and updates only the encrypted fixed GitHub Contents file, then verifies readback', async t => {
+  const f = await fixture(t); await f.service.connect(f.api.token);
+  const service = createGitHubPulls({ ...f.options, learningRepository: 'scodex-fixture/workbench' });
+  const secret = '仅用于本地 fixture 的偏好明文';
+  const now = Date.now();
+  const makeMemory = (text, updatedAt) => ({ ...emptyMemory(), updatedAt: new Date(updatedAt).toISOString(), entries: [{ id: 'fixture_entry', kind: 'preference', text, createdAt: new Date(now).toISOString(), updatedAt: new Date(updatedAt).toISOString() }] });
+  const synchronize = async local => service.syncLearningMemory({
+    content: encryptMemory(local, f.options.encryption),
+    merge: remoteText => encryptMemory(mergeMemories(local, remoteText === null ? emptyMemory() : decryptMemory(remoteText, f.options.encryption)), f.options.encryption),
+  });
+
+  const firstLocal = makeMemory(secret, now);
+  const first = await synchronize(firstLocal);
+  assert.deepEqual(first, { content: first.content, changed: true });
+  assert.equal(f.api.state.memoryWrites.length, 1);
+  assert.equal(f.api.state.memoryWrites[0].path, 'memory/scodex-learning.json');
+  assert.equal(f.api.state.memoryWrites[0].branch, 'main');
+  assert.equal(f.api.state.memoryWrites[0].previousSha, '');
+  assert.ok(!f.api.state.memoryWrites[0].content.includes(secret));
+  const remoteText = Buffer.from(f.api.state.memoryFile.content, 'base64').toString('utf8');
+  assert.equal(remoteText, first.content);
+  assert.equal(decryptMemory(remoteText, f.options.encryption).entries[0].text, secret);
+
+  const secondLocal = makeMemory('更新后的安全偏好', now + 1000);
+  const second = await synchronize(secondLocal);
+  assert.equal(second.changed, true);
+  assert.equal(f.api.state.memoryWrites.length, 2);
+  assert.equal(f.api.state.memoryWrites[1].previousSha, f.api.state.memoryWrites[0].sha);
+  assert.equal(Buffer.from(f.api.state.memoryFile.content, 'base64').toString('utf8'), second.content);
+  assert.equal(decryptMemory(second.content, f.options.encryption).entries[0].text, '更新后的安全偏好');
+  assert.deepEqual(f.api.state.requests.filter(item => item.route.includes('/contents/')).map(item => item.method), ['GET', 'PUT', 'GET', 'GET', 'PUT', 'GET']);
 });
 test('credential file concurrency and unavailable encryption preserve existing file', async t => {
   const f = await fixture(t); await f.service.connect(f.api.token); await fs.writeFile(f.file, '{"changed":true}');

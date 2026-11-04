@@ -9,7 +9,7 @@ export function forkChatRecord(source, projectId = source.projectId || '', now =
   const messageIds = new Map();
   const cloneMessages = values => values.map(m => {
     if (!messageIds.has(m.id)) messageIds.set(m.id, next.id + '-m-' + messageIds.size);
-    return ({ ...m, id: messageIds.get(m.id), pending: false, approval: null,
+    return ({ ...m, id: messageIds.get(m.id), fileChanges: undefined, pending: false, approval: null,
     ...(m.pending ? { cancelled: true, phase: '' } : {}),
     ...(m.operations ? { operations: m.operations.map(o => o.status === 'running' ? { ...o, status: 'interrupted' } : o) } : {}) }); });
   next.messages = cloneMessages(next.messages);
@@ -36,7 +36,7 @@ export function forkChatAtMessage(source, messageId, projectId = source.projectI
   next.messages = source.messages.slice(0, index + 1).map((message) => {
     const id = next.id + '-m-' + messageIds.size;
     messageIds.set(message.id, id);
-    return { ...structuredClone(message), id, pending: false, approval: null,
+    return { ...structuredClone(message), id, fileChanges: undefined, pending: false, approval: null,
       ...(message.pending ? { cancelled: true, phase: '' } : {}),
       ...(message.operations ? { operations: message.operations.map((operation) => operation.status === 'running' ? { ...operation, status: 'interrupted' } : operation) } : {}) };
   });

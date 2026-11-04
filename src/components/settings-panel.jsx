@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AppWindow, BookOpen, Bot, Check, ChevronDown, Clipboard, Code2, Folder, FolderOpen, GitBranch, Globe, Info, Keyboard, LayoutPanelLeft, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, Sun, Terminal, X } from 'lucide-react';
+import { AppWindow, BookOpen, Bot, Brain, Check, ChevronDown, Clipboard, Code2, Folder, FolderOpen, GitBranch, Globe, Info, Keyboard, LayoutPanelLeft, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, Sun, Terminal, X } from 'lucide-react';
 import { WORK_MODES } from '../lib/modes.js';
 import { StoragePanel } from './storage-panel.jsx';
 import { ModelConnectionPanel } from './model-connection-panel.jsx';
@@ -10,6 +10,7 @@ const CATEGORIES = [
   { id: 'general', label: '常规', icon: Settings2, group: '个人', search: '权限 工作区 聊天目录 压缩 归档 插件 技能 开源 许可 默认模式 完整视图 底部面板 默认打开终端 shell 语言 关闭窗口 通知 Dot 托盘 驻留 最小化 退出' },
   { id: 'appearance', label: '外观', icon: Palette, group: '个人', search: '字体 微软雅黑 字号 清晰 主题 模式 强调色 背景 前景' },
   { id: 'workspace', label: '工作台与标签', icon: LayoutPanelLeft, group: '个人', search: '导航 侧栏 隐藏 第三 页面 标签 状态栏 技能' },
+  { id: 'learning', label: '学习成长', icon: Brain, group: '个人', search: '学习 成长 偏好 纠正 经验 记忆 GitHub 同步 自动保存 删除 清空' },
   { id: 'storage', label: '存储空间', icon: FolderOpen, group: '个人', search: '数据目录 会话 草稿 文件 保存 本地 归档 聊天 子智能体 工作树 清理' },
   { id: 'shortcuts', label: '键盘快捷键', icon: Keyboard, group: '个人', search: 'Ctrl K P S Enter 快捷键' },
   { id: 'model', label: '模型与连接', icon: Globe, group: '集成', search: 'Grok 中转站 服务地址 密钥 凭据 API 网络' },
@@ -165,6 +166,53 @@ function SupabaseSyncSettings({ appState, chatBusy, onSaved, onSync }) {
     {status && <section className="settings-config-status" aria-live="polite"><p className={status.type === 'error' ? 'settings-agent-error' : ''} role={status.type === 'error' ? 'alert' : 'status'}>{status.text}</p></section>}
     <p className="settings-footnote">同步只使用专用表 `scodex_sync_records`；不会修改 Supabase 其他业务表。首次启用前请先在独立测试项目执行本轮 SQL。</p>
   </>;
+}
+
+function LearningMemoryPanel({ appState, chatBusy }) {
+  const [memory, setMemory] = useState(appState?.learningMemory || { entries: [], sync: { enabled: true, status: 'never' } });
+  const [kind, setKind] = useState('preference');
+  const [text, setText] = useState('');
+  const [editing, setEditing] = useState('');
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  useEffect(() => { if (appState?.learningMemory) setMemory(appState.learningMemory); }, [appState?.learningMemory]);
+  useEffect(() => { window.scodex.getLearningMemory().then(setMemory).catch(() => {}); }, []);
+  const run = async (operation, success = '') => {
+    setWorking(true); setError(''); setNotice('');
+    try { const next = await operation(); if (next) setMemory(next); if (success) setNotice(success); return next; }
+    catch (cause) { setError(String(cause?.message || cause)); return null; }
+    finally { setWorking(false); }
+  };
+  const save = () => {
+    const value = text.trim();
+    if (!value) { setError('请先填写要记住的内容。'); return; }
+    const operation = editing
+      ? window.scodex.editLearningMemory({ id: editing, kind, text: value })
+      : window.scodex.addLearningMemory({ kind, text: value });
+    return run(() => operation, editing ? '记忆已更新。' : '记忆已保存。').then(next => { if (next) { setText(''); setEditing(''); } });
+  };
+  const startEdit = (entry) => { setEditing(entry.id); setKind(entry.kind); setText(entry.text); setError(''); setNotice(''); };
+  const sync = () => run(() => window.scodex.syncLearningMemory(), '已完成一次 GitHub 同步尝试。');
+  const syncLabel = { never: '尚未同步', pending: '同步中或待重试', synced: '已同步', failed: '同步失败，已保留本地记录' }[memory.sync?.status] || '尚未同步';
+  return <div className="learning-memory-settings">
+    <SettingsGroup title="记录学习内容">
+      <SettingRow label="记忆类型" description="只保存你明确整理的偏好、纠正和经验摘要。"><select aria-label="学习记忆类型" value={kind} disabled={working} onChange={(event) => setKind(event.target.value)}><option value="preference">用户偏好</option><option value="correction">用户纠正</option><option value="lesson">经验摘要</option></select></SettingRow>
+      <SettingRow label={editing ? '编辑记忆' : '新增记忆'} description="不会保存完整聊天、密钥、令牌、私密配置或本机路径。"><textarea aria-label="学习记忆内容" maxLength={2000} value={text} disabled={working} onChange={(event) => setText(event.target.value)} placeholder="例如：回答消息中的重试应直接撤回失败版本，不打开编辑框。" /></SettingRow>
+      <SettingRow label={editing ? '保存修改' : '保存记忆'}><div className="learning-memory-actions"><button className="primary-button" type="button" disabled={working || chatBusy || !text.trim()} onClick={save}>{editing ? '保存修改' : '保存记忆'}</button>{editing && <button className="secondary-button" type="button" disabled={working} onClick={() => { setEditing(''); setText(''); }}>取消</button>}</div></SettingRow>
+    </SettingsGroup>
+    <SettingsGroup title={`已保存记忆（${memory.entries?.length || 0}）`}>
+      {memory.entries?.length ? <div className="learning-memory-list">{memory.entries.map(entry => <article className="learning-memory-item" key={entry.id}><div><span className="learning-memory-kind">{{ preference: '偏好', correction: '纠正', lesson: '经验' }[entry.kind] || entry.kind}</span><p>{entry.text}</p></div><div className="learning-memory-item-actions"><button className="icon-button small" type="button" aria-label="编辑学习记忆" disabled={working} onClick={() => startEdit(entry)}><Clipboard size={15} /></button><button className="icon-button small" type="button" aria-label="删除学习记忆" disabled={working} onClick={() => run(() => window.scodex.removeLearningMemory(entry.id), '记忆已删除。')}><X size={15} /></button></div></article>)}</div> : <p className="settings-empty-note">还没有保存的学习记忆。</p>}
+      <SettingRow label="清空全部记忆" description="清空操作会记录删除标记，下一次同步时同步到 GitHub。"><button className="secondary-button" type="button" disabled={working || chatBusy || !memory.entries?.length} onClick={() => { if (window.confirm('清空全部学习记忆？')) run(() => window.scodex.clearLearningMemory(), '学习记忆已清空。'); }}>清空全部</button></SettingRow>
+    </SettingsGroup>
+    <SettingsGroup title="退出时同步">
+      <SettingRow label="同步到 GitHub" description="每次完整退出时保存本地加密记忆，并尝试同步到 song123-jian/-0；失败会在下次启动重试。"><Switch label="退出时同步学习记忆" checked={memory.sync?.enabled === true} disabled={working} onChange={(enabled) => run(() => window.scodex.configureLearningMemory({ enabled }), enabled ? '已开启退出同步。' : '已关闭退出同步。')} /></SettingRow>
+      <SettingRow label="最近同步状态" description={memory.sync?.lastError ? `错误类别：${memory.sync.lastError}` : 'GitHub 只保存加密的结构化记忆文件。'}><span className={'settings-value ' + (memory.sync?.status === 'failed' ? 'settings-error-value' : '')}>{syncLabel}</span></SettingRow>
+      <SettingRow label="立即同步"><button className="secondary-button" type="button" disabled={working || chatBusy || memory.sync?.enabled !== true} onClick={sync}><RefreshCw size={16} />立即同步</button></SettingRow>
+    </SettingsGroup>
+    {error && <p className="settings-agent-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
+    <p className="settings-footnote">学习记忆只作为相关任务的普通参考，不会覆盖当前用户指令、AGENTS.md 规则或安全边界；程序不会根据记忆修改自身源码。</p>
+  </div>;
 }
 
 function LicenseDialog({ onClose }) {
@@ -371,6 +419,7 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
           <SettingsGroup title="布局"><SettingRow label="收起左侧导航" description="仅显示图标，为主工作区留出更多空间。"><Switch label="收起左侧导航" checked={preferences.railCollapsed} onChange={(checked) => onPreference({ railCollapsed: checked })} /></SettingRow><SettingRow label="显示标签工作台" description="右侧第三工作台提供独立网页标签。隐藏后保留已打开页面。"><Switch label="显示标签工作台" checked={preferences.browserPanelOpen} onChange={(checked) => onPreference({ browserPanelOpen: checked })} /></SettingRow><SettingRow label="放大标签工作台" description="暂时收起主区域；可从面板右上角还原。"><Switch label="放大标签工作台" checked={preferences.browserPanelExpanded} onChange={(checked) => onPreference({ browserPanelExpanded: checked, browserPanelOpen: true })} /></SettingRow><SettingRow label="显示编辑器底部状态栏"><Switch label="显示编辑器底部状态栏" checked={preferences.showEditorStatusBar} onChange={(checked) => onPreference({ showEditorStatusBar: checked })} /></SettingRow></SettingsGroup>
           <SettingsGroup title="网页标签"><SettingRow label="网页隔离" description="网页标签不能调用本地文件或模型接口。"><span className="settings-value status-value"><Check size={16} />已启用</span></SettingRow><SettingRow label="页面保留"><span className="settings-value">最多 10 个标签</span></SettingRow></SettingsGroup>
         </>}
+        {active === 'learning' && <LearningMemoryPanel appState={appState} chatBusy={chatBusy} />}
         {active === 'storage' && <>
           <StoragePanel onOpenWorktree={onOpenWorktree} workspaceRoot={workspaceRoot} library={library} busy={chatBusy} historyError={appState?.historyError} onManageChats={onManageChats} onChooseWorkspace={onChooseWorkspace} onRevealWorkspace={onReveal} onCopyWorkspace={onCopyPath} />
         </>}

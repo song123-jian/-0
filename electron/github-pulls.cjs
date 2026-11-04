@@ -51,7 +51,7 @@ function publicPull(value, repo, detail = false) {
   });
   return result;
 }
-function createGitHubPulls({ file, encryption, withRepository, authorize = async () => {}, authorizeCredentials = async () => {}, confirm = async () => false, fetchImpl = fetch, endpoint = API }) {
+function createGitHubPulls({ file, encryption, withRepository, authorize = async () => {}, authorizeCredentials = async () => {}, confirm = async () => false, fetchImpl = fetch, endpoint = API, learningRepository = 'song123-jian/-0' }) {
   const origin = apiBase(endpoint);
   let loaded = false, stored = null, disk = null, readError = '', busy = false;
   async function exclusive(operation) {
@@ -95,13 +95,15 @@ function createGitHubPulls({ file, encryption, withRepository, authorize = async
     finally { await fs.rm(temporary, { force: true }).catch(() => {}); }
     disk = text; stored = next;
   }
-  async function request(route, { method = 'GET', body, token, write = false } = {}) {
+  async function request(route, { method = 'GET', body, token, write = false, acceptedStatuses = [], signal, timeoutMs = 20_000 } = {}) {
     if (!route.startsWith('/') || route.startsWith('//')) throw Error('GitHub 请求路径无效。');
     const url = new URL(origin + route);
     if (url.origin !== origin) throw Error('GitHub 请求地址无效。');
     await authorize(url, write);
     let secret = token === undefined ? await credentials() : token;
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20000);
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeoutMs);
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
     try {
       const headers = { accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Scodex-Workbench' };
       if (secret) headers.authorization = 'Bearer ' + secret;
@@ -109,6 +111,10 @@ function createGitHubPulls({ file, encryption, withRepository, authorize = async
       const pending = fetchImpl(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'error', signal: controller.signal }); secret = null;
       const response = await pending;
       if (!response.ok) {
+        if (acceptedStatuses.includes(response.status)) {
+          await response.body?.cancel().catch(() => {});
+          return { value: null, more: false, status: response.status };
+        }
         await response.body?.cancel().catch(() => {});
         const reason = ({ 401: 'GitHub 连接已失效，请重新填写访问令牌。', 403: 'GitHub 拒绝访问，请检查令牌权限、分支保护或请求限额。', 404: '找不到仓库、分支或 PR，请检查所选远端及令牌的仓库授权。', 405: 'GitHub 拒绝合并，请检查审查、检查项和分支保护。', 409: '远端提交或 PR 状态已变化，请刷新并重新查看。', 422: 'GitHub 校验未通过，请检查分支差异、已有 PR 或仓库权限。', 429: 'GitHub 请求达到限额，请稍后再试。' })[response.status];
         throw Error(reason || 'GitHub 请求失败（HTTP ' + response.status + '），未展示可能包含敏感信息的服务输出。');
@@ -119,12 +125,12 @@ function createGitHubPulls({ file, encryption, withRepository, authorize = async
       finally { await reader.cancel().catch(() => {}); }
       let value;
       try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); } catch { throw Error('GitHub 未返回有效的 UTF-8 JSON。'); }
-      return { value, more: /rel="next"/.test(response.headers.get('link') || '') };
+      return { value, more: /rel="next"/.test(response.headers.get('link') || ''), status: response.status };
     } catch (error) {
-      if (controller.signal.aborted) throw Error('GitHub 请求超时（20 秒）。远端写入可能已完成，请刷新 PR 后确认，勿直接重复提交。');
+      if (controller.signal.aborted) throw Error('GitHub 请求超时或已取消。远端写入可能已完成，请刷新目标文件确认，勿直接覆盖。');
       if (error instanceof TypeError) throw Error('无法连接 GitHub，或服务发生重定向。远端写入状态请刷新确认。');
       throw error;
-    } finally { secret = null; clearTimeout(timer); }
+    } finally { secret = null; clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   }
   const prefix = repo => '/repos/' + encodeURIComponent(repo.owner) + '/' + encodeURIComponent(repo.name);
   async function context(root, input, write, action) {
@@ -157,6 +163,45 @@ function createGitHubPulls({ file, encryption, withRepository, authorize = async
   return {
     status: authState,
     isBusy: () => busy,
+    syncLearningMemory(input) { return exclusive(async () => {
+      if (githubRepository('https://github.com/' + learningRepository + '.git').fullName !== learningRepository) throw Error('学习记忆仓库配置无效。');
+      if (typeof input?.content !== 'string' || Buffer.byteLength(input.content, 'utf8') > 512 * 1024 || typeof input?.merge !== 'function') throw Error('学习记忆同步数据无效或超过 512 KB。');
+      if (!await credentials()) throw Error('GitHub 尚未连接。');
+      const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25_000);
+      const repo = githubRepository('https://github.com/' + learningRepository + '.git');
+      const route = prefix(repo);
+      const name = 'memory/scodex-learning.json';
+      const encodedPath = name.split('/').map(encodeURIComponent).join('/');
+      const decodeFile = value => {
+        if (value === null) return null;
+        if (!value || value.path !== name || value.encoding !== 'base64' || typeof value.content !== 'string' || typeof value.sha !== 'string' || !/^[a-f0-9]{40}$/i.test(value.sha)) throw Error('远端学习记忆文件格式无效。');
+        const encoded = value.content.replace(/\s/g, '');
+        const bytes = Buffer.from(encoded, 'base64');
+        if (bytes.length > 512 * 1024 || bytes.toString('base64') !== encoded) throw Error('远端学习记忆文件超过限制或编码无效。');
+        try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { throw Error('远端学习记忆文件不是有效 UTF-8。'); }
+      };
+      try {
+        const repository = (await request(route, { signal: controller.signal, timeoutMs: 10_000 })).value;
+        if (!/^[a-zA-Z0-9_.-]{1,250}$/.test(repository?.default_branch || '')) throw Error('GitHub 仓库默认分支无效。');
+        const read = async () => request(route + '/contents/' + encodedPath + '?ref=' + encodeURIComponent(repository.default_branch), { signal: controller.signal, timeoutMs: 10_000, acceptedStatuses: [404] });
+        const current = await read();
+        const remoteText = current.status === 404 ? null : decodeFile(current.value);
+        const nextText = await input.merge(remoteText, input.content);
+        if (typeof nextText !== 'string' || Buffer.byteLength(nextText, 'utf8') > 512 * 1024) throw Error('合并后的学习记忆文件无效或超过 512 KB。');
+        if (remoteText === nextText) return { content: nextText, changed: false };
+        const body = {
+          message: 'Update encrypted Scodex learning memory',
+          content: Buffer.from(nextText, 'utf8').toString('base64'),
+          branch: repository.default_branch,
+          ...(current.value?.sha ? { sha: current.value.sha } : {}),
+        };
+        await request(route + '/contents/' + encodedPath, { method: 'PUT', body, write: true, signal: controller.signal, timeoutMs: 10_000 });
+        const verified = await read();
+        const verifiedText = verified.status === 404 ? null : decodeFile(verified.value);
+        if (verifiedText !== nextText) throw Error('GitHub 已接受学习记忆更新，但回读内容不一致。');
+        return { content: nextText, changed: true };
+      } finally { clearTimeout(timer); }
+    }); },
     connect(token) { return exclusive(async () => {
       await ensure(); if (readError) throw Error(readError);
       if (typeof token !== 'string' || !/^[\x21-\x7e]{10,8192}$/.test(token)) throw Error('请填写有效的 GitHub 访问令牌。');

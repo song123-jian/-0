@@ -8,6 +8,19 @@ export function revisionOptionLabel(value) {
   if (text.startsWith('重新生成：')) return '重新生成';
   return text;
 }
+export function compareRevisionText(currentMessages = [], versionMessages = []) {
+  const differences = [];
+  const count = Math.max(currentMessages.length, versionMessages.length);
+  for (let index = 0; index < count; index++) {
+    const current = currentMessages[index] || null;
+    const version = versionMessages[index] || null;
+    const currentText = typeof current?.content === 'string' ? current.content : '';
+    const versionText = typeof version?.content === 'string' ? version.content : '';
+    if (currentText === versionText) continue;
+    differences.push({ index, role: current?.role || version?.role || 'assistant', currentText, versionText });
+  }
+  return differences;
+}
 export function assertRevisionIdle(chat) {
   if (!chat || chat.archivedAt) throw Error('请先恢复此聊天。');
   if (chat.messages.some(m => m.pending || m.approval || m.operations?.some(o => o.status === 'running'))) throw Error('请先停止此聊天任务，再编辑或切换版本。');

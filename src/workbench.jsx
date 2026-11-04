@@ -31,7 +31,8 @@ import { ToolsPanel, CommandPalette } from './components/tools-panel.jsx';
 import { AgentActivity } from './components/agent-activity.jsx';
 import { ChatRuns } from './components/chat-runs.jsx';
 import { GitPanel } from './components/git-panel.jsx';
-import { ConversationVersions, MessageRevisionDialog } from './components/conversation-revisions.jsx';
+import { MessageRevisionDialog } from './components/conversation-revisions.jsx';
+import { TaskFileChanges } from './components/task-file-changes.jsx';
 import { TaskCollaborationDialog } from './components/task-collaboration.jsx';
 import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboration.js';
 import { prepareRevision, selectRevision, revisionStamp, revisionSource, discardFailedRegeneration } from './lib/conversation-revisions.js';
@@ -387,6 +388,7 @@ function App() {
     const request = activeRequestsRef.current.get(event.requestId);
     if (!request) return;
     const updateRequestMessages = (update) => setMessages(update, request.conversationId);
+    if (['complete', 'cancelled', 'error'].includes(event.type) && event.fileChanges) updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, fileChanges: event.fileChanges } : item));
     if (event.type === 'goal-state') {
       updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.status, rounds: event.rounds, maxRequests: event.maxRequests } }), request.conversationId);
     } else if (event.type === 'steering-queued') {
@@ -1649,6 +1651,10 @@ function App() {
       setLibrary(next); await window.scodex.saveHistory(next); return true;
     }
     if (action.type==='revision') return chooseConversationVersion(action.versionId,action.stamp,id);
+    if (action.type==='change-details' || action.type==='change-undo') {
+      if (!chat.messages.some(message => message.fileChanges?.id === action.changeId)) throw Error('文件修改记录已变化。');
+      return action.type==='change-details' ? window.scodex.taskChangeDetails(action.changeId,id) : window.scodex.undoTaskChanges(action.changeId,id);
+    }
     if (action.type==='draft') { updateChat(()=>({draft:action.text}),id); return true; }
     if (action.type==='stop') {
       const request=[...activeRequestsRef.current.values()].find(r=>r.conversationId===id);
@@ -1866,7 +1872,6 @@ function App() {
         {activeView === 'assistant' && (
           <section className={`assistant-view task-chat-view ${messages.length === 0 ? 'assistant-view-empty' : ''}`} onDragEnter={(event) => fileDrag(event, 'enter')} onDragOver={(event) => fileDrag(event, 'over')} onDragLeave={(event) => fileDrag(event, 'leave')} onDrop={(event) => fileDrag(event, 'drop')}>
             {fileDragActive && <div className="chat-file-drop-overlay" role="status"><div><Files size={36} /><strong>{!canShareContext ? '请先更改权限' : sending || attachmentLoading ? '请等待当前操作完成' : '松开即可添加'}</strong><span>文件将添加到当前消息</span></div></div>}
-            <ConversationVersions chat={currentChat} disabled={sending || storageBusy || attachmentLoading} onSelect={(id, stamp) => { try { chooseConversationVersion(id, stamp); } catch (e) { showNotice(readableError(e)); } }}/>
             {revisionEditor && revisionEditor.conversationId === currentChat?.id && <MessageRevisionDialog chat={currentChat} request={revisionEditor} canExecute={canShareContext} onClose={() => setRevisionEditor(null)} onSubmit={action => sendMessage('',null,currentChat.id,action)}/>}
             <div className="conversation-scroll">
               {messages.length === 0 ? (
@@ -1877,6 +1882,7 @@ function App() {
                     <MessageBubble
                       key={message.id || index}
                       message={message}
+                      conversationId={currentChat.id}
                       copied={copiedId === message.id}
                       onCopy={() => copyMessage(message)}
                       onFork={() => forkAssistantMessage(message).catch((error) => showNotice(readableError(error)))}
@@ -2165,7 +2171,7 @@ function ComposerAttachmentDisclosure({ attachments = [], images = [], fileConte
   </details>;
 }
 
-export function MessageBubble({ message, copied, onCopy, onFork, onRetry, onApplyCode, onApproval, onOpenFile, onBrowser, onServices, onEdit, onRegenerate, actionsDisabled }) {
+export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onApplyCode, onApproval, onOpenFile, onBrowser, onServices, onEdit, onRegenerate, actionsDisabled }) {
   if (message.role === 'user') return <article data-message-id={message.id} className={'user-message' + (message.images?.length ? ' user-message-with-images' : '')}>
     <MessageAttachmentDisclosure attachments={message.attachments} images={message.images} />
     {message.content && <div className="user-message-content">{message.content}</div>}
@@ -2177,8 +2183,9 @@ export function MessageBubble({ message, copied, onCopy, onFork, onRetry, onAppl
     <MessageProgress message={message} collapsed={messageProgressState(message) === 'complete'} />
     {message.content && <MessageContent content={message.content} onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
     <AgentActivity operations={message.operations} approval={message.approval} collapsed={messageProgressState(message) === 'complete'} onApproval={onApproval} onOpenFile={onOpenFile} onBrowser={onBrowser} onServices={onServices} />
+    {!message.pending && message.fileChanges && <TaskFileChanges record={message.fileChanges} conversationId={conversationId} disabled={actionsDisabled} />}
     {message.error && <div className="message-error"><CircleAlert size={16} /><span>{message.error}</span></div>}
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}
-    <div className="message-actions">{onRegenerate && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="重新生成此回答" disabled={actionsDisabled} onClick={onRegenerate}><RotateCw size={15}/>重新生成</button>}{onFork && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="从此回答分支到新聊天" disabled={actionsDisabled} onClick={onFork}><GitBranch size={15}/>分支到新聊天</button>}{message.content && <button className="icon-button small" title="复制回答" aria-label="复制回答" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}{(message.error || message.cancelled) && <button className="text-tool retry-message" onClick={onRetry}><RotateCw size={14} />{message.operations?.length ? '继续任务' : '重试'}</button>}</div></div></article>;
+    <div className="message-actions">{onRegenerate && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="重新生成此回答" disabled={actionsDisabled} onClick={onRegenerate}><RotateCw size={15}/>重新生成</button>}{onFork && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="从此回答分支到新聊天" disabled={actionsDisabled} onClick={onFork}><GitBranch size={15}/>在新对话中分支</button>}{message.content && <button className="icon-button small" title="复制回答" aria-label="复制回答" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}{(message.error || message.cancelled) && <button className="text-tool retry-message" onClick={onRetry}><RotateCw size={14} />{message.operations?.length ? '继续任务' : '重试'}</button>}</div></div></article>;
 }
 

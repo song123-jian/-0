@@ -1,67 +1,46 @@
 # Project Handoff
 
-## Current State — 1.3.32 installed; 1.3.33 source published, installation pending
+## Current Checkpoint — 1.3.35, 2026-11-04
 
-The desktop workbench supports ordinary conversations and local tasks without a registered project. Projects remain optional. An explicitly empty project registry survives restart; deleting or archiving the last project returns to Ordinary Chat. Legacy workspace migration remains supported.
+- Goal: show actual task file changes below that task's completion answer, replacing the incorrect conversation-version cards. Local implementation, review, builds, installation and actual installed-app acceptance are complete. Source push and GitHub Release publication are pending and must be read back before claiming publication.
+- Source: this checkout, branch main; pre-delivery HEAD f598df9a14a104cb87afaef040e34f04d00f5242. Existing authorized learning-memory changes are retained; the task baseline separates them from this file-card increment.
+- Actual entry: C:/Program Files/scodex-workbench/Scodex工作台.exe, version 1.3.35. User data: %APPDATA%/scodex-workbench. All verification applications exited normally; no build or test is pending.
+- Plan/checkpoint: implementation completed; candidate acceptance completed; installer/replacement completed; installed acceptance completed; source/Release publication pending; final dual-handoff publication update pending. No additional product refactor is justified by the reviewed scope.
+- Skills: requirement-understanding 95/100 (30/20/16/15/9/5); code-write-review 94/100 (30/20/15/15/9/5). No subagent delegation.
 
-| Completed requirement | Change and scope | Validation |
+## Completed Requirements
+
+| Requirement | Result and scope | Evidence |
 | --- | --- | --- |
-| Optional projects | Project registry, main-process request binding, and Ordinary Chat navigation | 19 focused logical cases passed |
-| Projectless file tasks | A general workspace outside protected app data, retaining existing permission and binding checks | Actual installed 1.3.31: real file write and Chinese text readback passed |
-| Persistence and project lifecycle | Empty startup, ordinary message save, optional-project switching, last-project deletion, and restart | Six actual installed-app scenarios passed; candidate archive/restore also passed |
-| Windows 1.3.31 installer | Fixed build inputs, renderer build, unpacked Electron build, NSIS, installation over 1.3.30 | Build/install succeeded; 81 installed files matched the accepted candidate |
-| Message operations and answer branching | Added copy/edit/regenerate actions for messages, answer-level branching to a new chat, isolated message IDs, display-only operation history without replay, and strict detached-window action filtering | `conversation-revisions.test.mjs` passed 10/10 after the final IPC filtering fix; real Electron DOM check exposed all five actions and preserved `run_command` disclosure |
-| Running-task steering | Added bounded text-only steering queues, a preload/IPC bridge, next-model-round injection, expiry events, and a separate stop plus “提交引导但不中断模型运行” UI action | Steering queue/runtime tests passed; real Electron loopback model check confirmed a second request received the steering text and completed normally |
-| Completed progress and command disclosures | Completed progress is compact by default, operation details expose stable disclosure IDs and names, and command/output remain toggleable | Focused UI contract tests and real Electron DOM check passed |
-| Windows 1.3.32 installer and replacement | Rebuilt with the local Electron distribution and installed over `C:\Program Files\scodex-workbench` | Installer exit 0; installed EXE and ASAR match the accepted candidate hashes; actual startup loaded both existing chats without history errors |
-| Gateway 502 diagnosis | Detect an upstream-authentication failure detail on HTTP 502 and distinguish chat generation from `/models` latency checks; retain the failed prompt and completed operations | Runtime regression passed; 1.3.33 packaged-Electron/IPC check passed against a loopback `/models` success and matching `/chat/completions` 502 fixture |
-| Conversation version picker sizing | Show concise `编辑消息` or `重新生成` options while retaining the full source text in the selected selector tooltip; cap width at 360px | Logical regression and actual packaged Electron layout check passed; long-message picker measured about 123px at 1440px viewport |
-| Failed-answer retry | Retry removes the failed response without opening the revision editor; a failed first answer in a regenerated branch restores its parent version before retrying | `conversation-revisions.test.mjs` passed 16/16; actual 1.3.33 UI acceptance passed 4/4, including both retry paths |
-| Windows 1.3.33 installer build | Build renderer, unpacked Electron and NSIS using the local Electron distribution | Passed; packaged candidate passed 4/4 UI checks. Replacement is pending because the existing 1.3.32 app is still running; no process was stopped. |
+| Per-answer file summary | Below completed answer and activity, above message actions; total files and green additions/red deletions, per-file counts | Core actual UI: 4 files, +5/-2; final installed 1440x1000 visual check passed |
+| Real changes | Actual tool before/after bytes, bounded command snapshots, repeated edits aggregated from task baseline | 46 focused logical checks; actual file tools and PowerShell |
+| View and undo | Real text diff; encrypted persistent snapshots; workspace/conversation/permission binding; preflight rejects later edits; deleted parent directories restored | Candidate 3/3 and installed-path 3/3 boundary UI checks |
+| Correct display object | Removed old ConversationVersions cards in main and detached chat windows; retained message edit/regenerate behavior and history | Installed regression 4/4; old/current history retained |
+| Copy and new-chat branch | Existing answer copy and “在新对话中分支” below the card; branch cannot inherit source undo capability | Core UI copy/branch checks passed; final installed geometry/actions passed |
+| Existing authorized functionality | Optional projects, ordinary chat, steering, progress/command disclosure, retry and encrypted learning memory retained | Historical valid scoped results reused; current installed retry/gateway regression passed |
 
-## Decisions and Constraints
+## Architecture and Constraints
 
-- Public source retains the 1.3.30 packaging conventions. Unfinished mobile changes and mobile-only npm scripts are excluded from this release.
-- Dependencies are unchanged. Only root version metadata in the lockfile changes.
-- Existing user profiles and disk project files are preserved. New computers still require model service and key configuration.
-- The historical GitHub Release remains [v1.3.31](https://github.com/song123-jian/-0/releases/tag/v1.3.31). The 1.3.32 installer remains the current installed rollback baseline. The 1.3.33 installer is local at the path recorded in the test handoff; no new GitHub Release was created.
-- Upgrade by running the installer and selecting the existing application directory. Keep the 1.3.31 installer for rollback; do not overwrite or delete user data during rollback.
-- Private credentials, profiles, local build artifacts, machine-specific evidence and backups are excluded from source uploads.
+- electron/task-file-changes.cjs owns per-request aggregation, encrypted records, real diff and guarded undo. electron/file-commit.cjs observes writes inside the existing commit lock. main/preload persist only a record ID in each answer. The shared React card and existing detached-window action bridge render it.
+- Source baseline/review: release/delivery-1.3.35/source-baseline.json and incremental-review.json. Review covers 15 directly changed code/test files; unrelated inherited differences are not attributed to this increment. Two hook/bridge baselines were captured after initial edits, so their known patches and source were reviewed without claiming an original byte baseline.
+- Limits: 2 MiB per file, 16 MiB snapshot budget, 100 changed files, 6,000 command scan entries. Excluded dependency/build/Git/sensitive/protected paths and project-external shell effects are not universally captured. Incomplete records display a warning and disable undo. Binary/non-UTF8 or over-budget text comparisons show no invented line counts.
+- External applications do not share the internal lock. Hash preflight and write/readback detect conflicts; arbitrary OS activity cannot be made transactional. Old answers without saved snapshots cannot acquire retroactive real diffs.
+- Model responses in acceptance were loopback fixtures; actual Electron, React, IPC, Windows encryption, disk files and PowerShell were used. External generation and real learning-memory synchronization were not accepted by these fixtures.
 
-## Existing Results and Limits
+## Version, Build and Replacement
 
-Earlier 1.3.30 validation covered 403 distinct automated cases after a targeted test-helper cleanup repair. Those results remain valid only for unchanged scope; no full-suite rerun is claimed for 1.3.31. Earlier file/editor and packaging validation is historical evidence, not a new whole-system acceptance.
+- Established project version mapping: 1.3.34 to 1.3.35, one patch increment for this delivery. package.json and both root lock versions agree; failed builds and tests did not increment again.
+- Build: npm run build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist. All exited 0; existing bundle-size/dependency-metadata warnings remain.
+- Installer: release/Scodex-Workbench-Setup-1.3.35-x64.exe, 181099770 bytes; SHA-256 489685A4C02B8AACD95904F7013F55E5B3F2F044DF00BA7AC9D318995F3D1C94.
+- EXE SHA-256 2FB70D59D954B899FE439BEA80FF186F7A57FA08C2518EBA278174EDAA2AE71C; app.asar SHA-256 A8BD869DBF1D8405647E61958613910DB324E8E10433A53E0A90A5102FE9FD14.
+- Installer exited 0 over the confirmed 1.3.34 target. All 27 candidate files match the installed files. All 2,945 profile files were byte-identical immediately after installation; conversations/settings/model-connection/device-profile remain unchanged after real-profile startup and normal exit.
+- Recoverable exact old installation: release/delivery-1.3.35/rollback-1.3.34 (30 files, verified). Old installer retained: release/Scodex-Workbench-Setup-1.3.34-x64.exe, SHA-256 848D705FDD76D299F09AADC83AD276C08314CE2045E9EA3F7756B42425A01E0B. Rollback: quit normally and reinstall 1.3.34 or restore the verified application backup; preserve APPDATA. Do not restore profile caches over live user data.
+- Detailed local identity/profile manifest: release/delivery-1.3.35/installation.json. User-specific profiles, rollback copies, fixture data, credentials and build outputs stay out of Git.
 
-Only model HTTP responses were replaced by a controlled loopback fixture during the 1.3.31 actual-app checks. Public model generation, unrelated integrations and unfinished mobile features are outside this acceptance. No further refactoring is required by this increment.
+## Remaining Publication and Cleanup
 
-The restored source checkout used for this increment is `C:\Users\宋建建\source\repos\scodex-workbench-restored`; it is an extracted working tree without Git metadata. The original GitHub commit archive was used as a read-only comparison baseline, and its temporary extracted comparison directory was removed after review. Dependencies were installed from `package-lock.json` for validation and are not part of the source handoff. The current renderer build completed successfully after temporarily supplying the Electron package's missing `dist/LICENSE` input for license generation; that temporary file was removed afterward.
-
-Known limits: running-task steering accepts text only; attachments, file context, message editing, revision switching, and answer branching remain blocked while the target chat is running. A steering item submitted after the final model round is reported as expired instead of being silently dropped. The affected focused suites passed 23/23 (including 10/10 conversation revision cases); a later full `npm test` run passed its initial 50+ cases but produced no further output for several minutes and was stopped, so no clean full-suite result is claimed. The renderer `npm run build` completed successfully. Actual Electron loopback/UI checks remain valid evidence for the previously tested packaged candidate.
+- Publish the reviewed authorized source to main, create v1.3.35 using the verified installer, then verify remote commit and Release asset. Authenticated GitHub access for song123-jian was confirmed; no publication has yet been claimed. Use the existing per-command proxy, without changing global Git settings.
+- Automatic approval review rejected cleanup with “blocked by policy”. Six task-owned fixture directories remain in their original locations; no delete or move ran and none was retried. Reports, final screenshots, baseline and rollback remain deliberately retained. See [Test Handoff](TEST_HANDOFF.md) and local cleanup.json for exact manual paths.
+- No remaining high-confidence in-scope defect or justified extra refactor was identified. Outstanding manual cleanup does not affect the accepted executable.
 
 See [Test Handoff](TEST_HANDOFF.md) and [Workflow](WORKFLOW.md).
-
-## Current Checkpoint — 2026-11-03
-
-- Installed 1.3.32 steering acceptance passed: the active request continued, the next model round contained guidance and real read_file results, and the final answer persisted (release/delivery-1.3.32/steering-installed.json).
-- Current focused verification passed 15/15 on the upload copy; incremental review found no remaining confirmed in-scope issue. Earlier valid results are reused, without claiming a clean full-suite run.
-- Lightweight refactoring assessment: no evidence supports additional refactoring for this delivery; retained temporary data is a documented manual cleanup follow-up.
-
-- The source changes for progress disclosures, message operations, answer branching, and running-task steering are implemented and published in feature commit `cf03d081937d8f12386aefbcb81ee30420b33e48`.
-- The earlier pre-rebuild packaged-app steering check passed on the 1.3.31 executable with an isolated profile and loopback model. The focused changed suites passed 32/32; no clean full-suite result is claimed.
-- Standard and initial local-cache builds timed out. The diagnostic run found the missing Electron `45.0.0` ZIP; that download stalled and was stopped.
-- The 1.3.32 installer build passed using `node_modules/electron/dist` through `electronDist`, with verified local NSIS and `rcedit` paths. Installer: `release/Scodex-Workbench-Setup-1.3.32-x64.exe`, 181089600 bytes, SHA-256 `1323D3C0419ECAEA86B6A6EF0D07D5E0AC2ED94B0355211B3B419F2184307E03`. Candidate executable file version `1.3.32`, SHA-256 `3AAA10F56A81927C1504472877861A61E31DAC6D73DF435E0B50C8438C6E87FE`; ASAR SHA-256 `E911964F195BF5F3014AD2DFFD4F524DBAED150C8725A79B3CF7A5605D9B261B`.
-- Actual 1.3.32 candidate UI acceptance passed for completed progress, command/output disclosure, copy, edit, regenerate, and answer branching. Progress starts collapsed at 13px against 16px body text.
-- The 1.3.32 installer replaced `C:\Program Files\scodex-workbench`; actual startup reported version `1.3.32`, loaded two conversations and four visible messages, and returned no history error. Pre-install and post-install hashes matched for `conversations.json`, `settings.json`, `model-connection.json`, and `device-profile.json`. The old `repairs` directory is absent; all 27 candidate files are installed plus two uninstaller files.
-- Application source 1.3.32 was committed and pushed to `main` as `cf03d081937d8f12386aefbcb81ee30420b33e48` on 2026-11-03. Remote `refs/heads/main` equalled the local feature commit after push (exit 0). The direct attempt failed to connect to github.com:443 after 21139 ms; using the existing Windows proxy `127.0.0.1:7890` per Git command resolved publication without changing global Git settings. Final handoff synchronization is documentation-only.
-- The 1.3.33 failed-answer retry fix is committed as `179937a92fe75f227ecab187ef3a875353778755` and pushed to `main`; remote `refs/heads/main` was verified equal to local HEAD. The push fast-forwarded from `8e3b973a56ea8fbc506c8c423a8abaf53ec9b92a`.
-- The latest 1.3.33 candidate passed the 16/16 focused conversation-revision tests and 4/4 actual packaged-UI checks. No clean full-suite run is claimed; loopback fixtures supplied model responses.
-- The installed 1.3.32 application remains active in four processes. Replacement with the accepted 1.3.33 installer is pending normal app exit; no user process was stopped.
-- Cleanup remains a manual follow-up because automatic approval review rejected it; retained paths and the manual procedure are recorded in TEST_HANDOFF.md.
-
-## Retry Revalidation Checkpoint — 2026-11-03
-
-- Retry behavior is implemented in the 1.3.33 candidate: ordinary failed answers are removed and resent without opening the revision editor; failed first answers in regenerated branches restore the exact parent revision and then request a fresh answer, discarding the failed branch.
-- Legacy regeneration rollback now requires a unique parent match across prompt text, mode, images, and attachment data. The focused `conversation-revisions.test.mjs` suite passed 16/16, including mismatched-media cases.
-- Actual packaged-UI report `release/delivery-1.3.33-retry-revalidated-20261103/model-diagnostics-ui.json` passed 4/4. Both retry cases closed without opening the editor; the regenerated branch and failed answer were absent after rollback and the replacement answer persisted.
-- Candidate installer, executable, and ASAR are version 1.3.33; exact sizes and SHA-256 values are recorded in `TEST_HANDOFF.md`. The source commit is published and verified on `main`.
-- Installation over `C:\Program Files\scodex-workbench` remains pending because the installed 1.3.32 application is still running. Preserve the existing user profile and wait for normal exit before replacing it.

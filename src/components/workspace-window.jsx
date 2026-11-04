@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowUpRight, FolderOpen, LoaderCircle, MessageSquare, Plus, Square } from 'lucide-react';
 import { MessageBubble } from '../workbench.jsx';
-import { ConversationVersions, MessageRevisionDialog } from './conversation-revisions.jsx';
+import { MessageRevisionDialog } from './conversation-revisions.jsx';
 import { revisionStamp, revisionSource } from '../lib/conversation-revisions.js';
 
 export function WorkspaceWindow() {
@@ -30,9 +30,8 @@ export function WorkspaceWindow() {
     {snapshot&&!snapshot.available&&<div className="detached-empty">此项目或聊天已被删除，请回到主工作台。</div>}
     {snapshot?.available&&snapshot.kind==='project'&&<section className="detached-project"><div className="detached-project-heading"><h1>{snapshot.title}</h1><button type="button" className="primary-button" disabled={archived} onClick={()=>action({type:'new-chat'})}><Plus size={16}/>新建聊天</button></div><p>{snapshot.project.path}</p><div className="history-list">{snapshot.chats.map(c=><button type="button" key={c.id} className="detached-project-chat" onClick={()=>action({type:'open-chat',chatId:c.id})}><MessageSquare size={18}/><span><strong>{c.title}</strong><small>{c.archivedAt?'已归档':c.running?'运行中':c.unreadResult?'有新结果':'本机聊天'}</small></span><ArrowUpRight size={16}/></button>)}</div>{!snapshot.chats.length&&<p>项目中还没有聊天。新建聊天会在独立窗口打开。</p>}</section>}
     {snapshot?.available&&snapshot.kind==='chat'&&<>
-      <ConversationVersions chat={chat} disabled={busy || archived || waiting} onSelect={(versionId,stamp)=>action({type:'revision',versionId,stamp})}/>
       {revisionRequest && <MessageRevisionDialog chat={chat} request={revisionRequest} canExecute={snapshot.canExecute} onClose={()=>setRevisionRequest(null)} onSubmit={async input=>{const result=await action({...input,type:'revise'});if(result===false)throw Error('版本操作未执行，请查看窗口提示。');}}/>}
-      <div className="detached-messages conversation-scroll"><div className="message-list">{chat.messages.map((m,index)=><MessageBubble key={m.id} message={m} copied={copied===m.id}
+      <div className="detached-messages conversation-scroll"><div className="message-list">{chat.messages.map((m,index)=><MessageBubble key={m.id} message={m} conversationId={chat.id} copied={copied===m.id}
         onCopy={()=>navigator.clipboard.writeText(m.content||'').then(()=>setCopied(m.id)).catch(e=>setError(e.message))}
         onEdit={()=>openRevision('edit',m.id)} onRegenerate={()=>openRevision('regenerate',m.id)} onFork={()=>action({type:'fork',messageId:m.id})} actionsDisabled={busy||archived||waiting}
         onRetry={()=>{if(!m.operations?.length){openRevision('regenerate',m.id);return;}const original=chat.messages[index-1]?.content||'继续未完成任务';action({type:'send',text:'继续未完成的任务：'+original+'\n先检查已有操作和失败原因，保留已完成的修改。'});}}

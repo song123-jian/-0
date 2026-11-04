@@ -2,7 +2,7 @@
 const http = require('node:http');
 const crypto = require('node:crypto');
 async function startGitHubFixture({ head, repository = 'scodex-fixture/workbench' }) {
-  const state = { head, repository, pulls: [], requests: [], writes: [], confirmed: [], ahead: 1, failStatus: 0, failReadback: false, mismatch: false, more: false };
+  const state = { head, repository, pulls: [], requests: [], writes: [], memoryWrites: [], memoryFile: null, confirmed: [], ahead: 1, failStatus: 0, failReadback: false, mismatch: false, more: false };
   const token = 'fixture_' + crypto.randomBytes(24).toString('hex');
   const route = '/repos/' + repository;
   const server = http.createServer(async (req, res) => {
@@ -19,6 +19,23 @@ async function startGitHubFixture({ head, repository = 'scodex-fixture/workbench
       if (url.pathname === '/user') return authenticated ? send(200, { login: 'scodex-fixture' }) : send(401, {});
       if (req.method !== 'GET' && !authenticated) return send(401, {});
       if (req.method === 'GET' && url.pathname === route) return send(200, { default_branch: 'main', allow_merge_commit: true, allow_squash_merge: true });
+      const memoryPath = route + '/contents/memory/scodex-learning.json';
+      if (url.pathname === memoryPath && req.method === 'GET') {
+        if (url.searchParams.get('ref') !== 'main') return send(404, {});
+        if (!state.memoryFile) return send(404, { message: 'Not Found' });
+        return send(200, { path: 'memory/scodex-learning.json', sha: state.memoryFile.sha, encoding: 'base64', content: state.memoryFile.content });
+      }
+      if (url.pathname === memoryPath && req.method === 'PUT') {
+        if (body.branch !== 'main' || body.message !== 'Update encrypted Scodex learning memory') return send(422, {});
+        if (state.memoryFile ? body.sha !== state.memoryFile.sha : body.sha !== undefined) return send(409, {});
+        const encoded = String(body.content || '').replace(/\s/g, ''), bytes = Buffer.from(encoded, 'base64');
+        if (!encoded || bytes.toString('base64') !== encoded) return send(422, {});
+        const sha = crypto.createHash('sha1').update('memory:' + bytes.toString('utf8')).digest('hex');
+        const previous = state.memoryFile;
+        state.memoryFile = { sha, content: encoded };
+        state.memoryWrites.push({ path: 'memory/scodex-learning.json', branch: body.branch, previousSha: body.sha || '', sha, content: encoded });
+        return send(previous ? 200 : 201, { content: { path: 'memory/scodex-learning.json', sha } });
+      }
       if (req.method === 'GET' && url.pathname.startsWith(route + '/git/ref/heads/')) return send(200, { object: { sha: state.head } });
       if (req.method === 'GET' && url.pathname.startsWith(route + '/compare/')) return send(200, { ahead_by: state.ahead });
       if (req.method === 'GET' && url.pathname === route + '/pulls') {

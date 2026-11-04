@@ -41,6 +41,7 @@ function normalizeMessage(message) {
     id: validId(message.id), role: message.role, content: message.content.slice(0, 64_000),
     ...(message.executionEnabled === true ? { executionEnabled: true } : {}),
     ...(message.role === 'assistant' && Array.isArray(message.operations) && message.operations.length ? { operations: normalizeOperations(message.operations) } : {}),
+    ...(message.role === 'assistant' && /^[0-9a-f-]{36}$/i.test(message.fileChanges?.id || '') ? { fileChanges: { id: message.fileChanges.id } } : {}),
     mode: validMode(message.mode), skillName: String(message.skillName || '').slice(0, 160),
     ...(typeof message.skillId === 'string' && message.skillId.length <= 1024 && !/[\x00-\x1f\x7f]/.test(message.skillId) ? { skillId: message.skillId } : {}),
     contextName: String(message.contextName || '').slice(0, 200),
