@@ -1,6 +1,32 @@
 # Test Handoff
 
-## Current Verification Checkpoint — 1.3.35, 2026-11-04
+## Active Increment — 1.3.36, 2026-11-04
+
+- Actual target: Scodex Workbench 1.3.36, Windows x64/Electron 45; installed entry C:/Program Files/scodex-workbench/Scodex工作台.exe, candidate release/win-unpacked/Scodex工作台.exe. Existing Node.js 24 toolchain. Evidence root: release/delivery-1.3.36.
+- Preconditions: isolated actual-app UI profiles allow loopback binding and danger-full-access only for owned fixtures. Real Windows safeStorage, disk/PowerShell, Electron/React/IPC are exercised; model generation is a loopback fixture except the explicitly separate public short request.
+
+| Scope / actual steps | Expected and actual result | Status / evidence |
+| --- | --- | --- |
+| Focused changed-module logical cases | Metadata reuse, finite limits/spill, approval-before-capture, cancellation/conflicts, real diff/undo, SSE completion, timing and batching; 45/45 | Passed: focused-tests-final.log |
+| Direct regression | Goal, steering, message/progress and model-usage paths; 21/21 | Passed: direct-regression.log |
+| Comparable local benchmark | 320 x 64 KiB plus target, 4 commands; old 2,581 ms/missed target versus new 474 ms/exact target, 2,243 metadata reuses; deliberate 500-ms SSE tail first tool 534 -> 2 ms | Passed: performance-benchmark.json; encryption stub, not public/Windows performance proof |
+| Actual candidate core UI | Submit command over 18 MiB workspace, inspect lazy diff, undo and read bytes; phases/metrics omit reasoning body; incomplete empty state blocks undo; 390px layout fits | Passed 5/5: ui-r3/latency-capture-ui.json; scan 71 ms, preparation 10 ms |
+| Actual candidate independent-window boundary | Delete nested directory, expand detached diff, undo and reread exact original bytes | Passed 3/3: ui-boundary/task-file-changes-ui.json |
+| Actual installed core UI | Repeat affected real command/diff/undo/phases/incomplete/narrow UI sequence at installed EXE | Passed 5/5, exit 0: installed-ui/latency-capture-ui.json; scan 84 ms, preparation 12 ms, tool-completion to next request 1,110 ms before 5-second tail |
+| Installed visual | 1440x1000 final state: real file card/actions and incomplete warning; no visible obstruction/overflow in this device/page/viewport/data state | Passed: installed-ui/latency-capture.png |
+| Existing user profile | Launch installed entry without sending a model request, compare history, quit normally and reread four critical files | Passed 2/2, version 1.3.36, 2 conversations/2 messages, exit 0, 4 hashes unchanged: installed-startup.json |
+| Real public short request | Existing glm-5.3/ultra, isolated chat-only profile, fixed public prompt; HTTP 200, 300 reported tokens; preparation 9 ms / first activity 8,669 ms / text 11,771 ms / total 11,773 ms | Passed: external/external-latency.json; not a same-input reproduction of original 47-second task; credential copies removed, original unchanged |
+| Incremental review | Only 21 current code/test/version files; correct boundaries/references, UTF-8/no BOM, no replacement character/NUL; unrelated license marker retained | Passed: incremental-review.json; unchanged final fingerprints verified |
+| Build and replacement | Renderer/unpacked/NSIS and installation exit 0; 26 candidate file hashes match; 2,946 profile hashes unchanged at replacement | Passed: renderer-build.log, package-dir.log, installer-build-final.log, installation.json |
+
+- Identity: 1.3.35 -> 1.3.36 under established patch mapping. Installer 181102112 bytes / SHA-256 177daacfbedad180aa9b5981594a10600c4a17d9a85eea4e10fad6646f3b622e. Final EXE/ASAR hashes and 29-file rollback-1.3.35 manifest: installation.json. Roll back only application files after normal exit, preserving APPDATA.
+- Source commit and GitHub v1.3.36 publication pending; installed delivery is accepted.
+- Resolved prerequisite/harness failures: authorization-test expectation; ui allowLocalBinding omission; ui-r2 premature pending completion; external encrypted-key context omission; NSIS held debug.log; install preflight artifact root; startup helper relative import (application had not launched); handoff checker escape error (actual links remained valid). Retained failure logs; rerun only affected scope. ui-r3/external-r2/final packaging/install/startup supersede these failed attempts.
+- All finite build/test/install operations finished; test apps exited normally. Existing 1.3.35 unaffected results remain valid only for unchanged paths. User model/default reasoning was not changed.
+- Cleanup: automatic approval rejected the one deletion request (“blocked by policy”); nothing deleted/moved, no retry. Six exact present fixture paths and manual cleanup state are in cleanup.json; old denied fixtures untouched. Retain reports/final screenshots/baselines/installer/rollback; never delete APPDATA.
+- Uncovered: comparable original 47-second full task, every provider/load condition, and paths deliberately outside bounded capture. No absolute model-speed guarantee. See [Project Handoff](HANDOFF.md).
+
+## Previous Verification — 1.3.35, 2026-11-04
 
 Actual target: Scodex Workbench 1.3.35, Windows x64, Electron 45. Final entry C:/Program Files/scodex-workbench/Scodex工作台.exe; candidate entry release/win-unpacked/Scodex工作台.exe. Focused logic uses the existing Node.js 24 runtime. Actual UI tests use isolated profiles and loopback-only model HTTP, real renderer/IPC/file tools, PowerShell and Windows safeStorage. Real-profile startup reads existing user data without submitting a model request. No full-suite or real external-generation acceptance is claimed.
 

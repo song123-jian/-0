@@ -42,7 +42,7 @@ function fileDiff(relative, before, after) {
 }
 
 function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false, allowedPaths = [], allowedTools = null, guard = async () => {}, authorize = async () => {},
-  isDirty = () => false, protectedPaths = [], environment = async () => process.env, onFileChanged = () => {} }) {
+  isDirty = () => false, protectedPaths = [], environment = async () => process.env, onFileChanged = () => {}, commandCapture = action => action() }) {
   const observed = new Map();
   const rootPromise = fs.realpath(workspaceRoot);
   const scopes = allowedPaths.map((value) => path.resolve(workspaceRoot, value));
@@ -142,7 +142,12 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
       await authorize('agent-command', { path: item.target, command: args.command }, context);
       await guard(); if (context.signal?.aborted) throw new Error('任务已停止。');
       context.onProgress?.({ title: TITLES[name], detail: args.command, path: item.target });
-      const result = await runAgentCommand({ command: args.command, cwd: item.target, timeoutMs: args.timeout_ms, signal: context.signal, environment: await environment(), onOutput: context.onProgress });
+      const commandEnvironment = await environment();
+      const result = await commandCapture(async () => {
+        await guard(); if (context.signal?.aborted) throw new Error('任务已停止。');
+        context.onProgress?.({ title: TITLES[name], detail: args.command, path: item.target });
+        return runAgentCommand({ command: args.command, cwd: item.target, timeoutMs: args.timeout_ms, signal: context.signal, environment: commandEnvironment, onOutput: context.onProgress });
+      }, context);
       return { ...result, activity: { title: TITLES[name], detail: args.command, path: item.target, output: result.output, exitCode: result.exitCode, truncated: result.truncated } };
     }
     await authorize('file-read', { path: item.target }, context);

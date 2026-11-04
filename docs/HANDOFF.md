@@ -1,6 +1,30 @@
 # Project Handoff
 
-## Current Checkpoint — 1.3.35, 2026-11-04
+## Active Increment — 1.3.36, 2026-11-04
+
+- Goal: improve bounded command capture and the reported ~47-second delay before model work. Delivery 1.3.36 replaces installed 1.3.35 using the established patch mapping; this round does not increment again.
+- Checkpoint: implementation, candidate/installed acceptance, build, replacement, incremental review and documentation checks completed. Publication remains the only delivery step pending.
+- Source/entry: this checkout on main; C:/Program Files/scodex-workbench/Scodex工作台.exe. Model, credential and chosen reasoning level were unchanged. Preserve user data, unrelated electron/third-party-licenses.json stat change and previous evidence.
+
+| Requirement | Actual result | Evidence under release/delivery-1.3.36 |
+| --- | --- | --- |
+| Faster bounded capture | Reuse unchanged metadata; 16 MiB memory plus 128 MiB encrypted spill; 2 MiB/file, 6,000 entries, cooperative 2-second guard; snapshot after command approval | 45 focused cases; candidate and installed real encrypted capture |
+| Honest file summary | Incomplete coverage lists reasons, does not invent zero changes and disables batch undo; actual diffs load on demand | Installed UI 5/5; independent-window boundary UI 3/3 |
+| Faster response/tool channel | Complete SSE finishes without gateway tail; first reasoning/tool/text timing; immediate first text then 32-ms batches; no reasoning body persisted | Controlled tail first tool 534 -> 2 ms; actual installed tool continuation 1,110 ms despite 5-second tail |
+| Measured limits | Four command snapshots 2,581 -> 474 ms under identical 20 MiB fixture; public short request preparation 9 ms, first activity 8,669 ms, first text 11,771 ms | performance-benchmark.json; external/external-latency.json |
+| Program delivery | Renderer/unpacked/NSIS all exit 0; installer exit 0; 26/26 candidate files match; 2,946 user-profile files unchanged immediately after installation | installation.json and build logs |
+| Installed acceptance | Five actual UI checks and existing-profile startup/history/normal-exit checks passed; four critical profile files unchanged; all test apps exited 0 | installed-ui/latency-capture-ui.json; installed-startup.json |
+
+- Installer: release/Scodex-Workbench-Setup-1.3.36-x64.exe, 181102112 bytes, SHA-256 177daacfbedad180aa9b5981594a10600c4a17d9a85eea4e10fad6646f3b622e. Installed EXE 8af5c8027b8e25cf9dbf173f35a11d607d40cb4b1593141290f21bfd3b5e0527; ASAR d329963fb8b9137968a23d083c06362e9427789f2f37e0644c41dfc93e2fba57.
+- Build: npm run build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist.
+- Rollback: delivery-1.3.36/rollback-1.3.35 contains 29 verified old application files. Quit normally before restoring application files or reinstalling the retained 1.3.35 installer; preserve APPDATA. Full identity/backup list: installation.json.
+- Source commit and GitHub v1.3.36 publication pending; installed delivery is accepted.
+- Limits: controlled benchmarks use an encryption stub; actual-app UI substitutes loopback model responses. One public glm-5.3/ultra short request is not the same input as the original 47-second task, so no 47-to-12-second speedup is claimed. Excluded/protected/external paths and capture guards remain intentional boundaries; remote inference waiting remains measurable.
+- Cleanup: automatic approval rejected deletion as “blocked by policy”; no delete/move executed or retried. Six task-owned fixtures remain in their original paths, enumerated in cleanup.json; reports, screenshots, baselines, installer and rollback are retained. Prior denied cleanup is untouched.
+- Incremental review: 21 code/test/version files passed; fingerprints in incremental-review.json. Unchanged results reused: 45/45 focused and 21/21 direct regression. No further high-confidence in-scope refactor is justified.
+- Skills: requirement-understanding 95 (30/20/16/15/9/5), code-write-review 94 (30/20/15/15/9/5), reused; no subagents. Test detail: [Test Handoff](TEST_HANDOFF.md).
+
+## Previous Delivery — 1.3.35, 2026-11-04
 
 - Goal: show actual task file changes below that task's completion answer, replacing the incorrect conversation-version cards. Local implementation, review, builds, installation and actual installed-app acceptance are complete. Source commit 7c2b1b3a9b2abf20938d176f51add537643f2f5b is pushed and remotely verified. GitHub v1.3.35 is published and marked Latest; tag target, asset size and server-side SHA-256 match the accepted installer.
 - Source: this checkout, branch main; pre-delivery HEAD f598df9a14a104cb87afaef040e34f04d00f5242. Existing authorized learning-memory changes are retained; the task baseline separates them from this file-card increment.

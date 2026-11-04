@@ -540,7 +540,8 @@ function requestToolApproval(webContents, requestId, input, signal) {
 
 async function callModel(webContents, requestId, payload, controller = new AbortController()) {
   if (runningRequests.has(requestId)) throw new Error('此请求仍在运行。');
-  const selectedProjectId = activeProjectId;
+  const selectedProjectId = activeProjectId, requestStarted = performance.now();
+  sendChatEvent(webContents, { requestId, type: 'phase', phase: 'preparing' });
   runningRequests.set(requestId, controller);
   const steeringQueue = createSteeringQueue();
   steeringQueues.set(requestId, steeringQueue);
@@ -635,6 +636,10 @@ async function callModel(webContents, requestId, payload, controller = new Abort
     });
     const skillTools = execution ? selectedSkill : null;
     const toolbox = execution ? createAgentTools({ workspaceRoot: requestWorkspace, readOnly: payload.mode === 'plan', fullAccess: requestPermissionSettings.sandboxMode === 'danger-full-access', guard,
+      commandCapture: (action, context) => {
+        const launch = async () => { await guard(); delegatedCoordinator?.assertNoActiveTasks(); if (commandHasDirtyFiles()) throw new Error('运行前出现未保存编辑，请先保存或取消编辑。'); return action(); };
+        return fileTracker ? fileTracker.command(launch, context) : launch();
+      },
       isDirty: (target) => editorDirtyPaths.has(path.resolve(target).toLowerCase()),
       protectedPaths: modelProtection.paths,
       environment: () => requestAgentSettings.workspaceDependencies && workspaceTools ? workspaceTools.environment() : Promise.resolve(process.env),
@@ -757,7 +762,7 @@ async function callModel(webContents, requestId, payload, controller = new Abort
     } : undefined;
     const executeTool = executeUntrackedTool ? (name, args, context) => {
       const action = () => executeUntrackedTool(name, args, context);
-      return fileTracker ? fileTracker.run(() => name === 'run_command' ? fileTracker.command(action) : action()) : action();
+      return fileTracker ? fileTracker.run(action) : action();
     } : undefined;
     const projectRules = toolbox ? await toolbox.projectInstructions() : '';
     const learningContext = ['scheduled', 'subagent'].includes(payload.requestKind) ? '' : learningMemory?.context() || '';
@@ -788,11 +793,13 @@ async function callModel(webContents, requestId, payload, controller = new Abort
     ].filter(Boolean).join('\n\n');
     timeout = setTimeout(() => controller.abort(), (goalExecution?.minutes || 15) * 60_000);
     if (payload.requestKind === 'scheduled') assertContextAccess(preferences, { attachments, images });
+    if (controller.signal.aborted) throw new Error('任务已停止。');
+    const preparationMs = Math.max(0, Math.round(performance.now() - requestStarted));
     const result = await runModelTask({ connection, signal: controller.signal, goal: goalExecution,
       messages: [{ role: 'system', content: systemPrompt }, ...messages,
         { role: 'user', content: modelMessageContent([prompt, chatAttachmentContext(attachments)].filter(Boolean).join('\n\n'), images) }],
       tools: executionTools, executeTool, takeSteering: () => steeringQueue.drain(),
-      emit: (event) => { if (event.type === 'request-metrics') modelUsage.record(event).catch(() => sendChatEvent(webContents, { requestId, type: 'usage-warning', message: '用量记录未能保存。' })); sendChatEvent(webContents, { requestId, ...event }); },
+      emit: (event) => { if (event.type === 'request-metrics') { event = { ...event, preparationMs }; modelUsage.record(event).catch(() => sendChatEvent(webContents, { requestId, type: 'usage-warning', message: '用量记录未能保存。' })); } sendChatEvent(webContents, { requestId, ...event }); },
     });
     terminalEvent = { type: 'complete', text: result.text, operations: result.operations, rounds: result.rounds, usage: result.usage, goalStatus: result.goalStatus, goalSummary: result.goalSummary };
   } catch (error) {
@@ -1843,7 +1850,7 @@ function installHandlers() {
     return inventory.plugins.map((plugin) => ({ ...plugin, skillsCount: skills.filter((skill) => isWithin(plugin.path, skill.absolutePath)).length }));
   });
 
-  localHandle('task-changes:details', (id, conversationId) => taskChanges().details(id, conversationId));
+  localHandle('task-changes:details', (id, conversationId, options) => taskChanges().details(id, conversationId, { summaryOnly: options?.summaryOnly === true }));
   localHandle('task-changes:undo', async (id, conversationId) => {
     if (runningRequests.size || sourceControl?.isBusy() || githubPulls?.isBusy() || projectChanging || storageUpdatePending) throw new Error('请先等待运行中的任务或文件操作结束。');
     const scope = await resolveChatRequestScope({ conversationId });

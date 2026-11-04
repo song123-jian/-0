@@ -3,7 +3,7 @@
 const fs = require('node:fs/promises'), path = require('node:path'), crypto = require('node:crypto'), http = require('node:http'), assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { connect, wait, freePort } = require('./agent-workflow-ui.cjs');
-const root = path.resolve(__dirname, '..'), version = '1.3.35';
+const root = path.resolve(__dirname, '..'), version = require('../package.json').version;
 const output = path.resolve(process.env.SCODEX_FILE_CHANGES_OUTPUT || path.join(root, 'release/delivery-1.3.35/ui'));
 const executable = process.env.SCODEX_FILE_CHANGES_EXE || path.join(root, 'release/win-unpacked/Scodex工作台.exe');
 const fixture = process.env.SCODEX_FILE_CHANGES_FIXTURE || path.join(output, 'fixture-' + crypto.randomUUID()), profile = path.join(fixture, 'profile'), home = path.join(fixture, 'home');

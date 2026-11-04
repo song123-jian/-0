@@ -46,21 +46,26 @@ function httpError(response, usingTools, detail = '') {
   return new Error(`模型请求失败（HTTP ${response.status}）。${detail ? '服务信息：' + detail : '已执行的操作不会自动回滚。'}`);
 }
 
-async function readCompletion(response, { signal, onDelta = () => {}, onUsage = () => {} } = {}) {
+async function readCompletion(response, { signal, onDelta = () => {}, onUsage = () => {}, onActivity = () => {}, usageGraceMs = 0 } = {}) {
   if (!response.body) throw new Error('模型没有返回可读取的响应。');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  const cancelRead = () => { reader.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', cancelRead, { once: true });
   const calls = new Map();
-  let buffer = ''; let text = ''; let bytes = 0; let finished = false; let reason = '';
+  let buffer = ''; let text = ''; let bytes = 0; let finished = false; let reason = ''; let completedAt = null, hasUsage = false;
+  const activities = new Set();
+  const activity = kind => { if (!activities.has(kind)) { activities.add(kind); onActivity(kind); } };
   const jsonResponse = /application\/json/i.test(response.headers.get('content-type') || '');
-  const addText = (value) => { if (typeof value === 'string' && value) { text += value; onDelta(value); } };
+  const addText = (value) => { if (typeof value === 'string' && value) { activity('text'); text += value; onDelta(value); } };
   const consume = (data, streaming) => {
     if (data.error) throw new Error('模型返回了服务错误，请检查连接后重试。');
-    const usage = normalizeUsage(data?.usage); if (usage) onUsage(usage);
+    const usage = normalizeUsage(data?.usage); if (usage) { hasUsage = true; onUsage(usage); }
     const choice = data?.choices?.[0];
     if (!choice) return;
     const value = streaming ? choice.delta : choice.message;
-    if (choice.finish_reason) reason = choice.finish_reason;
+    if (choice.finish_reason) { reason = choice.finish_reason; completedAt ??= performance.now(); }
+    if (typeof value?.reasoning_content === 'string' && value.reasoning_content || typeof value?.reasoning === 'string' && value.reasoning) activity('reasoning');
     addText(value?.content || value?.refusal);
     if (value?.tool_calls !== undefined && !Array.isArray(value.tool_calls)) throw new Error('模型工具响应格式无效。');
     for (const [position, call] of (value?.tool_calls || []).entries()) {
@@ -71,6 +76,7 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
       if (call.type && call.type !== 'function') throw new Error('当前仅支持 function 工具。');
       if (typeof call.function?.name === 'string') current.function.name += call.function.name;
       if (typeof call.function?.arguments === 'string') current.function.arguments += call.function.arguments;
+      if (call.id || call.function?.name || call.function?.arguments) activity('tool');
       if (current.id.length > 160 || current.function.name.length > 100 || current.function.arguments.length > 160_000) throw new Error('模型工具参数超过限制。');
       calls.set(index, current);
     }
@@ -86,8 +92,18 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
   try {
     while (!finished) {
       aborted(signal);
-      const { value, done } = await reader.read();
+      // finish_reason confirms complete content/arguments. Gateways may keep
+      // SSE open afterward; wait at most 150 ms for requested usage metadata.
+      let tailTimer;
+      const remaining = completedAt === null ? null : Math.max(0, Math.min(150, usageGraceMs) - (performance.now() - completedAt));
+      if (!jsonResponse && completedAt !== null && (hasUsage || !remaining)) break;
+      let chunk;
+      try { chunk = remaining === null ? await reader.read() : await Promise.race([reader.read(), new Promise(resolve => { tailTimer = setTimeout(() => resolve(null), remaining); })]); }
+      finally { clearTimeout(tailTimer); }
+      if (!chunk) break;
+      const { value, done } = chunk;
       if (done) break;
+      activity('transport');
       bytes += value.byteLength;
       if (bytes > MAX_RESPONSE_BYTES) throw new Error('模型单次响应超过 4 MB，已停止。');
       buffer += decoder.decode(value, { stream: true });
@@ -95,11 +111,11 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
       const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
       for (const item of lines) { if (!finished) line(item); }
     }
-    buffer += decoder.decode();
+    aborted(signal); buffer += decoder.decode();
     if (jsonResponse) {
       let data; try { data = JSON.parse(buffer); } catch { throw new Error('模型未返回有效 JSON。'); }
       consume(data, false); finished = true;
-    } else if (buffer.trim() && !finished) line(buffer.trim());
+    } else if (buffer.trim() && !finished && completedAt === null) line(buffer.trim());
     if (!jsonResponse && !finished && !reason) throw new Error('模型响应流提前中断；尚未执行本轮未完整返回的操作。');
     if (['length', 'content_filter'].includes(reason)) throw new Error('模型响应被截断或过滤，请缩小任务后重试。');
     const toolCalls = [...calls.entries()].sort((a, b) => a[0] - b[0]).map(([, value]) => value);
@@ -109,7 +125,7 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
       ids.add(call.id);
     }
     return { role: 'assistant', content: text || null, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) };
-  } finally { await reader.cancel().catch(() => {}); }
+  } finally { signal?.removeEventListener('abort', cancelRead); await reader.cancel().catch(() => {}); }
 }
 
 async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null }) {
@@ -157,8 +173,13 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       const requestController = new AbortController();
       const timer = setTimeout(() => requestController.abort(), 120_000);
       const requestSignal = signal ? AbortSignal.any([signal, requestController.signal]) : requestController.signal;
-      const started = Date.now(); let usage = null; let firstTokenMs = null; let httpStatus = null; let status = 'failed'; let retry = false;
+      const started = performance.now(); let usage = null; let firstTokenMs = null, firstToolCallMs = null, firstTextMs = null, firstByteMs = null, responseHeadersMs = null; let httpStatus = null; let status = 'failed'; let retry = false;
+      const elapsed = () => Math.max(0, Math.round(performance.now() - started));
+      let pendingDelta = '', deltaTimer, sentDelta = false;
+      const flushDelta = () => { clearTimeout(deltaTimer); deltaTimer = undefined; if (pendingDelta) { const value = pendingDelta; pendingDelta = ''; append(value); } };
+      const streamAppend = value => { if (!sentDelta) { sentDelta = true; append(value); return; } pendingDelta += value; deltaTimer ??= setTimeout(flushDelta, 32); };
       try {
+        emit({ type: 'phase', phase: 'waiting', round: round + 1, attempt: attempt + 1 });
         const response = await fetchImpl(connection.endpoint, {
           method: 'POST', headers: { authorization: 'Bearer ' + connection.apiKey, 'content-type': 'application/json' },
           body: JSON.stringify({ model: connection.model, stream: true, temperature: 0.2,
@@ -168,14 +189,23 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
             messages: conversation, ...(tools?.length && !structured ? { tools, tool_choice: 'auto', parallel_tool_calls: false } : {}) }),
           signal: requestSignal, redirect: 'error',
         });
-        httpStatus = response.status;
+        responseHeadersMs = elapsed(); httpStatus = response.status;
         if (!response.ok) {
           retry = [429, 502, 503, 504].includes(response.status) && attempt < Math.min(2, Math.max(0, connection.retryLimit || 0));
           const detail = await serviceErrorDetail(response, connection.apiKey);
           if (!retry) throw httpError(response, Boolean(tools?.length && !structured), detail);
         } else {
           if (fullText && !fullText.endsWith('\n\n')) append('\n\n');
-          message = await readCompletion(response, { signal: requestSignal, onUsage: value => { usage = value; }, onDelta: value => { if (firstTokenMs === null) firstTokenMs = Date.now() - started; if (!structured) append(value); } });
+          emit({ type: 'phase', phase: 'receiving', round: round + 1 });
+          message = await readCompletion(response, { signal: requestSignal, usageGraceMs: connection.reportUsage ? 150 : 0,
+            onUsage: value => { usage = value; },
+            onActivity: kind => {
+              if (kind === 'transport') { firstByteMs ??= elapsed(); return; }
+              firstTokenMs ??= elapsed();
+              if (kind === 'tool') firstToolCallMs ??= elapsed();
+              if (kind === 'text') firstTextMs ??= elapsed();
+              emit({ type: 'phase', phase: kind === 'tool' ? 'tool-input' : kind === 'reasoning' ? 'reasoning' : 'streaming', round: round + 1, firstActivityMs: firstTokenMs });
+            }, onDelta: value => { if (!structured) streamAppend(value); } });
           if (structured) { message = structuredReply(message); if (message.content) append(message.content); }
           status = 'succeeded';
         }
@@ -184,9 +214,10 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         if (requestController.signal.aborted && !signal?.aborted) throw new Error('模型响应超时（120 秒）。已执行的操作已保留。');
         throw error;
       } finally {
+        flushDelta();
         clearTimeout(timer);
         if (usage) { for (const key of ['inputTokens', 'outputTokens', 'totalTokens']) totalUsage[key] += usage[key]; totalUsage.reportedRequests++; } else totalUsage.unknownRequests++;
-        emit({ type: 'request-metrics', model: connection.model, status, httpStatus, firstTokenMs, durationMs: Date.now() - started, usage });
+        emit({ type: 'request-metrics', model: connection.model, status, httpStatus, firstTokenMs, firstToolCallMs, firstTextMs, firstByteMs, responseHeadersMs, durationMs: elapsed(), usage });
       }
       if (!retry) break;
       emit({ type: 'phase', phase: 'retry', round: round + 1, attempt: attempt + 1 });

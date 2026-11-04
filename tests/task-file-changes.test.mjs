@@ -10,9 +10,52 @@ const { createTaskFileChanges, difference } = require('../electron/task-file-cha
 const { withFileCommit } = require('../electron/file-commit.cjs');
 const encryption = { isEncryptionAvailable: () => true, encryptString: text => Buffer.from(text), decryptString: buffer => buffer.toString() };
 async function fixture(t) { const root = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-file-changes-')); t.after(() => fs.rm(root, { recursive: true, force: true })); const workspace = path.join(root, 'workspace'); await fs.mkdir(workspace); const directory = path.join(root, 'records'); return { root, workspace, directory, service: createTaskFileChanges(directory, { encryption }) }; }
+
+test('command capture is not exhausted by 16 MiB of unchanged workspace files and reuses safe baselines', async t => {
+  const { workspace, service, directory } = await fixture(t);
+  for (let i = 0; i < 36; i++) await fs.writeFile(path.join(workspace, String(i).padStart(2, '0') + '.txt'), Buffer.alloc(512 * 1024, 97));
+  const target = path.join(workspace, 'z.txt'); await fs.writeFile(target, 'original\n');
+  const tracker = service.begin(crypto.randomUUID(), workspace, 'chat');
+  await tracker.command(() => fs.writeFile(target, 'changed\n'));
+  await tracker.command(() => fs.writeFile(target, 'final\n'));
+  const result = await tracker.finish(); assert.equal(result.warning, '');
+  assert.equal(result.files.length, 1); assert.equal(result.files[0].path, 'z.txt');
+  assert.ok(result.coverage.reusedFiles >= 70); assert.ok(result.coverage.readBytes < 20 * 1024 * 1024);
+  await service.undo(result.id, { conversationId: 'chat', validate: async () => {}, withCommit: withFileCommit });
+  assert.equal(await fs.readFile(target, 'utf8'), 'original\n');
+  assert.ok(!(await fs.readdir(directory)).some(name => name.startsWith('scan-')));
+});
+
+test('limited command inventory reports incomplete coverage and never invents an addition baseline', async t => {
+  const { workspace, directory } = await fixture(t);
+  const service = createTaskFileChanges(directory, { encryption, scanLimits: { maxEntries: 2 } });
+  for (const name of ['a', 'b', 'z']) await fs.writeFile(path.join(workspace, name), 'user content\n');
+  const tracker = service.begin(crypto.randomUUID(), workspace, 'chat');
+  await tracker.command(async () => { await fs.unlink(path.join(workspace, 'a')); await fs.writeFile(path.join(workspace, 'z'), 'changed\n'); });
+  const result = await tracker.finish(); assert.match(result.warning, /不完整/);
+  assert.equal(result.coverage.complete, false); assert.equal(result.coverage.reasons.entries > 0, true);
+  assert.ok(!result.files.some(file => file.path === 'z' && file.kind === 'added'));
+  await assert.rejects(() => service.undo(result.id, { conversationId: 'chat', validate: async () => {}, withCommit: withFileCommit }), /不完整/);
+});
+
+test('aborting before capture prevents the command from running', async t => {
+  const { workspace, service } = await fixture(t), controller = new AbortController(); controller.abort();
+  const tracker = service.begin(crypto.randomUUID(), workspace, 'chat'); let ran = false;
+  await assert.rejects(() => tracker.command(async () => { ran = true; }, { signal: controller.signal }), /停止/);
+  assert.equal(ran, false); await tracker.finish();
+});
 test('line diff counts actual disjoint edits and empty/new/binary files', () => {
   const before = Buffer.from('one\ntwo\nthree\nfour\n'), after = Buffer.from('ONE\ntwo\nthree\nFOUR\n'); const diff = difference(before, after); assert.equal(diff.added, 2); assert.equal(diff.removed, 2); assert.match(diff.diff, / two/);
   assert.equal(difference(null, Buffer.from('a\nb\n')).added, 2); assert.equal(difference(Buffer.from('a\n'), null).removed, 1); assert.equal(difference(null, Buffer.alloc(0)).added, 0); assert.equal(difference(Buffer.from([0]), Buffer.from([1])).added, null);
+});
+
+test('summary requests avoid loading full diffs but preserve counts and conversation binding', async t => {
+  const { workspace, service } = await fixture(t), tracker = service.begin(crypto.randomUUID(), workspace, 'chat');
+  await tracker.run(() => withFileCommit(path.join(workspace, 'new.txt'), () => fs.writeFile(path.join(workspace, 'new.txt'), 'new\n')));
+  const record = await tracker.finish(), summary = await service.details(record.id, 'chat', { summaryOnly: true });
+  assert.equal(summary.files[0].added, 1); assert.equal(summary.files[0].diff, undefined);
+  assert.match((await service.details(record.id, 'chat')).files[0].diff, /[+]new/);
+  await assert.rejects(service.details(record.id, 'other', { summaryOnly: true }), /不属于/);
 });
 test('repeated writes aggregate task baseline, preserve dirty prior content and persist undo', async t => {
   const { workspace, directory, service } = await fixture(t), file = path.join(workspace, 'dirty.txt'), created = path.join(workspace, 'new.txt'); await fs.writeFile(file, 'user unsaved-to-git\n');

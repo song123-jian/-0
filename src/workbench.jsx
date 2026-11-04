@@ -1653,7 +1653,7 @@ function App() {
     if (action.type==='revision') return chooseConversationVersion(action.versionId,action.stamp,id);
     if (action.type==='change-details' || action.type==='change-undo') {
       if (!chat.messages.some(message => message.fileChanges?.id === action.changeId)) throw Error('文件修改记录已变化。');
-      return action.type==='change-details' ? window.scodex.taskChangeDetails(action.changeId,id) : window.scodex.undoTaskChanges(action.changeId,id);
+      return action.type==='change-details' ? window.scodex.taskChangeDetails(action.changeId,id,{summaryOnly:action.summaryOnly===true}) : window.scodex.undoTaskChanges(action.changeId,id);
     }
     if (action.type==='draft') { updateChat(()=>({draft:action.text}),id); return true; }
     if (action.type==='stop') {

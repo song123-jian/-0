@@ -193,7 +193,7 @@ contextBridge.exposeInMainWorld('scodex', {
   saveHistory: (library) => ipcRenderer.invoke('chat:save-history', library),
   updateDirtyPaths: (paths) => ipcRenderer.invoke('workspace:dirty-paths', paths),
   approveAgentCommand: (id, allowed) => ipcRenderer.invoke('agent:approve', id, allowed),
-  taskChangeDetails: (id, conversationId) => ipcRenderer.invoke('task-changes:details', id, conversationId),
+  taskChangeDetails: (id, conversationId, options) => ipcRenderer.invoke('task-changes:details', id, conversationId, { summaryOnly: options?.summaryOnly === true }),
   undoTaskChanges: (id, conversationId) => ipcRenderer.invoke('task-changes:undo', id, conversationId),
   sendMessage: (payload) => ipcRenderer.invoke('chat:send', payload),
   cancelMessage: (requestId) => ipcRenderer.invoke('chat:cancel', requestId),

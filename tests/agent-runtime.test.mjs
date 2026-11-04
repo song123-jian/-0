@@ -16,6 +16,46 @@ const toolReply = (name = 'read_file', args = '{"path":"文件.txt"}') => stream
   delta({ tool_calls: [{ index: 0, id: 'call_中文'.replace('中文', 'file'), type: 'function', function: { name, arguments: args } }] }), delta({}, 'tool_calls'),
 ]);
 
+test('completed tool calls execute without waiting for a gateway to close its stream', async () => {
+  let cancelled = false, requests = 0; const events = [];
+  const response = new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(Buffer.from('data: ' + JSON.stringify(delta({ tool_calls: [{ index: 0, id: 'early', function: { name: 'read_file', arguments: '{}' } }] })) + '\n\ndata: ' + JSON.stringify(delta({}, 'tool_calls')) + '\n\n'));
+  }, cancel() { cancelled = true; } }), { headers: { 'content-type': 'text/event-stream' } });
+  const started = performance.now();
+  const result = await runModelTask({ connection, messages: [], tools, emit: event => events.push(event), executeTool: async () => ({ ok: true }),
+    fetchImpl: async () => requests++ ? stream([delta({ content: '完成' }), delta({}, 'stop')]) : response });
+  assert.equal(result.operations, 1); assert.equal(cancelled, true); assert.ok(performance.now() - started < 1000);
+  const metric = events.find(event => event.type === 'request-metrics');
+  assert.notEqual(metric.firstTokenMs, null); assert.notEqual(metric.firstToolCallMs, null); assert.ok(metric.responseHeadersMs >= 0);
+  assert.ok(events.some(event => event.type === 'phase' && event.phase === 'tool-input'));
+});
+
+test('reasoning activity is visible as a phase without exposing private reasoning text', async () => {
+  const events = [];
+  await runModelTask({ connection, messages: [], emit: event => events.push(event), fetchImpl: async () => stream([
+    delta({ reasoning_content: 'private-chain-do-not-display' }), delta({ content: '答复' }), delta({}, 'stop')]) });
+  assert.ok(events.some(event => event.type === 'phase' && event.phase === 'reasoning'));
+  assert.ok(!JSON.stringify(events).includes('private-chain-do-not-display'));
+  assert.notEqual(events.find(event => event.type === 'request-metrics').firstTokenMs, null);
+});
+
+test('incomplete optional usage trailers cannot block or invalidate a completed response', async () => {
+  let cancelled = false;
+  const response = new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(Buffer.from('data: ' + JSON.stringify(delta({ content: 'done' }, 'stop')) + '\n\ndata: {"usage":'));
+  }, cancel() { cancelled = true; } }), { headers: { 'content-type': 'text/event-stream' } });
+  const started = performance.now(); const message = await readCompletion(response, { usageGraceMs: 150 });
+  assert.equal(message.content, 'done'); assert.equal(cancelled, true); assert.ok(performance.now() - started < 800);
+});
+
+test('streaming emits its first text immediately and batches subsequent fragments without losing content', async () => {
+  const events = []; const fragments = Array.from({ length: 300 }, () => delta({ content: '中' }));
+  const result = await runModelTask({ connection, messages: [], emit: event => events.push(event), fetchImpl: async () => stream([...fragments, delta({}, 'stop')], true, 10000) });
+  const deltas = events.filter(event => event.type === 'delta');
+  assert.equal(deltas[0].text, '中'); assert.equal(deltas.map(event => event.text).join(''), result.text);
+  assert.equal(result.text.length, 300); assert.ok(deltas.length < 10);
+});
+
 test('SSE parser preserves UTF8 split across bytes and assembles fragmented tools', async () => {
   const fragments = [];
   const value = await readCompletion(stream([

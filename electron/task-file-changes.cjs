@@ -2,10 +2,10 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
+const { createCommandSnapshot } = require('./command-snapshot.cjs');
 const context = new AsyncLocalStorage();
 const hash = value => value === null ? null : crypto.createHash('sha256').update(value).digest('hex');
 const MAX_FILE = 2 * 1024 * 1024, MAX_TOTAL = 16 * 1024 * 1024;
-const excluded = new Set(['.git', 'node_modules', 'dist', 'release', 'target', '.next', '.cache', '__pycache__']);
 const inside = (root, target) => { const rel = path.relative(root, target); return rel === '' || !path.isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + path.sep); };
 async function read(target) {
   let handle;
@@ -43,15 +43,16 @@ async function observeCommit(target, commit) {
   let before; try { before = await read(target); } catch { tracker.warn('部分大文件未记录，不能撤销未记录的文件。'); return commit(); }
   try { return await commit(); } finally { try { tracker.record(target, before, await read(target)); } catch { tracker.warn('部分文件无法记录，不能撤销未记录的文件。'); } }
 }
-function createTaskFileChanges(directory, { encryption, sensitive = () => false, protectedPaths = [] } = {}) {
+function createTaskFileChanges(directory, { encryption, sensitive = () => false, protectedPaths = [], scanLimits = {} } = {}) {
   const busy = new Set();
   function file(id) { if (!/^[0-9a-f-]{36}$/i.test(id || '')) throw Error('无效的任务修改记录'); return path.join(directory, id + '.bin'); }
   async function save(record) { if (!encryption?.isEncryptionAvailable()) throw Error('系统加密不可用，未保存撤销记录'); await fs.mkdir(directory, { recursive: true }); const destination = file(record.id), temporary = destination + '.tmp'; await fs.writeFile(temporary, encryption.encryptString(JSON.stringify(record))); await fs.rename(temporary, destination); }
   async function load(id) { const target = file(id); if ((await fs.stat(target)).size > 48 * 1024 * 1024) throw Error('文件修改记录超过读取限制'); return JSON.parse(encryption.decryptString(await fs.readFile(target))); }
-  function summary(record) { return { id: record.id, undone: !!record.undone, warning: record.warning || '', files: record.files.map(item => ({ path: item.relative, ...difference(item.before === null ? null : Buffer.from(item.before, 'base64'), item.after === null ? null : Buffer.from(item.after, 'base64')), kind: item.before === null ? 'added' : item.after === null ? 'deleted' : 'modified' })).map(({ diff, ...item }) => item) }; }
+  function summary(record) { return { id: record.id, undone: !!record.undone, warning: record.warning || '', ...(record.coverage ? { coverage: record.coverage } : {}), files: record.files.map(item => ({ path: item.relative, ...(item.counts || difference(item.before === null ? null : Buffer.from(item.before, 'base64'), item.after === null ? null : Buffer.from(item.after, 'base64'))), kind: item.before === null ? 'added' : item.after === null ? 'deleted' : 'modified' })).map(({ diff, ...item }) => item) }; }
   function begin(id, workspaceRoot, conversationId) {
-    const changes = new Map(); let total = 0, warning = '';
-    const warn = value => { warning = value; };
+    const changes = new Map(), warnings = new Set(); let total = 0, warning = '';
+    const warn = value => { warnings.add(value); warning = [...warnings].join(' '); };
+    const commandSnapshots = createCommandSnapshot({ root: workspaceRoot, directory: path.join(directory, 'scan-' + id), encryption, read, sensitive, protectedPaths, warn, limits: scanLimits });
     const record = (target, before, after) => {
       if (hash(before) === hash(after)) return; const prior = changes.get(target);
       if (prior && hash(prior.after) !== hash(before)) { warn('文件在任务期间被其他操作修改；撤销已停用，请查看差异。'); prior.conflict = true; }
@@ -61,16 +62,19 @@ function createTaskFileChanges(directory, { encryption, sensitive = () => false,
       total = total - previousSize + size; changes.set(target, { before: prior ? prior.before : before, after, conflict: prior?.conflict || false });
     };
     const tracker = { record, warn, async run(action) { return context.run(tracker, action); },
-      async command(action) {
-        async function snapshot() { const result = new Map(), queue = [workspaceRoot]; let count = 0, bytes = 0; while (queue.length) { const dir = queue.pop(); let entries; try { if ((await fs.lstat(dir)).isSymbolicLink()) { warn('命令扫描发现路径联接，未读取其内容。'); continue; } entries = await fs.readdir(dir, { withFileTypes: true }); } catch { warn('命令扫描无法读取部分目录，记录不完整。'); continue; } for (const entry of entries) { const target = path.join(dir, entry.name); if (entry.isSymbolicLink() || excluded.has(entry.name.toLowerCase()) || sensitive(path.relative(workspaceRoot, target)) || protectedPaths.some(root => inside(root, target))) continue; if (++count > 6000) { warn('命令文件扫描达到上限；仅展示已覆盖的工作区文件。'); return result; } if (entry.isDirectory()) queue.push(target); else if (entry.isFile()) { try { const value = await read(target); if (bytes + (value?.length || 0) > MAX_TOTAL) { warn('命令文件扫描达到容量限制；仅展示已覆盖的工作区文件。'); continue; } bytes += value?.length || 0; result.set(target, value); } catch { warn('命令中的部分大文件无法记录；项目外、依赖和构建目录不纳入命令差异。'); } } } } return result; }
-        const before = await snapshot(); try { return await action(); } finally { const after = await snapshot(); for (const target of new Set([...before.keys(), ...after.keys()])) {
-          if (!before.has(target)) { if (warning) continue; record(target, null, after.get(target)); }
-          else { try { record(target, before.get(target), await read(target)); } catch { warn('命令修改中的部分文件无法记录；未覆盖的文件不能撤销。'); } }
-        } }
+      async command(action, options = {}) {
+        const before = await commandSnapshots.snapshot(options);
+        if (options.signal?.aborted) throw Error('任务已停止。');
+        commandSnapshots.coverage.commands++;
+        try { return await action(); } finally {
+          options.onProgress?.({ detail: '正在核对命令后的文件修改…' });
+          const after = await commandSnapshots.snapshot();
+          await commandSnapshots.compare(before, after, record);
+        }
       },
-      async finish() { const files = [...changes].filter(([, item]) => hash(item.before) !== hash(item.after)).map(([target, item]) => ({ target, relative: path.relative(workspaceRoot, target).replaceAll('\\', '/'), before: item.before === null ? null : item.before.toString('base64'), after: item.after === null ? null : item.after.toString('base64'), conflict: item.conflict })); if (!files.length && !warning) return null; const value = { id, workspaceRoot, conversationId, warning, files }; try { await save(value); } catch { return { ...summary(value), unavailable: true, warning: '无法保存加密记录；撤销与完整差异不可用。' }; } return summary(value); } }; return tracker;
+      async finish() { try { const files = [...changes].filter(([, item]) => hash(item.before) !== hash(item.after)).map(([target, item]) => ({ target, relative: path.relative(workspaceRoot, target).replaceAll('\\', '/'), before: item.before === null ? null : item.before.toString('base64'), after: item.after === null ? null : item.after.toString('base64'), conflict: item.conflict, counts: (({ added, removed }) => ({ added, removed }))(difference(item.before, item.after)) })); if (!files.length && !warning) return null; const value = { id, workspaceRoot, conversationId, warning, files, coverage: commandSnapshots.coverage }; try { await save(value); } catch { return { ...summary(value), unavailable: true, warning: '无法保存加密记录；撤销与完整差异不可用。' }; } return summary(value); } finally { await commandSnapshots.close(); } } }; return tracker;
   }
-  async function details(id, conversationId) { const record = await load(id); if (record.conversationId !== conversationId) throw Error('记录不属于此对话'); return { ...summary(record), files: record.files.map(item => ({ path: item.relative, ...difference(item.before === null ? null : Buffer.from(item.before, 'base64'), item.after === null ? null : Buffer.from(item.after, 'base64')) })) }; }
+  async function details(id, conversationId, { summaryOnly = false } = {}) { const record = await load(id); if (record.conversationId !== conversationId) throw Error('记录不属于此对话'); if (summaryOnly) return summary(record); return { id: record.id, undone: !!record.undone, warning: record.warning || '', coverage: record.coverage, files: record.files.map(item => ({ path: item.relative, ...difference(item.before === null ? null : Buffer.from(item.before, 'base64'), item.after === null ? null : Buffer.from(item.after, 'base64')) })) }; }
   async function undo(id, { conversationId, validate, withCommit }) {
     if (busy.has(id)) throw Error('撤销正在进行'); busy.add(id);
     try { const record = await load(id); if (record.conversationId !== conversationId || record.undone) throw Error('记录不可撤销'); if (record.warning || record.files.some(item => item.conflict)) throw Error('此任务的修改记录不完整或存在并发修改，请手动检查差异。');

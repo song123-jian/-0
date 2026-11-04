@@ -22,6 +22,7 @@ function validateWindowAction(record, input) {
     ...(type === 'revise' ? { kind: input.kind, messageId: input.messageId, executionEnabled: input.executionEnabled === true } : {}),
     ...(type === 'fork' ? { messageId: input.messageId } : {}),
     ...(['change-details','change-undo'].includes(type) ? { changeId: input.changeId } : {}),
+    ...(type === 'change-details' && input.summaryOnly === true ? { summaryOnly: true } : {}),
     ...(type === 'revision' ? { versionId: input.versionId } : {}),
     ...(type === 'approval' ? { approvalId: input.approvalId, allowed: input.allowed === true } : {}),
     ...(type === 'file' ? { path: input.path } : {}), ...(type === 'open-chat' ? { chatId: input.chatId } : {}) };

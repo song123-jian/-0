@@ -128,3 +128,10 @@ test('full access reads and edits an outside file and runs a command in its dire
   await fs.symlink(outside, path.join(outside, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(tools.execute('read_file', { path: path.join(outside, 'link/中文.txt') }), /符号链接|联接/);
 });
+test('command capture does not run for rejected permissions or invalid input', async t => {
+  let captures = 0;
+  const { tools } = await fixture(t, { commandCapture: async action => { captures++; return action(); }, authorize: async () => { throw Error('denied'); } });
+  await assert.rejects(tools.execute('run_command', { command: 'echo hello' }), /denied/);
+  await assert.rejects(tools.execute('run_command', { command: 'echo hello', cwd: 123 }), /路径/);
+  assert.equal(captures, 0);
+});
