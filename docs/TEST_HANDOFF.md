@@ -1,5 +1,35 @@
 # Test Handoff
 
+## Active Increment — 1.3.40, 2026-11-05
+
+- Goal: compact operation records like the supplied reference; fold multiple records, show one directly; clearly name Skill loading/use/reuse; remove the fixed three-Skill cap and reuse duplicate responsibilities.
+- Baseline/version: installed/published 1.3.39, source baf15c5de4215089df04d4ef4337ed6db43c7f47. Target 1.3.40 uses the established compatible SemVer patch mapping; all rebuilds kept this target.
+- Status: implementation, scoped review, builds, normal installation, installed actual-UI acceptance and unchanged real-profile acceptance passed. Source/Latest Release publication is the remaining delivery step.
+- Constraints: preserve user data, credentials, configured main/explorer models, reasoning/retry/advisor settings and the unrelated electron/third-party-licenses.json modification. No new dependency or Codex subagent. Existing permissions, task budgets and live Skill package path/hash/availability checks remain.
+- Checkpoint: release/delivery-1.3.38/checkpoint.json; evidence root release/delivery-1.3.40. Prior unchanged results are reused, not rerun.
+- Skills reused: requirement-understanding 95, code-write-review 94. User's no-count/avoid-duplicates requirement supersedes the product's previous fixed-three policy.
+
+- Target/entry/environment: Scodex工作台.exe 1.3.40, Windows x64/Electron 45/Node 24. Candidate release/win-unpacked/Scodex工作台.exe; installed C:/Program Files/scodex-workbench/Scodex工作台.exe. Owned isolated test profiles exercise real renderer/IPC/Windows encryption, commands and disk; only model responses use loopback fixtures. Real-profile acceptance uses existing data without a model request.
+
+| Scope, steps and expected result | Actual result | Evidence under release/delivery-1.3.40 |
+| --- | --- | --- |
+| Catalog: >3 distinct Skills, body/name alias and initial manual/default dedup, same page reuse, changed/disabled package refusal and unknown-ID notice | Current 8/8 passed; 21 unaffected context/presentation cases remain valid, total 29 current logic cases | catalog-final-tests.log, focused-tests.log |
+| Build renderer/unpacked app/NSIS and await finite completion | Final commands exited 0 | renderer-build.log, package-dir-r2.log, installer-build-r2.log |
+| Candidate actual UI: lone compact command and actual output; multi-operation running fold/five Skill names; completion summary/keyboard/two reuse notices/intentional failure; approval outside folded group and rejection without execution; history reload; desktop and 390px layout | 6/6 passed, normal exit 0; operation font 12px, row 26px | candidate-ui-r2/skill-activity-ui.json |
+| Direct Skill/AGENTS regression: scope/instructions/discovery/load/live rules and UI behavior; reuse unchanged long-stream evidence | 7/7 passed, normal exit 0 | context-regression/instruction-skill-ui.json |
+| Model-team direct regression: settings/three advisor gates/exploration/main effect ownership, ordinary zero-consultation, failure/cancel/history/layout | 6/6 passed, normal exit 0 | team-regression/model-team-ui.json |
+| Incremental review: 12 current code/test/version files against baf15c5 baseline; correctness/boundaries/regression/error handling, syntax/UTF-8/no BOM and direct references; reviewed Electron bytes match ASAR | Passed, no open finding, user license baseline unchanged | incremental-review.json |
+| Normal old-app exit and installer: verify prior 1.3.39, backup application files, accepted installer/hash, candidate files/HKLM/fresh-process version and profile bytes | Passed, installer exit 0, 26/26 candidate file hashes match, five profile files unchanged | normal-exit.json, final-installation.json, rollback-manifest.json |
+| Installed actual UI: repeat all six activity scenarios with the installed entry and a new fixture | 6/6 passed, normal exit 0 | installed-ui/skill-activity-ui.json, installed-ui.log |
+| Real user profile: launch/version/history and existing connection/settings, no request, normal quit, reread bytes/encrypted memory | Passed: 1 conversation/4 messages, four critical files unchanged, credentials/model/reasoning/retry retained, valid encrypted memory, exit 0 | installed-profile-final.json, real-profile.log |
+
+- Commands: node --test tests/skill-catalog.test.mjs for affected catalog scope; SCODEX_ACTIVITY_EXE=<actual entry>, SCODEX_ACTIVITY_OUTPUT=<evidence path>, node tests/skill-activity-ui.cjs; node release/delivery-1.3.40/verify-real-profile.cjs. Candidate and installed execution identities are included in their reports. Model-team and instruction regression reports bind their corresponding candidates; unchanged results are not invalidated by installation.
+- Artifact identity: installer 181112866 bytes / SHA-256 892aae36d05a5e3a62c9eec4c3983e4a73c33f30c066c6e4bd2f61c9eb036fc5; accepted and installed EXE 4a568be3e28e8ca08e8d0a7c2514525e21a6838c7bdecf9cce3d309402bc222a; installed ASAR 11af8ded54820d73be45f73816437e1fac4c878d4c206151ec97dd169a331259. 29 verified prior files in rollback-1.3.39; quit normally and restore application files only, preserve APPDATA.
+- Failures retained: focused-tests.log initially 27/28 (disabled canonical alias), fixed and final catalog 8/8; candidate-ui/skill-activity-ui.json failed from stale persisted snapshot, corrected settled-state harness/new fixture yielded r2 6/6; installer-build.log failed on locked debug.log, sequential installer-build-r2.log passed. No failed outcome is presented as passing.
+- Visual/cleanup: installed-ui/compact-skill-activity.png inspected at 1440x1000; current device/page/viewport/data has no visible error; 390px controls/no overflow passed. Missing Skill is intentional. Five owned fixtures moved into release/手动删除 after automatic approval rejected deletion as blocked by policy; originals absent, exact mapping and optional manual removal in cleanup.json. Reports/screenshots/installer/rollback remain retained; no acceptance impact.
+- Existing valid evidence: unchanged 1.3.39 model-role implementation, 1.3.38 retry/folding and 1.3.37 rule/inline-edit paths remain valid; only directly affected regressions were repeated. No public provider latency/quality/cost claim. Semantic overlap beyond exact body/name metadata is model-guided, not universally detected in code.
+- Remaining: authorized exact source/Latest Release publication and final handoff synchronization. No finite build/test or verification app remains running; no functional acceptance remains. Details: [Project Handoff](HANDOFF.md).
+
 ## Active Increment — 1.3.39, 2026-11-05
 
 - Target: Scodex工作台.exe 1.3.39, Windows x64/Electron 45. Candidate release/win-unpacked/Scodex工作台.exe; final C:/Program Files/scodex-workbench/Scodex工作台.exe installed and verified 1.3.39. Baseline source 1556890ddb7087a6fc31a15a2c0a0a4bd1998586.

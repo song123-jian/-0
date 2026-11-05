@@ -195,3 +195,8 @@ export function operationCaption(operation) {
   const suffix = { failed: '失败', cancelled: '已停止', interrupted: '已中断' }[operation.status] || '';
   return prefix + action + (suffix ? ' · ' + suffix : '');
 }
+
+export function usedSkillNames(operations = []) {
+  return [...new Set(operations.filter(item => ['skill_use', 'skill_open'].includes(item.name) && item.status === 'succeeded')
+    .map(item => item.detail?.trim()).filter(Boolean))];
+}

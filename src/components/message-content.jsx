@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronRight, Clipboard, FileCode2, LoaderCircle } from 'lucide-react';
-import { formatDuration, messageElapsedMs, messageProgressState, parseInline, parseMessageBlocks } from '../lib/message-presentation.js';
+import { formatDuration, messageElapsedMs, messageProgressState, parseInline, parseMessageBlocks, usedSkillNames } from '../lib/message-presentation.js';
 import { AgentActivity } from './agent-activity.jsx';
 
 function Inline({ text, tokens = parseInline(text) }) {
@@ -63,9 +63,11 @@ export function MessageProgress({ message, collapsed = false }) {
   const phases = { preparing: '正在准备请求', model: '正在准备模型上下文', waiting: '等待模型响应', receiving: '已连接，等待模型内容', reasoning: '模型正在推理', 'tool-input': '正在接收工具参数', streaming: '正在接收答复', tool: '正在执行', retry: '服务重试等待中' };
   const label = message.pending ? message.approval ? '等待审批' : phases[message.phase] || '正在准备请求' : message.error ? '处理失败' : message.cancelled ? '已停止' : '已处理';
   const inferred = !message.pending && !Number.isFinite(message.elapsedMs) && !Number.isFinite(message.stoppedAfter) && elapsed !== null;
+  const skills = usedSkillNames(message.operations);
   return <div className="message-progress" data-state={message.pending ? 'running' : message.error ? 'failed' : message.cancelled ? 'cancelled' : 'complete'} data-collapsed={collapsed ? 'true' : 'false'}>
     <span className="message-progress-label" role="status">{message.pending && <LoaderCircle size={15} className="spin" />}{label}</span>
     {elapsed !== null && <time title={inferred ? '根据历史操作记录起止时间计算' : '本条回复的实际处理时长'}>{formatDuration(elapsed)}{inferred && <span className="message-time-note">（操作耗时）</span>}</time>}
+    {skills.length > 0 && <span className="message-skill-notice" role="status" title={'使用 Skill：' + skills.join('、')}>Skill：{skills.join('、')}</span>}
     <span className="message-progress-line" />
   </div>;
 }
@@ -74,6 +76,10 @@ export function MessageExecution({ message, activity, ...actions }) {
   const complete = messageProgressState(message) === 'complete';
   const [expanded, setExpanded] = useState(!complete);
   useEffect(() => { setExpanded(!complete); }, [message.id, complete, message.approval?.id]);
+  if (message.operations?.length === 1 && !activity && !message.approval) return <div className="message-execution is-single">
+    <MessageProgress message={message} />
+    <AgentActivity operations={message.operations} collapsed={complete} embedded {...actions} />
+  </div>;
   return <details className="message-execution agent-activity-shell" open={expanded} onToggle={(event) => {
     if (event.target === event.currentTarget) setExpanded(event.currentTarget.open);
   }}>

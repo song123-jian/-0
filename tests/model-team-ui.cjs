@@ -158,7 +158,7 @@ async function main() {
     assert.equal(await page.evaluate('document.querySelector(' + json(css + ' .message-execution') + ')?.open'), false);
     assert.ok(await page.evaluate('Boolean(document.querySelector(' + json(css + ' .task-file-changes') + '))'));
     await click(css + ' .message-execution-summary');
-    await click(css + ' .agent-earlier-operations > summary');
+    await click(css + ' .agent-operation-group > summary');
     assert.ok(await page.evaluate('document.querySelector(' + json(css) + ').innerText.includes("等待主模型核验")'));
     return { stages, writes: 1, parallelExplorers: 2, prematureCompletionPrevented: true, answerAndRealFileCardVisible: true };
   });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDuration, messageElapsedMs, operationCaption, parseInline, parseMessageBlocks, safeMessageUrl, settledTiming } from '../src/lib/message-presentation.js';
+import { formatDuration, messageElapsedMs, operationCaption, parseInline, parseMessageBlocks, safeMessageUrl, settledTiming, usedSkillNames } from '../src/lib/message-presentation.js';
 
 const fence = String.fromCharCode(96).repeat(3);
 test('timing follows the active request then settles to a fixed value, including subsecond results', () => {
@@ -82,4 +82,11 @@ test('operation summaries distinguish failed, cancelled, interrupted and running
   assert.equal(operationCaption({ name: 'run_command', status: 'failed' }), '运行 · 失败');
   assert.match(operationCaption({ name: 'service_start', status: 'cancelled' }), /已停止/);
   assert.match(operationCaption({ name: 'read_file', status: 'interrupted' }), /已中断/);
+});
+
+test('Skill notices list only actual successful loads, once per name and including preloaded guidance', () => {
+ const operations=[{name:'skill_use',status:'succeeded',detail:'requirement-understanding'},{name:'skill_open',status:'running',detail:'pending'},{name:'skill_open',status:'succeeded',detail:'pdf'},{name:'skill_open',status:'succeeded',detail:'pdf'},{name:'skill_open',status:'failed',detail:'unavailable'},{name:'skill_search',status:'succeeded',detail:'query'}];
+ assert.deepEqual(usedSkillNames(operations),['requirement-understanding','pdf']);
+ assert.equal(operationCaption({name:'skill_open',title:'使用 Skill',status:'succeeded'}),'已使用 Skill');
+ assert.equal(operationCaption({name:'skill_open',title:'加载 Skill',status:'running'}),'正在加载 Skill');
 });

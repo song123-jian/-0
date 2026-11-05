@@ -648,6 +648,10 @@ async function callModel(webContents, requestId, payload, controller = new Abort
       getSkills: () => listLocalSkills(requestWorkspace), getPreferences: () => preferences, guard, signal: controller.signal,
       authorize: (operation, input) => checkPermission(operation, input, { source: '技能资料', permissionSettings: requestAgentSettings, workspaceRoot: requestWorkspace }),
     }) : null;
+    for (const activity of skillTools?.initialActivities || []) {
+      const now = new Date().toISOString();
+      sendChatEvent(webContents, { requestId, type: 'operation', operation: { id: crypto.randomUUID(), ...activity, status: 'succeeded', startedAt: now, endedAt: now } });
+    }
     const toolbox = execution ? createAgentTools({ workspaceRoot: requestWorkspace, readOnly: payload.mode === 'plan', fullAccess: requestPermissionSettings.sandboxMode === 'danger-full-access', guard,
       instructionsPreloaded: instructionContext?.entries || [],
       commandCapture: (action, context) => {
