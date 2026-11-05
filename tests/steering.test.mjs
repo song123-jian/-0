@@ -41,3 +41,20 @@ test('runtime injects steering at the next model request boundary and acknowledg
   assert.match(JSON.stringify(requests[1].messages), /请在下一轮先核对已有结果/);
   assert.deepEqual(events.filter(event => event.type === 'steering-accepted').map(event => event.steeringId), ['s1']);
 });
+
+test('several running supplements are injected in order once without replaying a tool', async () => {
+  const queue = createSteeringQueue(), requests = [], events = [];
+  let effects = 0;
+  await runModelTask({ connection: { endpoint: 'http://fixture', model: 'fixture' }, messages: [{ role: 'user', content: '原始任务' }],
+    takeSteering: () => queue.drain(), emit: event => events.push(event),
+    tools: [{ type: 'function', function: { name: 'write_file', parameters: { type: 'object' } } }],
+    executeTool: async () => { effects++; queue.enqueue({ id: 'first', text: '补充第一条' }); queue.enqueue({ id: 'second', text: '补充第二条' }); return { ok: true }; },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body); requests.push(body);
+      return stream(requests.length === 1 ? [{ tool_calls: [{ index: 0, id: 'write_once', type: 'function', function: { name: 'write_file', arguments: '{}' } }] }] : [{ content: '已整合补充' }]);
+    },
+  });
+  assert.equal(effects, 1); assert.equal(requests.length, 2);
+  assert.deepEqual(requests[1].messages.filter(m => m.role === 'user').map(m => m.content.split('\n').at(-1)), ['原始任务', '补充第一条', '补充第二条']);
+  assert.deepEqual(events.filter(e => e.type === 'steering-accepted').map(e => e.steeringId), ['first', 'second']);
+});

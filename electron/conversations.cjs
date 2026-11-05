@@ -39,6 +39,10 @@ function normalizeMessage(message) {
   try { attachments = normalizeAttachmentRecords(message.attachments); } catch { /* Keep the message if an old attachment is invalid. */ }
   return {
     id: validId(message.id), role: message.role, content: message.content.slice(0, 64_000),
+    ...(message.role === 'user' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(message.steering?.id || '') && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(message.steering?.requestId || '') ? { steering: {
+      id: message.steering.id, requestId: message.steering.requestId,
+      status: ['accepted', 'expired', 'failed'].includes(message.steering.status) ? message.steering.status : 'expired',
+    } } : {}),
     ...(message.role === 'assistant' && Number.isInteger(message.finalContentOffset) && message.finalContentOffset > 0 && message.finalContentOffset < Math.min(message.content.length, 64_000) ? { finalContentOffset: message.finalContentOffset } : {}),
     ...(message.executionEnabled === true ? { executionEnabled: true } : {}),
     ...(message.role === 'assistant' && Array.isArray(message.operations) && message.operations.length ? { operations: normalizeOperations(message.operations) } : {}),

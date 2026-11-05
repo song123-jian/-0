@@ -1,5 +1,26 @@
 # Test Handoff
 
+## Active Increment — 1.3.41, 2026-11-05
+
+- Target: installed Scodex工作台.exe 1.3.41, Windows x64/Electron 45, C:/Program Files/scodex-workbench/Scodex工作台.exe; candidate release/win-unpacked/Scodex工作台.exe. Existing Node 24. Evidence root release/delivery-1.3.41. Source/Latest Release publication pending.
+- Environment: isolated UI profiles exercise real Electron/React/IPC/Windows encryption/files with loopback model replies; separate harmless test uses actual configured external provider. Existing user model, encrypted credential, reasoning, retry and advisor settings unchanged. No finite test remains running; unchanged earlier results reused only for unaffected paths.
+
+| Scope, input and operation | Expected and actual result | Status and evidence |
+| --- | --- | --- |
+| Advisor and steering focused logic | Default advisor sampling, explicit effort adaptation, no unrelated replay, redacted failure, durable supplement order/status | Passed 28/28 affected-r4.log; 44/44 focused-final.log; 50/50 direct-regression.log |
+| Actual provider | Harmless tool-free review: first HTTP 400 advertises max instead of ultra, second HTTP 200 gives valid revise JSON inside 30 seconds, saved profile bytes unchanged | Passed advisor-provider-acceptance.json (16,221 ms); prior invalid-format failure remains failed |
+| Candidate UI | Settings, three gates, visible main/detached supplements once, zero advisor for ordinary reply, 503 unverified/main continues, stop/cancel, history and 390px controls | Passed 8/8 candidate-ui-final-r4/model-team-ui.json; exit 0 |
+| Installed UI | Same affected flows at installed EXE, with detached acknowledgement and preserved supplement text | Passed 8/8 installed-ui-final/model-team-ui.json; exit 0 |
+| Installed visual | 1440x1000 advisor settings and 390px control bounds/no horizontal overflow | Passed installed-ui-final/model-team-settings.png; no visible error in that page/viewport/data state |
+| Build/install | Vite, unpacked, NSIS, installer exit 0; version 1.3.41 and 27/27 candidate files match installed files | Passed renderer-build-r4.log, package-dir-r4.log, installer-build.log, final-installation.json |
+| Existing real profile | Launch, read compressed history and saved connection, UI settings, normal exit, reread four file hashes and encrypted memory; no model request | Passed installed-profile-final.json: 2 conversations/2 messages, exit 0 |
+| Incremental review | 15 changed code/test/version files, UTF-8/no BOM, diff whitespace, installed ASAR identity and license preservation | Passed incremental-review.json, no open finding |
+
+- Failures/recovery: provider temperature and ultra rejections, and one invalid review JSON, are retained as failed evidence. Candidate r3 detached send was repaired and r4/installed scope passed. Real-profile helper first assumed plain JSON, then disabled advisor; both failed reports retained, final helper compared the actual compressed library and enabled saved setting. Test-program processes exited normally.
+- Identity/rollback: 1.3.40 -> 1.3.41; installer 181113683 bytes/SHA-256 9b32684b8b425295651d67ca72509740a0dd0689856dd35597e7d0aa7890ebad; installed EXE a5f72daac65f50a85067d40d20a31bc76a255ac4325b5117a6ca2e65e2f169fd and ASAR f9692b5408f81ebf236cfd4b86e40fb6b72a8f735e2e23e9b211e92758108ebf. Verified rollback-1.3.40; quit normally and restore only application files, preserving APPDATA.
+- Limits: one observed real provider request cannot guarantee ongoing service availability/format; UI role replies were loopback substitutes. User license was not changed by this task. cleanup.json records ten task-owned fixture directories moved to release/手动删除 after deletion was rejected by policy; manual removal pending without acceptance impact.
+- Pending: source main and v1.3.41 Latest Release publication/readback, then both handoff final sync. No additional program acceptance pending. [Project Handoff](HANDOFF.md).
+
 ## Active Increment — 1.3.40, 2026-11-05
 
 - Goal: compact operation records like the supplied reference; fold multiple records, show one directly; clearly name Skill loading/use/reuse; remove the fixed three-Skill cap and reuse duplicate responsibilities.

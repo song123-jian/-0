@@ -180,6 +180,7 @@ test('advisor uses its independently encrypted connection with no retries or too
   assert.equal(advisor.endpoint, 'https://advisor.example/v1/chat/completions'); assert.equal(advisor.apiKey, 'advisor-secret');
   assert.equal(advisor.model, 'advisor-model'); assert.equal(advisor.reasoning_effort, 'high');
   assert.equal(advisor.retryLimit, 0); assert.equal(advisor.maxOutputTokens, 1200); assert.equal(advisor.toolProtocol, 'native');
+  assert.equal(advisor.temperature, null, 'Advisor must use provider-default sampling without guessing model capabilities');
   assert.equal((await reopened.request('main')).apiKey, 'main-secret'); assert.equal((await reopened.request('subagent')).apiKey, 'child-secret');
 });
 

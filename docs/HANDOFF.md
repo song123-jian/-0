@@ -1,5 +1,27 @@
 # Project Handoff
 
+## Active Increment — 1.3.41, 2026-11-05
+
+- Goal: repair advisor consultation service errors and show/persist text submitted while a model task runs. Previous formal release 1.3.40; this delivery is 1.3.41. Source baseline 783a9b95f73e04e5dcd84bacb7bc046380c1e14e.
+- Status: implementation, focused verification, candidate and installed UI 8/8 each, actual configured-provider consultation, installation, real-profile startup/history/normal exit and 15-file incremental review passed. Source and Latest Release publication remain pending; do not mark remote delivery complete.
+- Skills reused: requirement-understanding 95, systematic-debugging 95 and code-write-review 94 for distinct requirement, diagnosis and review duties. No Codex subagent delegated.
+
+| Requirement | Result and evidence under release/delivery-1.3.41 |
+| --- | --- |
+| Advisor compatibility | Omit unsupported non-default temperature only for advisor. On explicit HTTP 400 listing lower supported efforts, adapt one tool-free request from saved ultra to advertised max inside the same 30-second gate. Saved model, effort and encrypted key stay unchanged; unrelated failures are not replayed. advisor-provider-acceptance.json and installed-ui-final/model-team-ui.json. |
+| Honest error | Redacted, bounded service details identify the cause; failed consultation remains unverified while the main model continues. focused-final.log and installed UI. |
+| Running supplements | One linked user bubble appears before the continuing answer in main and detached chat, with submitting/queued/accepted/unused/failed state and durable text. Accepted text enters the next model request once; unused text stays out of later history. Detached initial send returns a started acknowledgement. candidate-ui-final-r4 and installed-ui-final reports. |
+
+- Scope: electron/agent-runtime.cjs, conversations.cjs, main.cjs, model-connection.cjs, model-team.cjs; src/workbench.jsx, src/components/model-team-settings.jsx, new src/lib/conversation-steering.js; five targeted test files and package versions. No new dependency. The pre-existing electron/third-party-licenses.json difference was preserved and excluded from this commit.
+- Constraints: preserve user data/settings, no forced user-process exit, tool/content replay, generic HTTP retry, guessed model capability, automatic saved-effort change, unrelated license edit or secret output. Invalid provider JSON or later service failure still shows unverified status.
+- Verification: affected logic 28/28, focused 44/44, direct regression 50/50; actual candidate and installed Electron/React/IPC UI 8/8 each using loopback model replies. One harmless real configured-provider consultation returned HTTP 200 and valid revise JSON after explicit ultra-to-max adaptation. UTF-8/no BOM, source diff and installed ASAR checked in incremental-review.json.
+- Delivery: release/Scodex-Workbench-Setup-1.3.41-x64.exe, 181113683 bytes, SHA-256 9b32684b8b425295651d67ca72509740a0dd0689856dd35597e7d0aa7890ebad. Installed C:/Program Files/scodex-workbench/Scodex工作台.exe SHA-256 a5f72daac65f50a85067d40d20a31bc76a255ac4325b5117a6ca2e65e2f169fd; installed ASAR f9692b5408f81ebf236cfd4b86e40fb6b72a8f735e2e23e9b211e92758108ebf. Vite, electron-builder unpacked and NSIS finished, installer exit 0, 27/27 candidate files match final path, registry and fresh-process metadata identify 1.3.41. final-installation.json.
+- Real profile: installed program retained the existing compressed library (2 conversations/2 messages), saved enabled advisor setting and four unchanged critical profile files, then exited normally. Encrypted memory remained valid; no real-profile model request. installed-profile-final.json.
+- Rollback: release/delivery-1.3.41/rollback-1.3.40 contains verified old application files. Quit normally, restore application files or reinstall retained 1.3.40, preserving APPDATA. rollback-manifest.json.
+- Recovery: actual provider first rejected temperature, then ultra; one invalid-format response remains failed evidence. Candidate r3 exposed detached initial-send blocking; r4 and installed app passed after repair. Inherited real-profile helper assumed plain JSON and advisor disabled; both failed reports remain, final helper matches actual compressed and enabled profile. No app defect inferred from verifier failures.
+- Cleanup: policy rejected deletion; no repeat. Ten exact task-owned diagnostic/provider/UI fixtures moved into release/手动删除 after ownership/path checks; original paths absent. cleanup.json lists original/current paths for manual removal. Evidence, screenshot, installer and rollback retained.
+- Pending: publish reviewed source to remote main, publish/read back v1.3.41 as Latest, then synchronize both handoffs. No finite build/test is running. No evidence-supported extra refactor. [Test Handoff](TEST_HANDOFF.md).
+
 ## Active Increment — 1.3.40, 2026-11-05
 
 - Goal: compact operation records like the supplied reference; fold multiple records, show one directly; clearly name Skill loading/use/reuse; remove the fixed three-Skill cap and reuse duplicate responsibilities.

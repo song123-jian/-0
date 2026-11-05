@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { createModelTeam, advisorReply } = require('../electron/model-team.cjs');
+const { createModelTeam, advisorReply, advisorCompatibleEffort, runCompatibleAdvisorRequest } = require('../electron/model-team.cjs');
 const { runModelTask } = require('../electron/agent-runtime.cjs');
 const { createSubagentCoordinator } = require('../electron/subagent-coordinator.cjs');
 const { createSubagentTools } = require('../electron/subagent-tools.cjs');
@@ -20,6 +20,70 @@ test('advisor is idle for ordinary answers and successful read-only exploration'
   await team.afterTool('read_file', {}, { ok: true, hash: 'read-hash' }, 'succeeded');
   assert.equal(await team.beforeFinal('这是项目文档说明'), null);
   assert.equal(count, 0);
+});
+
+test('provider-default advisor sampling works without changing the selected model or effort', async () => {
+  let observed;
+  const result = await runModelTask({ connection: { ...connection, model: 'strict-model', temperature: null, reasoning_effort: 'ultra', maxOutputTokens: 1200 },
+    messages: [{ role: 'user', content: 'review harmless plan' }], tools: [], maxRounds: 1,
+    fetchImpl: async (_url, init) => {
+      observed = JSON.parse(init.body);
+      return Object.hasOwn(observed, 'temperature') ? Response.json({ error: { message: 'non-default temperature not supported' } }, { status: 400 }) : response({ content: review() });
+    },
+  });
+  assert.equal(advisorReply(result.text).verdict, 'revise');
+  assert.equal(Object.hasOwn(observed, 'temperature'), false);
+  assert.equal(observed.model, 'strict-model'); assert.equal(observed.reasoning_effort, 'ultra');
+  assert.equal(observed.max_tokens, 1200); assert.equal(observed.tools, undefined);
+});
+
+test('advisor adapts once to an explicitly advertised lower effort without changing saved choices', async () => {
+  const configured = { ...connection, model: 'strict-model', temperature: null, reasoning_effort: 'ultra', maxOutputTokens: 1200 };
+  const requests = [], adaptations = [];
+  const run = current => runModelTask({ connection: current, messages: [{ role: 'user', content: 'review plan' }], tools: [], maxRounds: 1,
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body); requests.push(body);
+      return body.reasoning_effort === 'ultra'
+        ? Response.json({ error: { message: 'strict-model does not support reasoning effort "ultra"; use low, medium, high, xhigh or max' } }, { status: 400 })
+        : response({ content: review() });
+    },
+  });
+  const result = await runCompatibleAdvisorRequest(configured, run, { onAdapt: (from, to) => adaptations.push([from, to]) });
+  assert.equal(advisorReply(result.text).verdict, 'revise');
+  assert.deepEqual(requests.map(item => item.reasoning_effort), ['ultra', 'max']);
+  assert.ok(requests.every(item => item.model === 'strict-model' && item.max_tokens === 1200 && !Object.hasOwn(item, 'temperature') && !Object.hasOwn(item, 'tools')));
+  assert.deepEqual(adaptations, [['ultra', 'max']]); assert.equal(configured.reasoning_effort, 'ultra');
+});
+
+test('advisor effort compatibility never retries unrelated, cancelled or repeated service errors', async () => {
+  const detail = 'strict-model does not support reasoning effort "ultra"; use low, medium, high, xhigh or max';
+  assert.equal(advisorCompatibleEffort({ httpStatus: 400, providerDetail: detail }, 'ultra'), 'max');
+  assert.equal(advisorCompatibleEffort({ httpStatus: 503, providerDetail: detail }, 'ultra'), '');
+  assert.equal(advisorCompatibleEffort({ httpStatus: 400, providerDetail: detail }, 'high'), '');
+  assert.equal(advisorCompatibleEffort({ httpStatus: 400, providerDetail: 'unknown request error' }, 'ultra'), '');
+  const controller = new AbortController(); controller.abort();
+  let calls = 0; const serviceError = Object.assign(Error('rejected'), { httpStatus: 400, providerDetail: detail });
+  await assert.rejects(runCompatibleAdvisorRequest({ reasoning_effort: 'ultra' }, async () => { calls++; throw serviceError; }, { signal: controller.signal }), error => error === serviceError);
+  assert.equal(calls, 1);
+  calls = 0;
+  await assert.rejects(runCompatibleAdvisorRequest({ reasoning_effort: 'ultra' }, async () => { calls++; throw serviceError; }), error => error === serviceError);
+  assert.equal(calls, 2);
+});
+
+for (const streaming of [false, true]) test('advisor service-error details are readable, redacted and never treated as a pass: ' + streaming, async () => {
+  let calls = 0; const events = [];
+  const team = createModelTeam({ enabled: true, secrets: ['main-unit-key'], emit: e => events.push(e),
+    consult: () => runModelTask({ connection, tools: [], messages: [], maxRounds: 1,
+      fetchImpl: async () => {
+        calls++; const payload = { error: { type: 'invalid_request_error', message: 'unsupported sampling apiKey=provider-hidden main-unit-key' } };
+        return streaming ? new Response('data: ' + JSON.stringify(payload) + '\n\n', { headers: { 'content-type': 'text/event-stream' } }) : Response.json(payload);
+      },
+    }),
+  });
+  const gate = await team.beforeTool('write_file', {});
+  assert.match(gate.advice, /unsupported sampling/); assert.doesNotMatch(gate.advice, /provider-hidden|main-unit-key/);
+  assert.match(gate.advice, /未完成/); assert.equal(calls, 1); assert.equal(team.snapshot().unavailable, true);
+  assert.equal(events.filter(e => e.operation.status === 'succeeded').length, 0);
 });
 
 test('one advisor request per gate, bounded redacted context, changed arguments share repeated-error gate', async () => {

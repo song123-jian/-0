@@ -37,6 +37,7 @@ import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboratio
 import { prepareRevision, selectRevision, revisionStamp, revisionSource } from './lib/conversation-revisions.js';
 import { MessageContent, MessageExecution } from './components/message-content.jsx';
 import { messageContentParts, settledTiming } from './lib/message-presentation.js';
+import { insertSteeringMessage, updateSteeringStatus, settleSteeringMessages, steeringLabel, includesModelHistory } from './lib/conversation-steering.js';
 import { applyConversationAction, conversationText, forkChatAtMessage, newChatRecord } from './lib/conversation-actions.js';
 import { WorkspaceContextMenu, WorkspaceActionDialog } from './components/workspace-context-menu.jsx';
 import { ActivityRail, BrowserPanel } from './components/shell-panels.jsx';
@@ -387,14 +388,18 @@ function App() {
     const request = activeRequestsRef.current.get(event.requestId);
     if (!request) return;
     const updateRequestMessages = (update) => setMessages(update, request.conversationId);
+    if (['complete', 'cancelled', 'error'].includes(event.type)) updateRequestMessages(items => settleSteeringMessages(items, event.requestId));
     if (['complete', 'cancelled', 'error'].includes(event.type) && event.fileChanges) updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, fileChanges: event.fileChanges } : item));
     if (event.type === 'goal-state') {
       updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.status, rounds: event.rounds, maxRequests: event.maxRequests } }), request.conversationId);
     } else if (event.type === 'steering-queued') {
+      updateRequestMessages(items => updateSteeringStatus(items, event.requestId, event.steeringId, 'queued'));
       showNotice('引导已提交，当前模型继续运行');
     } else if (event.type === 'steering-accepted') {
+      updateRequestMessages(items => updateSteeringStatus(items, event.requestId, event.steeringId, 'accepted'));
       showNotice('模型已接收运行中引导');
     } else if (event.type === 'steering-expired') {
+      updateRequestMessages(items => updateSteeringStatus(items, event.requestId, event.steeringId, 'expired'));
       showNotice(event.message || '当前任务已结束，引导未能注入');
     } else if (event.type === 'phase') {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, phase: event.phase } : item));
@@ -1468,10 +1473,22 @@ function App() {
       const steeringAttachments = detached ? [] : attachments;
       if (!steeringText && !steeringImages.length && !steeringAttachments.length) return;
       if (steeringImages.length || steeringAttachments.length || (!detached && fileContext)) throw Error('运行中的引导只支持文字，请停止任务后再添加附件或文件上下文。');
-      const result = await window.scodex.steerMessage({ requestId: activeRequest.requestId, conversationId: targetChat.id, text: steeringText });
-      updateChat(() => ({ draft: '' }), targetChat.id);
-      if (!detached) setPrompt('');
-      return result;
+      if (storageBusyRef.current) throw Error('正在处理聊天存储，补充消息未发送，请稍候。');
+      if (activeRequest.steeringSubmitting) throw Error('补充消息正在发送，请稍候。');
+      activeRequest.steeringSubmitting = true;
+      const steeringId = window.crypto.randomUUID();
+      try {
+        setMessages(items => insertSteeringMessage(items, { requestId: activeRequest.requestId, steeringId, text: steeringText }), targetChat.id);
+        const result = await window.scodex.steerMessage({ requestId: activeRequest.requestId, conversationId: targetChat.id, steeringId, text: steeringText });
+        setMessages(items => updateSteeringStatus(items, activeRequest.requestId, steeringId, 'queued'), targetChat.id);
+        updateChat(chat => ({ draft: chat.draft.trim() === steeringText ? '' : chat.draft }), targetChat.id);
+        return result;
+      } catch (error) {
+        setMessages(items => updateSteeringStatus(items, activeRequest.requestId, steeringId, 'failed'), targetChat.id);
+        throw error;
+      } finally {
+        activeRequest.steeringSubmitting = false;
+      }
     }
     if (handoff) {
       const prepared = prepareTaskHandoff(libraryRef.current, appState?.projects || [], [...activeRequestsRef.current.values()].map(r => r.conversationId), handoff);
@@ -1523,7 +1540,7 @@ function App() {
     setLiveRequests([...activeRequestsRef.current.values()]);
     const dispatch = async () => { try {
       const retryIndex = revisionPlan ? targetMessages.length : retryContent ? targetMessages.findIndex((item) => item.id === retryContent.userId) : targetMessages.length;
-      const history = targetMessages.slice(0, retryIndex).filter((item) => (item.role === 'user' || item.role === 'assistant') && (item.content || item.images?.length || item.attachments?.length || item.operations?.length) && ((!item.error && !item.cancelled) || item.operations?.length))
+      const history = targetMessages.slice(0, retryIndex).filter((item) => includesModelHistory(item) && (item.role === 'user' || item.role === 'assistant') && (item.content || item.images?.length || item.attachments?.length || item.operations?.length) && ((!item.error && !item.cancelled) || item.operations?.length))
         .slice(-20).map((item) => ({ role: item.role, content: item.content + (executionEnabled && item.operations?.length ? '\n\n[本机实际操作记录]\n' + item.operations.map((operation) => [operation.name, operation.status, operation.detail || '', operation.output?.slice(-1000) || ''].join(' · ')).join('\n').slice(-6000) : ''), ...(canShareContext ? { images: item.images, attachments: item.attachments } : {}) }));
       await window.scodex.updateDirtyPaths([...(fileDirty && activeFile ? [activeFile] : []), ...(tableDirty && tablePath ? [tablePath] : []), ...(imageDirty && imagePath ? [imagePath] : [])]);
       await window.scodex.sendMessage({
@@ -1566,6 +1583,7 @@ function App() {
     }
     const completion = dispatch();
     if (revisionPlan) return { started: true, revisionId: revisionPlan.chat.revisionId };
+    if (detached) return { started: true, requestId, conversationId: targetChat.id };
     await completion;
   };
 
@@ -2171,6 +2189,7 @@ function ComposerAttachmentDisclosure({ attachments = [], images = [], fileConte
 
 export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onRetryUser, onApplyCode, onApproval, onOpenFile, onBrowser, onServices, onEdit, onRegenerate, editRequest, onEditCancel, onEditSubmit, canExecute, actionsDisabled }) {
   if (message.role === 'user') return <article data-message-id={message.id} className={'user-message' + (message.images?.length ? ' user-message-with-images' : '') + (editRequest ? ' user-message-editing' : '')}>
+    {message.steering && <div className="user-message-meta steering-message-status" role="status" data-state={message.steering.status}>{steeringLabel(message)}</div>}
     <MessageAttachmentDisclosure attachments={message.attachments} images={message.images} />
     {editRequest ? <InlineMessageEditor request={editRequest} canExecute={canExecute} disabled={actionsDisabled} onSubmit={onEditSubmit} onClose={onEditCancel} /> : message.content && <div className="user-message-content">{message.content}</div>}
     {(message.skillName || message.contextName) && <div className="user-message-meta">{message.skillName && <span className="message-context"><BookOpen size={12} />{message.skillName}</span>}{message.contextName && <span className="message-context"><Paperclip size={12} />{message.contextName}</span>}</div>}

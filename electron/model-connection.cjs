@@ -160,7 +160,7 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
       if (kind === 'advisor') {
         if (!config.advisorEnabled || !config.advisorModel) throw new Error('顾问模型尚未配置或启用。');
         if (!config.advisorModels.includes(config.advisorModel)) throw new Error('顾问模型已不在配置列表中。');
-        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model: config.advisorModel, toolProtocol: 'native', retryLimit: 0, reportUsage: config.reportUsage, maxOutputTokens: 1200, ...(config.advisorReasoningEffort ? { reasoning_effort: config.advisorReasoningEffort } : {}) };
+        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model: config.advisorModel, toolProtocol: 'native', retryLimit: 0, temperature: null, reportUsage: config.reportUsage, maxOutputTokens: 1200, ...(config.advisorReasoningEffort ? { reasoning_effort: config.advisorReasoningEffort } : {}) };
       }
       const subagent = kind === 'subagent';
       const childOwnService = config.subagentBaseUrl !== config.baseUrl;

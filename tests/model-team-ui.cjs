@@ -16,16 +16,17 @@ const report = { status: 'running', version, executable, fixture, checks: [], re
 const reportPath = path.join(output, 'model-team-ui.json');
 let app, page, socket, server, workspace, port, base;
 const heldChildren = new Map(), taskState = new Map(); let cancelledAdvisor = false, cancelledClosed = false;
+const heldSteering = new Map(); let detachedPage, detachedSocket;
 const selector = id => '[data-message-id=' + json(id) + ']';
 const state = () => page.evaluate('window.scodex.getAppState()');
 const chat = async () => (await state()).library.conversations.find(item => item.id === 'team-chat');
 async function persist() { await fs.writeFile(reportPath, json(report, null, 2)); }
 async function check(name, fn) { const evidence = await fn(); report.checks.push({ name, status: 'passed', evidence }); await persist(); console.log('PASS ' + name); }
-async function click(css, text) {
-  await wait(() => page.evaluate('(()=>{const e=[...document.querySelectorAll(' + json(css) + ')].find(e=>' + (text ? 'e.textContent.trim()===' + json(text) : 'true') + ');if(!e||e.disabled)return false;e.click();return true})()'), 'Click ' + css);
+async function click(css, text, targetPage = page) {
+  await wait(() => targetPage.evaluate('(()=>{const e=[...document.querySelectorAll(' + json(css) + ')].find(e=>' + (text ? 'e.textContent.trim()===' + json(text) : 'true') + ');if(!e||e.disabled)return false;e.click();return true})()'), 'Click ' + css);
 }
-async function insert(css, value) {
-  await page.evaluate('(()=>{const e=document.querySelector(' + json(css) + ');if(!e)throw Error("Missing input");const p=e instanceof HTMLSelectElement?HTMLSelectElement.prototype:e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,"value").set.call(e,' + json(value) + ');e.dispatchEvent(new Event(e instanceof HTMLSelectElement?"change":"input",{bubbles:true}));})()');
+async function insert(css, value, targetPage = page) {
+  await targetPage.evaluate('(()=>{const e=document.querySelector(' + json(css) + ');if(!e)throw Error("Missing input");const p=e instanceof HTMLSelectElement?HTMLSelectElement.prototype:e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,"value").set.call(e,' + json(value) + ');e.dispatchEvent(new Event(e instanceof HTMLSelectElement?"change":"input",{bubbles:true}));})()');
 }
 async function reload() {
   const origin = await page.evaluate('performance.timeOrigin'); await page.command('Page.reload');
@@ -48,6 +49,10 @@ function reply(res, message) {
   res.writeHead(200, { 'content-type': 'text/event-stream' });
   res.end('data: ' + json({ choices: [{ delta, finish_reason: calls ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 11, completion_tokens: 5, total_tokens: 16 } }) + '\n\ndata: [DONE]\n\n');
 }
+function beginStream(res, text) {
+  res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' });
+  res.write('data: ' + json({ choices: [{ delta: { content: text } }] }) + '\n\n');
+}
 function tool(res, name, args) { reply(res, { tool_calls: [{ id: crypto.randomUUID(), type: 'function', function: { name, arguments: json(args) } }] }); }
 function results(body) {
   const definitions = new Map(body.messages.flatMap(item => (item.tool_calls || []).map(call => [call.id, call.function.name])));
@@ -59,16 +64,28 @@ async function model(req, res) {
   if (req.url.endsWith('/models')) { assert.equal(role, 'advisor'); res.writeHead(200, { 'content-type': 'application/json' }); res.end(json({ data: [{ id: 'advisor-fixture' }] })); return; }
   let raw = ''; for await (const part of req) raw += part;
   const body = JSON.parse(raw); assert.equal(body.model, role + '-fixture');
-  const prompt = body.messages.findLast(item => item.role === 'user' && typeof item.content === 'string' && /^(?:TEAM-|EXPLORE-)/.test(item.content))?.content;
+  const prompt = body.messages.findLast(item => item.role === 'user' && typeof item.content === 'string' && /^(?:TEAM-|EXPLORE-|STEER-)/.test(item.content))?.content;
   report.requests.push({ role, task: prompt || '', tokens: body.max_tokens || null });
   if (role === 'advisor') {
     assert.equal(body.tools, undefined); assert.equal(body.max_tokens, 1200);
     const input = JSON.parse(body.messages.at(-1).content); report.requests.at(-1).stage = input.stage; report.requests.at(-1).task = input.task;
+    report.requests.at(-1).reasoningEffort = body.reasoning_effort || '';
     assert.ok(body.messages.at(-1).content.length < 12000);
     for (const key of Object.values(keys)) assert.ok(!body.messages.at(-1).content.includes(key));
     if (input.task === 'TEAM-FAIL') { res.writeHead(503); res.end('{}'); return; }
     if (input.task === 'TEAM-CANCEL') { cancelledAdvisor = true; res.on('close', () => { if (!res.writableEnded) cancelledClosed = true; }); return; }
+    if (body.reasoning_effort === 'ultra') { res.writeHead(400, { 'content-type': 'application/json' }); res.end(json({ error: { message: 'advisor-fixture does not support reasoning effort "ultra"; use low, medium, high, xhigh or max' } })); return; }
+    assert.ok(!body.reasoning_effort || body.reasoning_effort === 'max');
     return reply(res, { content: json({ verdict: 'revise', summary: '顾问核对 ' + input.stage, checks: ['主模型核对实际文件和验证证据'] }) });
+  }
+  const steeringTask = /^STEER-/.test(prompt || '') ? prompt : '';
+  if (steeringTask) {
+    report.requests.at(-1).task = steeringTask;
+    const taskIndex = body.messages.findLastIndex(item => item.role === 'user' && item.content === steeringTask);
+    const injected = body.messages.slice(taskIndex + 1).filter(item => item.role === 'user' && item.content?.includes('用户在当前任务运行期间提交的引导'));
+    if (!injected.length) { heldSteering.set(steeringTask, res); beginStream(res, steeringTask + '开始。'); return; }
+    report.requests.at(-1).steering = injected.map(item => item.content);
+    return reply(res, { content: '已采用运行中补充，继续完成。' });
   }
   const done = results(body);
   if (role === 'child') {
@@ -138,21 +155,30 @@ async function main() {
     await settings();
     await insert('#model-advisor-base-url', base + '/advisor/v1'); await insert('#model-advisor-api-key', keys.advisor);
     await click('button', '获取顾问模型列表'); await wait(() => page.evaluate('[...document.querySelector("#model-advisor").options].some(o=>o.value==="advisor-fixture")'), 'Advisor list');
-    await insert('#model-advisor', 'advisor-fixture'); await click('#model-advisor-enabled'); await click('.model-save-button');
+    await insert('#model-advisor', 'advisor-fixture');
+    await click('[aria-label="顾问推理强度"]'); await click('[role="option"]', 'ultra');
+    await click('#model-advisor-enabled'); await click('.model-save-button');
     await wait(() => page.evaluate('document.querySelector(".model-message")?.textContent.includes("已保存")'), 'Save roles');
     await reload(); const saved = await page.evaluate('window.scodex.getModelConnection()');
-    assert.equal(saved.advisorEnabled, true); assert.equal(saved.advisorModel, 'advisor-fixture'); assert.equal(saved.model, original.model); assert.equal(saved.subagentModel, original.subagentModel);
+    assert.equal(saved.advisorEnabled, true); assert.equal(saved.advisorModel, 'advisor-fixture'); assert.equal(saved.advisorReasoningEffort, 'ultra'); assert.equal(saved.model, original.model); assert.equal(saved.subagentModel, original.subagentModel);
     const stored = await fs.readFile(path.join(profile, 'model-connection.json'), 'utf8'); for (const key of Object.values(keys)) assert.ok(!stored.includes(key));
     assert.ok(saved.hasAdvisorCredential && saved.hasCredential && saved.hasSubagentCredential);
-    return { mainPreserved: true, explorerReadOnly: true, defaultConcurrency: 2, advisorEnabled: true, threeCredentialsEncrypted: true };
+    return { mainPreserved: true, explorerReadOnly: true, defaultConcurrency: 2, advisorEnabled: true, advisorEffort: saved.advisorReasoningEffort, threeCredentialsEncrypted: true };
   });
   let workAnswer;
   await check('three-advisor-gates-parallel-explorers-main-effects-and-final-ownership', async () => {
     const count = await send('TEAM-WORK'); workAnswer = await finished(count);
     assert.match(workAnswer.content.slice(workAnswer.finalContentOffset), /主模型已整合两项探索/);
-    const stages = report.requests.filter(r => r.role === 'advisor' && r.task === 'TEAM-WORK').map(r => r.stage);
-    assert.deepEqual(stages, ['plan', 'repeated-error', 'completion']); assert.equal(report.mainWroteWhileExplorersActive, true);
+    const advisorRequests = report.requests.filter(r => r.role === 'advisor' && r.task === 'TEAM-WORK');
+    const stages = [...new Set(advisorRequests.map(r => r.stage))];
+    assert.deepEqual(stages, ['plan', 'repeated-error', 'completion']);
+    assert.equal(advisorRequests.filter(r => r.reasoningEffort === 'ultra').length, 3);
+    assert.equal(advisorRequests.filter(r => r.reasoningEffort === 'max').length, 3);
+    assert.equal(report.mainWroteWhileExplorersActive, true);
     assert.equal(workAnswer.operations.filter(op => op.name === 'advisor_consult' && op.status === 'succeeded').length, 3);
+    const adapters = workAnswer.operations.filter(op => op.name === 'advisor_compat' && op.status === 'succeeded');
+    assert.equal(adapters.length, 3);
+    assert.ok(adapters.every(op => /ultra.*max.*设置未变/.test(op.detail)));
     assert.equal(workAnswer.operations.filter(op => op.name === 'write_file' && op.status === 'succeeded').length, 1);
     const css = selector(workAnswer.id);
     assert.equal(await page.evaluate('document.querySelector(' + json(css + ' .message-execution') + ')?.open'), false);
@@ -160,7 +186,40 @@ async function main() {
     await click(css + ' .message-execution-summary');
     await click(css + ' .agent-operation-group > summary');
     assert.ok(await page.evaluate('document.querySelector(' + json(css) + ').innerText.includes("等待主模型核验")'));
-    return { stages, writes: 1, parallelExplorers: 2, prematureCompletionPrevented: true, answerAndRealFileCardVisible: true };
+    return { stages, advisorEffortAdaptation: 'ultra -> max', savedEffortUnchanged: (await page.evaluate('window.scodex.getModelConnection()')).advisorReasoningEffort, writes: 1, parallelExplorers: 2, prematureCompletionPrevented: true, answerAndRealFileCardVisible: true };
+  });
+  const sendSteering = async (tag, targetPage, sendSelector, text) => {
+    const before = (await chat()).messages.length;
+    await insert('textarea[aria-label="' + (targetPage === page ? '输入工作内容' : '独立窗口输入工作内容') + '"]', tag, targetPage);
+    await click(sendSelector, undefined, targetPage);
+    await wait(() => heldSteering.has(tag), 'Held ' + tag + ' model response');
+    await insert('textarea[aria-label="' + (targetPage === page ? '输入工作内容' : '独立窗口输入工作内容') + '"]', text, targetPage);
+    await click(targetPage === page ? '[aria-label="提交引导但不中断模型运行"]' : '[aria-label="独立窗口提交引导但不中断模型运行"]', undefined, targetPage);
+    const user = await wait(async () => (await chat()).messages.find(message => message.steering?.requestId && message.content === text), tag + ' visible supplement');
+    await wait(() => targetPage.evaluate('document.querySelector(' + json(selector(user.id) + ' .steering-message-status') + ')?.dataset.state==="queued"'), tag + ' queued UI status');
+    assert.equal(await targetPage.evaluate('document.querySelector(' + json(selector(user.id) + ' .user-message-content') + ')?.textContent'), text);
+    heldSteering.get(tag).end('data: ' + json({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_steer_' + tag, type: 'function', function: { name: 'read_file', arguments: json({ path: 'docs/a.txt' }) } }] }, finish_reason: 'tool_calls' }] }) + '\n\ndata: [DONE]\n\n');
+    const answer = await wait(async () => {
+      const current = await chat(), final = current.messages.at(-1), item = current.messages.find(message => message.id === user.id);
+      if (item?.steering?.status === 'accepted' && final?.content?.includes('已采用运行中补充') && !final.pending) return { final, item };
+      if (final?.error) throw Error(final.error);
+      return false;
+    }, tag + ' accepted and answered', 60000);
+    assert.ok(report.requests.some(request => request.task === tag && request.steering?.some(value => value.includes(text))));
+    await wait(async () => (await fs.readFile(path.join(profile, 'conversations.json'), 'utf8')).includes(text), tag + ' persisted transcript');
+    return { visibleOnce: (await chat()).messages.filter(message => message.steering?.id === user.steering.id).length === 1, status: answer.item.steering.status, injectedAtNextRequest: true, persisted: true, initialMessageCount: before };
+  };
+  await check('main-window-running-message-is-visible-persisted-and-accepted-once', async () => sendSteering('STEER-MAIN', page, '[aria-label="发送消息"]', '主窗口运行中补充正文'));
+  await check('detached-window-running-message-syncs-to-main-and-is-accepted-once', async () => {
+    await page.evaluate('window.scodex.openWorkspaceWindow("chat", "team-chat")');
+    const target = await wait(async () => (await fetch('http://127.0.0.1:' + port + '/json/list').then(response => response.json())).find(item => item.url.includes('workspaceWindow=chat')), 'Detached chat window');
+    detachedSocket = new WebSocket(target.webSocketDebuggerUrl); await new Promise((resolve, reject) => { detachedSocket.addEventListener('open', resolve, { once: true }); detachedSocket.addEventListener('error', reject, { once: true }); }); detachedPage = connect(detachedSocket);
+    await wait(() => detachedPage.evaluate('Boolean(window.scodexWindow&&document.querySelector("[aria-label=独立窗口输入工作内容]"))'), 'Detached chat ready');
+    const evidence = await sendSteering('STEER-DETACHED', detachedPage, '[aria-label="独立窗口发送消息"]', '独立窗口运行中补充正文');
+    const saved = (await chat()).messages.find(message => message.content === '独立窗口运行中补充正文');
+    assert.equal(saved?.steering?.status, 'accepted');
+    await detachedPage.evaluate('window.close()').catch(() => {});
+    return { ...evidence, synchronizedToMainWindow: true };
   });
   await check('ordinary-answer-does-not-consult-advisor', async () => {
     const count = await send('TEAM-SIMPLE'); const message = await finished(count); assert.match(message.content, /普通问题/);
@@ -183,6 +242,8 @@ async function main() {
     const roles = [...new Set(usage.records.map(r => r.role))]; for (const role of ['main', 'explorer', 'advisor']) assert.ok(roles.includes(role));
     assert.ok(usage.records.filter(r => r.role === 'advisor').every(r => ['plan', 'repeated-error', 'completion'].includes(r.stage)));
     await reload(); const restored = (await chat()).messages.find(m => m.id === workAnswer.id); assert.equal(restored.operations.filter(op => op.name === 'advisor_consult').length, 3);
+    assert.equal((await chat()).messages.filter(message => message.steering?.status === 'accepted').length, 2);
+    assert.equal((await chat()).messages.filter(message => ['主窗口运行中补充正文', '独立窗口运行中补充正文'].includes(message.content)).length, 2);
     await settings();
     await page.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
     await page.evaluate('document.querySelector(".model-team-roles").scrollIntoView({block:"start"})');
@@ -202,7 +263,7 @@ main().catch(error => { report.status = 'failed'; report.error = error.stack; pr
       await page.evaluate('window.scodex.quitApp()'); await wait(() => app.exitCode !== null, 'Normal program exit', 30000); assert.equal(app.exitCode, 0);
     }
   } catch (error) { report.shutdownError = error.stack; report.status = 'failed'; process.exitCode = 1; }
-  socket?.close(); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  detachedSocket?.close(); socket?.close(); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   report.exitCode = app?.exitCode; report.finishedAt = new Date().toISOString();
   if (app?.exitCode !== null) report.exeSha256 = crypto.createHash('sha256').update(await fs.readFile(executable)).digest('hex');
   await persist(); console.log(json({ status: report.status, checks: report.checks.length, output }));

@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { normalizeUsage } = require('./model-usage.cjs');
 const { normalizeChatImages, modelMessageContent } = require('./chat-images.cjs');
+const { redact } = require('./model-team.cjs');
 
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_TOOL_CALLS = 8;
@@ -22,9 +23,13 @@ async function serviceErrorDetail(response, key) {
   } catch { return ''; } finally { await reader.cancel().catch(() => {}); }
   try {
     const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    const value = data.error?.message || data.message || data.error?.code || data.code || '';
-    return String(value).replaceAll(key || '\0', '[已隐藏凭据]').replace(/sk-[a-zA-Z0-9_-]+/g, '[已隐藏凭据]').replace(/Bearer\s+[^\s"']+/gi, 'Bearer [已隐藏]').slice(0, 500);
+    return serviceErrorMessage(data, key);
   } catch { return ''; }
+}
+
+function serviceErrorMessage(data, key) {
+  const value = data.error?.message || data.message || (typeof data.error === 'string' ? data.error : '') || data.error?.code || data.code || '';
+  return redact(String(value), [key]).slice(0, 500);
 }
 
 function structuredReply(message) {
@@ -50,7 +55,7 @@ function httpError(response, usingTools, detail = '') {
   return new Error(`模型请求失败（HTTP ${response.status}）。${detail ? '服务信息：' + detail : '已执行的操作不会自动回滚。'}`);
 }
 
-async function readCompletion(response, { signal, onDelta = () => {}, onUsage = () => {}, onActivity = () => {}, onProgress = () => {}, usageGraceMs = 0 } = {}) {
+async function readCompletion(response, { signal, apiKey, onDelta = () => {}, onUsage = () => {}, onActivity = () => {}, onProgress = () => {}, usageGraceMs = 0 } = {}) {
   if (!response.body) throw new Error('模型没有返回可读取的响应。');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -63,7 +68,7 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
   const jsonResponse = /application\/json/i.test(response.headers.get('content-type') || '');
   const addText = (value) => { if (typeof value === 'string' && value) { activity('text'); text += value; onDelta(value); } };
   const consume = (data, streaming) => {
-    if (data.error) throw new Error('模型返回了服务错误，请检查连接后重试。');
+    if (data.error) throw new Error('模型服务错误：' + (serviceErrorMessage(data, apiKey) || '服务未提供具体原因，请检查连接后重试。'));
     const usage = normalizeUsage(data?.usage); if (usage) { hasUsage = true; onUsage(usage); }
     const choice = data?.choices?.[0];
     if (!choice) return;
@@ -193,7 +198,8 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         emit({ type: 'phase', phase: 'waiting', round: round + 1, attempt: attempt + 1 });
         const response = await fetchImpl(connection.endpoint, {
           method: 'POST', headers: { authorization: 'Bearer ' + connection.apiKey, 'content-type': 'application/json' },
-          body: JSON.stringify({ model: connection.model, stream: true, temperature: 0.2,
+          body: JSON.stringify({ model: connection.model, stream: true,
+            ...(connection.temperature === null ? {} : { temperature: 0.2 }),
             ...(connection.reportUsage ? { stream_options: { include_usage: true } } : {}),
             ...(connection.maxOutputTokens ? { max_tokens: connection.maxOutputTokens } : {}),
             ...(connection.reasoning_effort ? { reasoning_effort: connection.reasoning_effort } : {}),
@@ -205,12 +211,17 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
           const detail = await serviceErrorDetail(response, connection.apiKey);
           retry = [429, 502, 503, 504].includes(response.status) && !isAuthenticationFailure(detail)
             && !fullText && operations === 0 && attempt < Math.min(6, Math.max(0, connection.retryLimit || 0));
-          if (!retry) throw httpError(response, Boolean(tools?.length && !structured), detail);
+          if (!retry) {
+            const error = httpError(response, Boolean(tools?.length && !structured), detail);
+            error.httpStatus = response.status;
+            error.providerDetail = detail;
+            throw error;
+          }
         } else {
           if (fullText && !fullText.endsWith('\n\n')) append('\n\n');
           finalContentOffset = fullText.length;
           emit({ type: 'phase', phase: 'receiving', round: round + 1 });
-          message = await readCompletion(response, { signal: requestSignal, usageGraceMs: connection.reportUsage ? 150 : 0,
+          message = await readCompletion(response, { signal: requestSignal, apiKey: connection.apiKey, usageGraceMs: connection.reportUsage ? 150 : 0,
             onProgress: touch,
             onUsage: value => { usage = value; },
             onActivity: kind => {

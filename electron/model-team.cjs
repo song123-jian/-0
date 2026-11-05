@@ -4,6 +4,27 @@ const STAGES = { plan: '计划确认', 'repeated-error': '重复错误诊断', c
 const MUTATIONS = new Set(['write_file', 'edit_file', 'run_command', 'spreadsheet_edit', 'image_edit', 'artifact_write', 'artifact_image', 'service_start', 'task_send', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_scroll']);
 const ADVISOR_TIMEOUT_MS = 30_000;
 const ADVISOR_OUTPUT_TOKENS = 1200;
+const EFFORT_ORDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+
+function advisorCompatibleEffort(error, requested) {
+  if (error?.httpStatus !== 400 || !EFFORT_ORDER.includes(requested)) return '';
+  const detail = String(error.providerDetail || '');
+  const match = detail.match(/\bdoes not support reasoning effort\s+["']?([a-z]+)["']?\s*;\s*use\s+([^.;\r\n]+)/i);
+  if (!match || match[1].toLowerCase() !== requested) return '';
+  const upper = EFFORT_ORDER.indexOf(requested);
+  const advertised = [...match[2].matchAll(/\b(?:none|minimal|low|medium|high|xhigh|max|ultra)\b/gi)]
+    .map(item => item[0].toLowerCase()).filter(item => EFFORT_ORDER.indexOf(item) < upper);
+  return advertised.sort((a, b) => EFFORT_ORDER.indexOf(b) - EFFORT_ORDER.indexOf(a))[0] || '';
+}
+
+async function runCompatibleAdvisorRequest(connection, run, { signal, onAdapt } = {}) {
+  try { return await run(connection); } catch (error) {
+    const effort = advisorCompatibleEffort(error, connection.reasoning_effort);
+    if (!effort || signal?.aborted) throw error;
+    onAdapt?.(connection.reasoning_effort, effort);
+    return run({ ...connection, reasoning_effort: effort });
+  }
+}
 
 function redact(value, secrets = []) {
   let text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
@@ -110,4 +131,4 @@ function createModelTeam({ enabled = false, task = '', consult, signal, emit = (
   };
 }
 
-module.exports = { ADVISOR_TIMEOUT_MS, ADVISOR_OUTPUT_TOKENS, advisorReply, createModelTeam, redact };
+module.exports = { ADVISOR_TIMEOUT_MS, ADVISOR_OUTPUT_TOKENS, advisorReply, advisorCompatibleEffort, runCompatibleAdvisorRequest, createModelTeam, redact };
