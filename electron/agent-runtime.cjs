@@ -46,7 +46,7 @@ function httpError(response, usingTools, detail = '') {
   return new Error(`模型请求失败（HTTP ${response.status}）。${detail ? '服务信息：' + detail : '已执行的操作不会自动回滚。'}`);
 }
 
-async function readCompletion(response, { signal, onDelta = () => {}, onUsage = () => {}, onActivity = () => {}, usageGraceMs = 0 } = {}) {
+async function readCompletion(response, { signal, onDelta = () => {}, onUsage = () => {}, onActivity = () => {}, onProgress = () => {}, usageGraceMs = 0 } = {}) {
   if (!response.body) throw new Error('模型没有返回可读取的响应。');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -64,6 +64,7 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
     const choice = data?.choices?.[0];
     if (!choice) return;
     const value = streaming ? choice.delta : choice.message;
+    if ([value?.content, value?.refusal, value?.reasoning_content, value?.reasoning].some(part => typeof part === 'string' && part.length)) onProgress();
     if (choice.finish_reason) { reason = choice.finish_reason; completedAt ??= performance.now(); }
     if (typeof value?.reasoning_content === 'string' && value.reasoning_content || typeof value?.reasoning === 'string' && value.reasoning) activity('reasoning');
     addText(value?.content || value?.refusal);
@@ -76,7 +77,7 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
       if (call.type && call.type !== 'function') throw new Error('当前仅支持 function 工具。');
       if (typeof call.function?.name === 'string') current.function.name += call.function.name;
       if (typeof call.function?.arguments === 'string') current.function.arguments += call.function.arguments;
-      if (call.id || call.function?.name || call.function?.arguments) activity('tool');
+      if (call.id || call.function?.name || call.function?.arguments) { onProgress(); activity('tool'); }
       if (current.id.length > 160 || current.function.name.length > 100 || current.function.arguments.length > 160_000) throw new Error('模型工具参数超过限制。');
       calls.set(index, current);
     }
@@ -128,7 +129,9 @@ async function readCompletion(response, { signal, onDelta = () => {}, onUsage = 
   } finally { signal?.removeEventListener('abort', cancelRead); await reader.cancel().catch(() => {}); }
 }
 
-async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null }) {
+async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null, requestTimeouts = {} }) {
+  const idleMs = Number.isFinite(requestTimeouts.idleMs) && requestTimeouts.idleMs > 0 ? Math.min(120_000, requestTimeouts.idleMs) : 120_000;
+  const totalMs = Number.isFinite(requestTimeouts.totalMs) && requestTimeouts.totalMs > 0 ? Math.min(600_000, requestTimeouts.totalMs) : 600_000;
   let goalFinish = null;
   if (goal) {
     maxRounds = Math.min(MAX_ROUNDS, Math.max(1, Number.isInteger(goal.maxRequests) ? goal.maxRequests : 8));
@@ -171,7 +174,11 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     for (let attempt = 0; ; attempt += 1) {
       aborted(signal);
       const requestController = new AbortController();
-      const timer = setTimeout(() => requestController.abort(), 120_000);
+      let timeoutKind = '', idleTimer;
+      const expire = kind => { timeoutKind = kind; requestController.abort(); };
+      const touch = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => expire('idle'), idleMs); };
+      const timer = setTimeout(() => expire('total'), totalMs);
+      touch();
       const requestSignal = signal ? AbortSignal.any([signal, requestController.signal]) : requestController.signal;
       const started = performance.now(); let usage = null; let firstTokenMs = null, firstToolCallMs = null, firstTextMs = null, firstByteMs = null, responseHeadersMs = null; let httpStatus = null; let status = 'failed'; let retry = false;
       const elapsed = () => Math.max(0, Math.round(performance.now() - started));
@@ -198,6 +205,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
           if (fullText && !fullText.endsWith('\n\n')) append('\n\n');
           emit({ type: 'phase', phase: 'receiving', round: round + 1 });
           message = await readCompletion(response, { signal: requestSignal, usageGraceMs: connection.reportUsage ? 150 : 0,
+            onProgress: touch,
             onUsage: value => { usage = value; },
             onActivity: kind => {
               if (kind === 'transport') { firstByteMs ??= elapsed(); return; }
@@ -211,11 +219,14 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         }
       } catch (error) {
         if (signal?.aborted) status = 'cancelled';
-        if (requestController.signal.aborted && !signal?.aborted) throw new Error('模型响应超时（120 秒）。已执行的操作已保留。');
+        if (requestController.signal.aborted && !signal?.aborted) throw new Error(timeoutKind === 'total'
+          ? '模型单次请求达到时长上限（' + Math.ceil(totalMs / 60_000) + ' 分钟）。已执行的操作已保留，可继续任务。'
+          : '模型连续 ' + Math.ceil(idleMs / 1000) + ' 秒没有新的正文、推理或工具参数，已暂停。已执行的操作已保留，可继续任务。');
         throw error;
       } finally {
         flushDelta();
         clearTimeout(timer);
+        clearTimeout(idleTimer);
         if (usage) { for (const key of ['inputTokens', 'outputTokens', 'totalTokens']) totalUsage[key] += usage[key]; totalUsage.reportedRequests++; } else totalUsage.unknownRequests++;
         emit({ type: 'request-metrics', model: connection.model, status, httpStatus, firstTokenMs, firstToolCallMs, firstTextMs, firstByteMs, responseHeadersMs, durationMs: elapsed(), usage });
       }
@@ -250,7 +261,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         try { args = JSON.parse(call.function.arguments); } catch { throw new Error('工具参数不是有效 JSON。'); }
         if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('工具参数必须是对象。');
         result = await executeTool(name, args, { signal, onProgress: (progress) => emit({ type: 'operation', operation: { id, ...progress, status: 'running' } }) });
-        if (result?.ok === false) status = 'failed';
+        if (result?.ok === false) status = result.requires_instruction_review === true ? 'deferred' : 'failed';
       } catch (error) {
         status = signal?.aborted ? 'cancelled' : 'failed';
         result = { ok: false, error: String(error?.message || '工具执行失败').slice(0, 1000) };

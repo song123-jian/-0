@@ -31,11 +31,11 @@ import { ToolsPanel, CommandPalette } from './components/tools-panel.jsx';
 import { AgentActivity } from './components/agent-activity.jsx';
 import { ChatRuns } from './components/chat-runs.jsx';
 import { GitPanel } from './components/git-panel.jsx';
-import { MessageRevisionDialog } from './components/conversation-revisions.jsx';
+import { InlineMessageEditor, MessageRevisionDialog } from './components/conversation-revisions.jsx';
 import { TaskFileChanges } from './components/task-file-changes.jsx';
 import { TaskCollaborationDialog } from './components/task-collaboration.jsx';
 import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboration.js';
-import { prepareRevision, selectRevision, revisionStamp, revisionSource, discardFailedRegeneration } from './lib/conversation-revisions.js';
+import { prepareRevision, selectRevision, revisionStamp, revisionSource } from './lib/conversation-revisions.js';
 import { MessageContent, MessageProgress } from './components/message-content.jsx';
 import { messageProgressState, settledTiming } from './lib/message-presentation.js';
 import { applyConversationAction, conversationText, forkChatAtMessage, newChatRecord } from './lib/conversation-actions.js';
@@ -1698,22 +1698,20 @@ function App() {
     window.addEventListener('keydown',shortcut);return()=>window.removeEventListener('keydown',shortcut);
   });
 
-  const retryFailed = (assistantMessage) => {
+  const retryUserMessage = (userMessage) => {
     const chat = libraryRef.current?.conversations.find((item) => item.id === libraryRef.current.activeId);
-    if (chat && !storageBusyRef.current && !(assistantMessage.executionEnabled && assistantMessage.operations?.length)) {
-      try {
-        const rollback = discardFailedRegeneration(chat, assistantMessage.id);
-        if (rollback) {
-          const restored = rollback.chat;
-          setLibrary((current) => current ? { ...current,
-            conversations: current.conversations.map((item) => item.id === restored.id ? restored : item),
-          } : current);
-          sendMessage('', null, restored.id, { kind: 'regenerate', messageId: rollback.sourceMessageId, stamp: revisionStamp(restored) })
-            .catch((error) => showNotice(readableError(error)));
-          return;
-        }
-      } catch (error) { showNotice(readableError(error)); return; }
-    }
+    if (!chat || storageBusyRef.current) return;
+    const index = chat.messages.findIndex((item) => item.id === userMessage.id && item.role === 'user');
+    if (index < 0) { showNotice('原消息已变化，请刷新后重试。'); return; }
+    const discarded = chat.messages.slice(index + 1);
+    const discardFollowing = discarded.some((item) => item.role === 'user');
+    const discardEffects = discarded.some((item) => item.fileChanges || item.operations?.some((operation) => operation.status === 'succeeded'));
+    if ((discardFollowing || discardEffects) && !window.confirm((discardFollowing ? '重试这条较早的消息会移除它之后的对话。' : '') + (discardEffects ? '原回答的操作记录和撤销入口将移除，但已执行的文件操作不会回滚。' : '') + '确定继续吗？')) return;
+    sendMessage('', null, chat.id, { kind: 'retry', messageId: userMessage.id, stamp: revisionStamp(chat), discardFollowing, discardEffects, executionEnabled: false })
+      .catch((error) => showNotice(readableError(error)));
+  };
+
+  const retryFailed = (assistantMessage) => {
     if (assistantMessage.executionEnabled && assistantMessage.operations?.length) {
       const index = messages.findIndex((item) => item.id === assistantMessage.id);
       const original = messages[index - 1]?.content || '上一个任务';
@@ -1721,11 +1719,7 @@ function App() {
     }
     const index = messages.findIndex((item) => item.id === assistantMessage.id);
     const userMessage = messages[index - 1];
-    if (userMessage?.role === 'user') {
-      const retryContent = { userId: userMessage.id, assistantId: assistantMessage.id, images: userMessage.images, attachments: userMessage.attachments,
-        model: userMessage.model, reasoningEffort: userMessage.reasoningEffort, mode: userMessage.mode, skillId: userMessage.skillId, executionEnabled: false };
-      sendMessage(userMessage.content, retryContent, chat?.id || null).catch((error) => showNotice(readableError(error)));
-    }
+    if (userMessage?.role === 'user') retryUserMessage(userMessage);
   };
 
   const applyCodeToEditor = (code) => {
@@ -1872,7 +1866,7 @@ function App() {
         {activeView === 'assistant' && (
           <section className={`assistant-view task-chat-view ${messages.length === 0 ? 'assistant-view-empty' : ''}`} onDragEnter={(event) => fileDrag(event, 'enter')} onDragOver={(event) => fileDrag(event, 'over')} onDragLeave={(event) => fileDrag(event, 'leave')} onDrop={(event) => fileDrag(event, 'drop')}>
             {fileDragActive && <div className="chat-file-drop-overlay" role="status"><div><Files size={36} /><strong>{!canShareContext ? '请先更改权限' : sending || attachmentLoading ? '请等待当前操作完成' : '松开即可添加'}</strong><span>文件将添加到当前消息</span></div></div>}
-            {revisionEditor && revisionEditor.conversationId === currentChat?.id && <MessageRevisionDialog chat={currentChat} request={revisionEditor} canExecute={canShareContext} onClose={() => setRevisionEditor(null)} onSubmit={action => sendMessage('',null,currentChat.id,action)}/>}
+            {revisionEditor?.kind === 'regenerate' && revisionEditor.conversationId === currentChat?.id && <MessageRevisionDialog chat={currentChat} request={revisionEditor} canExecute={canShareContext} onClose={() => setRevisionEditor(null)} onSubmit={action => sendMessage('',null,currentChat.id,action)}/>}
             <div className="conversation-scroll">
               {messages.length === 0 ? (
                 <Dashboard projectName={currentProjectName} />
@@ -1887,7 +1881,12 @@ function App() {
                       onCopy={() => copyMessage(message)}
                       onFork={() => forkAssistantMessage(message).catch((error) => showNotice(readableError(error)))}
                       onRetry={() => retryFailed(message)}
+                      onRetryUser={() => retryUserMessage(message)}
                       onEdit={() => openMessageRevision('edit', message.id)}
+                      editRequest={revisionEditor?.kind === 'edit' && revisionEditor.conversationId === currentChat?.id && revisionEditor.messageId === message.id ? revisionEditor : null}
+                      onEditCancel={() => setRevisionEditor(null)}
+                      onEditSubmit={action => sendMessage('', null, currentChat.id, action)}
+                      canExecute={canShareContext}
                       onRegenerate={() => openMessageRevision('regenerate', message.id)}
                       actionsDisabled={sending || storageBusy || attachmentLoading}
                       onApplyCode={applyCodeToEditor}
@@ -2171,12 +2170,12 @@ function ComposerAttachmentDisclosure({ attachments = [], images = [], fileConte
   </details>;
 }
 
-export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onApplyCode, onApproval, onOpenFile, onBrowser, onServices, onEdit, onRegenerate, actionsDisabled }) {
-  if (message.role === 'user') return <article data-message-id={message.id} className={'user-message' + (message.images?.length ? ' user-message-with-images' : '')}>
+export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onRetryUser, onApplyCode, onApproval, onOpenFile, onBrowser, onServices, onEdit, onRegenerate, editRequest, onEditCancel, onEditSubmit, canExecute, actionsDisabled }) {
+  if (message.role === 'user') return <article data-message-id={message.id} className={'user-message' + (message.images?.length ? ' user-message-with-images' : '') + (editRequest ? ' user-message-editing' : '')}>
     <MessageAttachmentDisclosure attachments={message.attachments} images={message.images} />
-    {message.content && <div className="user-message-content">{message.content}</div>}
+    {editRequest ? <InlineMessageEditor request={editRequest} canExecute={canExecute} disabled={actionsDisabled} onSubmit={onEditSubmit} onClose={onEditCancel} /> : message.content && <div className="user-message-content">{message.content}</div>}
     {(message.skillName || message.contextName) && <div className="user-message-meta">{message.skillName && <span className="message-context"><BookOpen size={12} />{message.skillName}</span>}{message.contextName && <span className="message-context"><Paperclip size={12} />{message.contextName}</span>}</div>}
-    <div className="user-message-actions">{onEdit && <button className="text-tool" aria-label="编辑此消息" disabled={actionsDisabled} onClick={onEdit}>编辑消息</button>}{message.content !== undefined && <button className="icon-button small" title="复制消息" aria-label="复制消息" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}</div>
+    {!editRequest && <div className="user-message-actions">{onEdit && <button className="text-tool" aria-label="编辑此消息" disabled={actionsDisabled} onClick={onEdit}>编辑消息</button>}{onRetryUser && <button className="text-tool" aria-label="重试此消息" disabled={actionsDisabled} onClick={onRetryUser}><RotateCw size={14} />重试</button>}{message.content !== undefined && <button className="icon-button small" title="复制消息" aria-label="复制消息" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}</div>}
   </article>;
 
   return <article data-message-id={message.id} className="assistant-message"><div className="assistant-message-mark"><Sparkles size={15} /></div><div className="assistant-message-main"><div className="assistant-message-label">{message.model || '助手'}</div>
@@ -2186,6 +2185,6 @@ export function MessageBubble({ message, conversationId, copied, onCopy, onFork,
     {!message.pending && message.fileChanges && <TaskFileChanges record={message.fileChanges} conversationId={conversationId} disabled={actionsDisabled} />}
     {message.error && <div className="message-error"><CircleAlert size={16} /><span>{message.error}</span></div>}
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}
-    <div className="message-actions">{onRegenerate && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="重新生成此回答" disabled={actionsDisabled} onClick={onRegenerate}><RotateCw size={15}/>重新生成</button>}{onFork && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="从此回答分支到新聊天" disabled={actionsDisabled} onClick={onFork}><GitBranch size={15}/>在新对话中分支</button>}{message.content && <button className="icon-button small" title="复制回答" aria-label="复制回答" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}{(message.error || message.cancelled) && <button className="text-tool retry-message" onClick={onRetry}><RotateCw size={14} />{message.operations?.length ? '继续任务' : '重试'}</button>}</div></div></article>;
+    <div className="message-actions">{onRegenerate && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="重新生成此回答" disabled={actionsDisabled} onClick={onRegenerate}><RotateCw size={15}/>重新生成</button>}{onFork && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="从此回答分支到新聊天" disabled={actionsDisabled} onClick={onFork}><GitBranch size={15}/>在新对话中分支</button>}{message.content && <button className="icon-button small" title="复制回答" aria-label="复制回答" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}{(message.error || message.cancelled) && <button className="text-tool retry-message" disabled={actionsDisabled} onClick={onRetry}><RotateCw size={14} />{message.operations?.length ? '继续任务' : '重试'}</button>}</div></div></article>;
 }
 

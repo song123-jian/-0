@@ -14,7 +14,7 @@ function normalizeOperations(value) {
   const previewIds = new Set((Array.isArray(value) ? value : []).filter((item) => item?.screenshot).slice(-4).map((item) => item.id));
   return (Array.isArray(value) ? value : []).slice(0, 64).filter((item) => item && typeof item === 'object' && typeof item.name === 'string').map((item) => ({
     id: validId(item.id), name: item.name.slice(0, 100), title: String(item.title || '').slice(0, 160),
-    status: item.status === 'running' ? 'interrupted' : ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(item.status) ? item.status : 'interrupted',
+    status: item.status === 'running' ? 'interrupted' : ['succeeded', 'failed', 'cancelled', 'interrupted', 'deferred'].includes(item.status) ? item.status : 'interrupted',
     detail: String(item.detail || '').slice(0, 16000), path: String(item.path || '').slice(0, 4096),
     output: String(item.output || '').slice(-24000), diff: String(item.diff || '').slice(0, 24500),
     startedAt: Number.isFinite(Date.parse(item.startedAt)) ? item.startedAt : '',

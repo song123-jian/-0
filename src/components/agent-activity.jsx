@@ -4,6 +4,7 @@ import { operationCaption } from '../lib/message-presentation.js';
 
 function Status({ status, name }) {
   if (status === 'running') return <LoaderCircle size={16} className="spin" />;
+  if (status === 'deferred') return <ListChecks size={16} />;
   if (status === 'succeeded') return name === 'run_command' ? <Terminal size={16} /> : <Check size={16} />;
   if (status === 'failed') return <CircleAlert size={16} />;
   return <X size={16} />;
@@ -36,7 +37,7 @@ function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
 export function AgentActivity({ operations = [], approval, onApproval, onOpenFile, onBrowser, onServices, collapsed = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const hasUrgentActivity = Boolean(approval || operations.some((item) => item.status !== 'succeeded'));
+  const hasUrgentActivity = Boolean(approval || operations.some((item) => !['succeeded', 'deferred'].includes(item.status)));
   const [expanded, setExpanded] = useState(hasUrgentActivity && !collapsed);
   useEffect(() => {
     if (hasUrgentActivity) setExpanded(true);
@@ -52,7 +53,7 @@ export function AgentActivity({ operations = [], approval, onApproval, onOpenFil
     changes.set(item.path, entry);
   }
   // Only completed older work is folded. Failures and running work stay visible.
-  const folded = operations.length > 6 ? operations.slice(0, -4).filter((item) => item.status === 'succeeded') : [];
+  const folded = operations.length > 6 ? operations.slice(0, -4).filter((item) => ['succeeded', 'deferred'].includes(item.status)) : [];
   const foldedIds = new Set(folded.map((item) => item.id));
   const visible = operations.filter((item) => !foldedIds.has(item.id));
   const renderOperation = (operation) => <Operation key={operation.id} operation={operation} index={operations.indexOf(operation)} onOpenFile={onOpenFile} onBrowser={onBrowser} onServices={onServices} />;

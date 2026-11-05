@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { runAgentCommand } = require('./agent-command.cjs');
 const { withFileCommit } = require('./file-commit.cjs');
+const { readInstructionFile, MAX_TOTAL_BYTES } = require('./instruction-context.cjs');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const IGNORED = new Set(['.git', 'node_modules', 'dist', 'release', 'target', '.next', '.cache', '__pycache__']);
@@ -42,18 +43,20 @@ function fileDiff(relative, before, after) {
 }
 
 function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false, allowedPaths = [], allowedTools = null, guard = async () => {}, authorize = async () => {},
-  isDirty = () => false, protectedPaths = [], environment = async () => process.env, onFileChanged = () => {}, commandCapture = action => action() }) {
+  isDirty = () => false, protectedPaths = [], environment = async () => process.env, onFileChanged = () => {}, commandCapture = action => action(), instructionsPreloaded = [] }) {
   const observed = new Map();
+  const ruleKey = p => process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
+  const deliveredRules = new Map(instructionsPreloaded.map(rule => [ruleKey(rule.path), rule.hash]));
   const rootPromise = fs.realpath(workspaceRoot);
   const scopes = allowedPaths.map((value) => path.resolve(workspaceRoot, value));
   const scoped = (target) => !scopes.length || scopes.some((scope) => inside(scope, target));
-  async function resolve(value = '.', allowMissing = false) {
+  async function resolve(value = '.', allowMissing = false, inheritedRule = false) {
     const root = await rootPromise;
     if (typeof value !== 'string' || !value.trim() || value.length > 4096 || /[\x00-\x1f]/.test(value)) throw new Error('项目路径无效。');
     const absolute = path.resolve(root, value); const rel = path.relative(root, absolute);
     const inWorkspace = inside(root, absolute);
     if (!inWorkspace && !fullAccess) throw new Error('模型工具只能访问当前项目内的路径。');
-    if (!scoped(absolute)) throw new Error('目标路径不在主模型分配范围内。');
+    if (!inheritedRule && !scoped(absolute)) throw new Error('目标路径不在主模型分配范围内。');
     if (sensitive(inWorkspace ? rel : absolute) || protectedPaths.some((value) => value && inside(path.resolve(value), absolute))) throw new Error('模型工具不读取或修改凭据、应用配置及受保护目录。');
     if (rel.split(path.sep).some((s) => s.toLowerCase() === '.git')) throw new Error('不直接读写 Git 内部数据；请使用经过权限检查的 Git 命令。');
     let ancestor = inWorkspace ? root : path.parse(absolute).root;
@@ -76,17 +79,24 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     let directory = path.dirname(target); const dirs = [];
     const boundary = inside(root, target) ? root : fullAccess ? path.parse(target).root : root;
     while (inside(boundary, directory)) { dirs.unshift(directory); if (directory === boundary) break; directory = path.dirname(directory); }
-    let remaining = 24_000;
+    let bytes = 0;
     for (const dir of dirs) {
       const file = path.join(dir, 'AGENTS.md');
       if (file === target) continue;
-      try { const item = await resolve(file); const value = await read(item.target); const body = value.content.slice(0, remaining); result.push({ path: item.relative, content: body, truncated: body.length < value.content.length }); remaining -= body.length; if (remaining <= 0) break; } catch {}
+      try {
+        const item = await resolve(file, false, true); const value = await readInstructionFile(item.target); bytes += value.bytes;
+        if (bytes > MAX_TOTAL_BYTES) throw new Error('沿途 AGENTS.md 超过 256 KiB，未截断规则；操作已停止。');
+        if (deliveredRules.get(ruleKey(item.target)) !== value.hash) result.push({ path: item.relative, content: value.content, hash: value.hash, truncated: false });
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
+    for (const rule of result) deliveredRules.set(ruleKey(path.resolve(root, rule.path)), rule.hash);
     return result;
   }
+  function rulesFirst(rules) { return { ok: false, requires_instruction_review: true, instructions: rules, error: '发现新的或已变化的目录 AGENTS.md，尚未执行此操作。先按这些指引核对当前方案，再提交操作。', activity: { title: '已加载目录规则 · 原操作未执行', detail: rules.map(rule => rule.path).join('、') } }; }
   async function save(args, edit, context) {
     if (readOnly) throw new Error('规划模式只读，不能写文件。');
     const item = await resolve(args.path, !edit);
+    const rules = await instructions(item.target); if (rules.length) return rulesFirst(rules);
     await authorize('file-write', { path: item.target }, context);
     await guard(); if (context.signal?.aborted) throw new Error('任务已停止。');
     if (isDirty(item.target)) throw new Error('此文件在工作台中有未保存修改，请先保存或取消编辑。');
@@ -139,6 +149,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     if (name === 'run_command') {
       if (readOnly) throw new Error('规划模式不能执行命令。');
       if (!(await fs.stat(item.target)).isDirectory()) throw new Error('命令目录不是文件夹。');
+      const rules = await instructions(path.join(item.target, '__scodex_command__')); if (rules.length) return rulesFirst(rules);
       await authorize('agent-command', { path: item.target, command: args.command }, context);
       await guard(); if (context.signal?.aborted) throw new Error('任务已停止。');
       context.onProgress?.({ title: TITLES[name], detail: args.command, path: item.target });
@@ -189,7 +200,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     throw new Error('未知工具。');
   }
   return { execute, projectFiles: { resolve, instructions }, definitions: AGENT_TOOLS.filter((t) => (!readOnly || !['write_file', 'edit_file', 'run_command'].includes(t.function.name)) && (!Array.isArray(allowedTools) || allowedTools.includes(t.function.name))).map((definition) => fullAccess ? { ...definition, function: { ...definition.function, description: definition.function.description + ' 完整访问已启用，可按当前 Windows 账号权限使用项目外绝对路径；凭据与受保护目录仍不开放。' } } : definition),
-    async projectInstructions() { try { const item = await resolve('AGENTS.md'); return (await read(item.target)).content.slice(0, 24_000); } catch { return ''; } } };
+    async projectInstructions() { try { const item = await resolve('AGENTS.md'); return (await readInstructionFile(item.target)).content; } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } } };
 }
 
 module.exports = { AGENT_TOOLS, MAX_FILE_BYTES, TITLES, createAgentTools, fileDiff, sensitive };

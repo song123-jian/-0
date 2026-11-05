@@ -1,5 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { RotateCw } from 'lucide-react';
+export function InlineMessageEditor({ request, canExecute, disabled, onSubmit, onClose }) {
+  const input = useRef(null), [text, setText] = useState(request.source.content), [execute, setExecute] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  useEffect(() => { input.current?.focus(); }, []);
+  async function submit(event) {
+    event?.preventDefault();
+    if (busy || disabled) return;
+    setError(''); setBusy(true);
+    try { await onSubmit({ ...request, text, executionEnabled: execute }); onClose(); }
+    catch (cause) { setError(String(cause.message || cause).replace(/^Error invoking remote method '[^']+': /, '')); }
+    finally { setBusy(false); }
+  }
+  return <form className="user-message-inline-editor" onSubmit={submit} onKeyDown={event => { if (event.key === 'Escape' && !busy) { event.preventDefault(); onClose(); } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) submit(event); }}>
+    <textarea ref={input} aria-label="在原消息内编辑" value={text} maxLength={64000} rows={3} disabled={busy || disabled} onChange={event => setText(event.target.value)} />
+    {(request.source.images?.length > 0 || request.source.attachments?.length > 0) && <small>保留原消息的 {request.source.images?.length || 0} 张图片、{request.source.attachments?.length || 0} 个附件。</small>}
+    {request.source.contextName && <small>临时文件上下文不会重新发送，需要时请在输入栏重新附加。</small>}
+    <label className="user-message-inline-execution"><input type="checkbox" checked={execute} disabled={!canExecute || busy || disabled} onChange={event => setExecute(event.target.checked)} />在新版本中执行项目工具</label>
+    {error && <span role="alert" className="user-message-inline-error">{error}</span>}
+    <div className="user-message-inline-buttons"><button type="button" className="text-tool" disabled={busy} onClick={onClose}>取消</button><button type="submit" className="primary-button" disabled={busy || disabled || (!text.trim() && !request.source.images?.length && !request.source.attachments?.length)}> {busy ? '正在发送…' : '保存为新版本并发送'}</button></div>
+  </form>;
+}
 export function MessageRevisionDialog({ chat, request, canExecute, onSubmit, onClose }) {
   const dialog = useRef(null), [text, setText] = useState(() => request.source.content), [execute, setExecute] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const source = request.source;

@@ -27,8 +27,8 @@ export function assertRevisionIdle(chat) {
 }
 export function revisionSource(chat, type, messageId) {
   const at = chat.messages.findIndex(m => m.id === messageId);
-  if (at < 0 || !['edit', 'regenerate'].includes(type)) throw Error('原消息已变化，请重新打开。');
-  const index = type === 'edit' ? at : at - 1;
+  if (at < 0 || !['edit', 'regenerate', 'retry'].includes(type)) throw Error('原消息已变化，请重新打开。');
+  const index = type === 'regenerate' ? at - 1 : at;
   const user = chat.messages[index];
   if (!user || user.role !== 'user' || (type === 'regenerate' && chat.messages[at].role !== 'assistant')) throw Error('找不到对应的用户消息。');
   return { index, user };
@@ -41,14 +41,18 @@ export function prepareRevision(chat, action, now = new Date().toISOString()) {
   assertRevisionIdle(chat);
   if (action.stamp !== revisionStamp(chat)) throw Error('对话版本已变化，请关闭后重新编辑。');
   const { index, user } = revisionSource(chat, action.kind, action.messageId);
+  const retry = action.kind === 'retry';
   const text = action.kind === 'edit' ? action.text : user.content;
   if (typeof text !== 'string' || text.length > 64000 || text.includes('\0') || (!text.trim() && !user.images?.length && !user.attachments?.length)) throw Error('请输入64000字符以内的有效消息。');
+  if (retry && chat.messages.slice(index + 1).some(message => message.role === 'user') && action.discardFollowing !== true) throw Error('重试较早的消息会移除后续对话，请先确认。');
+  if (retry && chat.messages.slice(index + 1).some(message => message.fileChanges || message.operations?.some(operation => operation.status === 'succeeded')) && action.discardEffects !== true) throw Error('重试会移除原回答的操作记录和撤销入口，请先确认。');
   const revisions = chat.revisions || [];
-  if (revisions.length >= MAX_CONVERSATION_VERSIONS - 1) throw Error('此聊天已达到20个版本，请导出需要的内容并新建聊天后继续；已有版本保持。');
-  const next = { ...chat, revisionId: crypto.randomUUID(), revisionLabel: label((action.kind === 'edit' ? '编辑：' : '重新生成：') + (text || user.attachments?.[0]?.name || '图片消息')),
+  if (!retry && revisions.length >= MAX_CONVERSATION_VERSIONS - 1) throw Error('此聊天已达到20个版本，请导出需要的内容并新建聊天后继续；已有版本保持。');
+  const next = retry ? { ...chat, revisionOrigin: undefined, messages: structuredClone(chat.messages.slice(0, index)) }
+    : { ...chat, revisionId: crypto.randomUUID(), revisionLabel: label((action.kind === 'edit' ? '编辑：' : '重新生成：') + (text || user.attachments?.[0]?.name || '图片消息')),
     revisionCreatedAt: now, revisionOrigin: { kind: action.kind, parentId: revisionId(chat), sourceMessageId: action.messageId, sourceUserMessageId: user.id },
     revisions: [...revisions, snapshot(chat)], messages: structuredClone(chat.messages.slice(0, index)) };
-  return { chat: next, user: { ...structuredClone(user), content: text.trim(), executionEnabled: action.executionEnabled === true } };
+  return { chat: next, user: { ...structuredClone(user), content: text.trim(), executionEnabled: !retry && action.executionEnabled === true } };
 }
 export function selectRevision(chat, id, stamp, now = new Date().toISOString()) {
   assertRevisionIdle(chat);

@@ -1,5 +1,39 @@
 # Test Handoff
 
+## Active Repair — 1.3.37, 2026-11-05
+
+- Current status: Stage 1 Skill/AGENTS, timeout and rule-display scope plus Stage 2 inline edit and direct retry have passed actual installed-program acceptance. Source/Release publication remains pending.
+- Baseline/identity: source HEAD 98e75188d1529312fefa1f73c584d964726e9157; previous formal version 1.3.36, same-round target 1.3.37. Final installer SHA-256 0d3a2c8e2298aec8ecba22bc956f7a45e8db770e054fb0bc12fc6168406b88de, 181107707 bytes; installed EXE 4c883b3233b034be2e310e63bd6af490f8269c51d3c1bb2ecac41ae3e882033f; ASAR be37ad05d7158ec7a5072a0b75c98fb3d5309cb0f50c7e7e9f9af57da84fd682. Previous formal version rollback: release/delivery-1.3.37/rollback-1.3.36.
+- Existing constraints: preserve model, reasoning, credentials, user data, unrelated license marker, current file-change/undo behavior and earlier rejected cleanup directories. No automatic source self-modification.
+- Prior failure evidence retained: context r1 31/32, fixed inherited-rule whitelist and retested scoped 19/19; early candidate harness r1/r2 and public assertion failures were test-only; corrected local candidate/UI and saved public terminal/proof evidence passed. Startup helper import path corrected before actual app launch. No prior failure reclassified as passing.
+- Stage 2 scope: in-bubble edit, adjacent retry, old-answer replacement, early-turn and file-effects confirmation, keyboard/cancel, detached window, revision persistence, error retry and actual installed UI. No real external model call was needed for Stage 2; its model text came from loopback. Stage 1 public-provider and 125-second stream results remain valid for unchanged paths.
+- Skills used in this task: requirement-understanding 95, systematic-debugging 95, code-write-review 94; no subagents.
+
+- Actual target: Scodex工作台.exe 1.3.37, Windows x64/Electron 45; installed entry C:/Program Files/scodex-workbench/Scodex工作台.exe; Node 24. Loopback UI uses isolated profile and synthetic project; public provider used isolated profile and synthetic skill/rules, with encrypted connection copied temporarily and removed.
+
+| Stage 1 scope and actual steps | Expected and actual result | Status and evidence |
+| --- | --- | --- |
+| Stream/timeout unit + regression | Effective stream progress renews idle 120 s; heartbeat does not; 10 min request bound, cancel and no replay; 23/23 | Passed: runtime-focused.log |
+| Catalog/package and scoped rules | Discovery, disable/uninstall/hash/pagination, full instruction precedence/change/safety, assigned-file inherited path; unchanged catalog 4/4 and selected package 12/12, scoped 19/19 | Passed: context-focused-r1.log partial plus scoped-context-r2.log; first overall 31/32 failure retained |
+| Deferred presentation, history and runtime | Rule disclosure retains ok:false, no initial file effect, deferred persisted and rendered neutrally; 44/44 | Passed: deferred-focused.log |
+| Actual candidate | First version 7/7 including 125,002 ms real stream; status revision 7/7, app exits 0 | Passed: candidate-ui-r3 and candidate-status-ui reports |
+| Stage 1 initial installed EXE | Status revision 7/7, normal folds, real file read/write, disabled/privacy/rule-change/cancel; 1440×1000 screenshot shows no visible error for that page/data state; app exits 0 | Passed: installed-status-ui/instruction-skill-ui.json and instruction-skill.png |
+| Real configured model | Actual auto Skill open/list/search/read and write/read, synthetic proof, PERSONAL/PROJECT/DEFAULT markers, original connection unchanged; first local preparation 381 ms, first activity 18,669 ms, not a same-input speed comparison | Passed: external/validated-result.json; original assertion failure preserved |
+| Stage 1 provisional installation | Initial installer SHA-256 c2656207947cc468f88bc43d0a42eed88e83514bf18b0a487e4cfe199676ae30; 27/27 files matched that candidate, 2,946 profile files unchanged immediately after install; 2/2 startup/history/exit and 4/4 critical profile hashes unchanged after exit | Passed: installation.json, installed-startup.json |
+
+| Stage 2 scope and operation | Expected and actual result | Status and evidence |
+| --- | --- | --- |
+| Revision/bridge logic | Retry preserves stored input/attachments and disables tools, removes old answer without new retry version; earlier turns/file effects require checked confirmation; edit keeps version history | Passed 21/21: focused Node tests and stage2-review.json |
+| Candidate actual UI | Click edit inside original bubble, Escape cancel, save; adjacent retry replaces answer; earlier-turn cancel/confirm; detached edit/retry; restart/history; narrow layout | Passed 5/5: inline-ui/inline-message-ui.json; screenshot inline-ui/inline-message.png |
+| Installed actual UI | Same scoped flow with Ctrl+Enter in detached window and 390px/1440px layout; app exits normally | Passed 5/5: installed-inline-keyboard/inline-message-ui.json and inline-message.png |
+| Failed answer retry | Model-list success and HTTP 502 diagnosis unchanged; ordinary and failed-regeneration retry avoid modal and remove failed response without new retry snapshot | Passed 4/4 candidate and 4/4 installed: installed-gateway-ui/model-diagnostics-ui.json |
+| Stage 1 direct UI regression | Automatic Skill/rule behavior and status remain correct after renderer change; long stream/public provider reuses unchanged evidence | Passed 7/7: candidate-stage1-regression/instruction-skill-ui.json |
+| Final build, replacement and real profile | Installer exit 0, 27/27 installed files match candidate; five critical profile files unchanged at install; real startup/history/normal exit, four immutable critical files unchanged and encrypted learning memory valid | Passed: final-installation.json; installed-profile-final.json |
+
+- Preserved failures: first inline UI script used an unquoted CSS attribute value for numeric-leading IDs; after fixing only the selector, all five checks passed. First silent install had an escaped-path argument error, returned 0, and was rejected by missing-EXE check; corrected raw-path reinstall and hashes passed. First real-profile script required learning-memory.json to stay byte-identical even though it saves encrypted state on normal exit; installed-profile-initial-failure.json is retained, corrected check passed. No failed result is reclassified as passing.
+- Cleanup: seven exact current fixtures moved to release/手动删除 after deletion was rejected by automatic approval; exact original/current paths are in cleanup.json. Manual removal later; previous denied paths untouched.
+- Project status: [Project Handoff](HANDOFF.md).
+
 ## Active Increment — 1.3.36, 2026-11-04
 
 - Actual target: Scodex Workbench 1.3.36, Windows x64/Electron 45; installed entry C:/Program Files/scodex-workbench/Scodex工作台.exe, candidate release/win-unpacked/Scodex工作台.exe. Existing Node.js 24 toolchain. Evidence root: release/delivery-1.3.36.

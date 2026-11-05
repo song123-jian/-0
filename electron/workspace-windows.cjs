@@ -10,7 +10,7 @@ function validateWindowAction(record, input) {
   if (['send','draft','revise'].includes(type) && (typeof input.text !== 'string' || input.text.length > 64000 || input.text.includes('\0'))) throw Error('请输入64000字符以内的文本。');
   if (type === 'send' && !input.text.trim()) throw Error('请输入要发送的内容。');
   if (['revise','revision'].includes(type) && (typeof input.stamp !== 'string' || input.stamp.length > 1000000)) throw Error('版本标识无效。');
-  if (type === 'revise' && (!['edit','regenerate'].includes(input.kind) || !snapshot.chat?.messages.some(m => m.id === input.messageId))) throw Error('此消息已变化。');
+  if (type === 'revise' && (!['edit','regenerate','retry'].includes(input.kind) || !snapshot.chat?.messages.some(m => m.id === input.messageId))) throw Error('此消息已变化。');
   if (type === 'fork' && !snapshot.chat?.messages.some(m => m.id === input.messageId && m.role === 'assistant')) throw Error('此回答已变化。');
   if (['change-details','change-undo'].includes(type) && !snapshot.chat?.messages.some(m => m.fileChanges?.id === input.changeId)) throw Error('此文件修改不属于当前聊天。');
   if (type === 'revision' && input.versionId !== (snapshot.chat?.revisionId || 'initial') && !snapshot.chat?.revisions?.some(v => v.id === input.versionId)) throw Error('此版本已变化。');
@@ -19,7 +19,7 @@ function validateWindowAction(record, input) {
   if (type === 'file' && !snapshot.chat?.messages.some(m => m.operations?.some(o => o.path === input.path))) throw Error('此文件不在当前操作记录中。');
   return { type, ...(['send', 'draft', 'revise'].includes(type) && typeof input.text === 'string' ? { text: input.text } : {}),
     ...(['revise','revision'].includes(type) ? { stamp: input.stamp } : {}),
-    ...(type === 'revise' ? { kind: input.kind, messageId: input.messageId, executionEnabled: input.executionEnabled === true } : {}),
+    ...(type === 'revise' ? { kind: input.kind, messageId: input.messageId, executionEnabled: input.executionEnabled === true, discardFollowing: input.discardFollowing === true, discardEffects: input.discardEffects === true } : {}),
     ...(type === 'fork' ? { messageId: input.messageId } : {}),
     ...(['change-details','change-undo'].includes(type) ? { changeId: input.changeId } : {}),
     ...(type === 'change-details' && input.summaryOnly === true ? { summaryOnly: true } : {}),
