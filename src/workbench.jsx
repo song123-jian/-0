@@ -28,7 +28,6 @@ import { PluginCenterPanel, ScheduledTasksPanel } from './components/task-panels
 import { SettingsPanel } from './components/settings-panel.jsx';
 import { ComposerTools } from './components/composer-tools.jsx';
 import { ToolsPanel, CommandPalette } from './components/tools-panel.jsx';
-import { AgentActivity } from './components/agent-activity.jsx';
 import { ChatRuns } from './components/chat-runs.jsx';
 import { GitPanel } from './components/git-panel.jsx';
 import { InlineMessageEditor, MessageRevisionDialog } from './components/conversation-revisions.jsx';
@@ -36,8 +35,8 @@ import { TaskFileChanges } from './components/task-file-changes.jsx';
 import { TaskCollaborationDialog } from './components/task-collaboration.jsx';
 import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboration.js';
 import { prepareRevision, selectRevision, revisionStamp, revisionSource } from './lib/conversation-revisions.js';
-import { MessageContent, MessageProgress } from './components/message-content.jsx';
-import { messageProgressState, settledTiming } from './lib/message-presentation.js';
+import { MessageContent, MessageExecution } from './components/message-content.jsx';
+import { messageContentParts, settledTiming } from './lib/message-presentation.js';
 import { applyConversationAction, conversationText, forkChatAtMessage, newChatRecord } from './lib/conversation-actions.js';
 import { WorkspaceContextMenu, WorkspaceActionDialog } from './components/workspace-context-menu.jsx';
 import { ActivityRail, BrowserPanel } from './components/shell-panels.jsx';
@@ -425,7 +424,7 @@ function App() {
       if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.goalStatus || 'paused', summary: event.goalSummary || '' } }), request.conversationId);
       finishRequest(event.requestId);
       setApiState('connected');
-      updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: event.text, pending: false, approval: null, phase: '', ...settledTiming(item) } : item));
+      updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: event.text, finalContentOffset: event.finalContentOffset, pending: false, approval: null, phase: '', ...settledTiming(item) } : item));
       window.scodex.notify('complete').catch(() => {});
     } else if (event.type === 'cancelled') {
       if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'paused', summary: '已停止或到达时间预算；已执行结果保留。' } }), request.conversationId);
@@ -2178,10 +2177,10 @@ export function MessageBubble({ message, conversationId, copied, onCopy, onFork,
     {!editRequest && <div className="user-message-actions">{onEdit && <button className="text-tool" aria-label="编辑此消息" disabled={actionsDisabled} onClick={onEdit}>编辑消息</button>}{onRetryUser && <button className="text-tool" aria-label="重试此消息" disabled={actionsDisabled} onClick={onRetryUser}><RotateCw size={14} />重试</button>}{message.content !== undefined && <button className="icon-button small" title="复制消息" aria-label="复制消息" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}</div>}
   </article>;
 
+  const parts = messageContentParts(message);
   return <article data-message-id={message.id} className="assistant-message"><div className="assistant-message-mark"><Sparkles size={15} /></div><div className="assistant-message-main"><div className="assistant-message-label">{message.model || '助手'}</div>
-    <MessageProgress message={message} collapsed={messageProgressState(message) === 'complete'} />
-    {message.content && <MessageContent content={message.content} onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
-    <AgentActivity operations={message.operations} approval={message.approval} collapsed={messageProgressState(message) === 'complete'} onApproval={onApproval} onOpenFile={onOpenFile} onBrowser={onBrowser} onServices={onServices} />
+    <MessageExecution message={message} activity={parts.activity} onApproval={onApproval} onOpenFile={onOpenFile} onBrowser={onBrowser} onServices={onServices} />
+    {parts.answer && <MessageContent content={parts.answer} onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
     {!message.pending && message.fileChanges && <TaskFileChanges record={message.fileChanges} conversationId={conversationId} disabled={actionsDisabled} />}
     {message.error && <div className="message-error"><CircleAlert size={16} /><span>{message.error}</span></div>}
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}

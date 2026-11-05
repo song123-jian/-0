@@ -32,7 +32,7 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   if (subagentModel && !subagentModels.includes(subagentModel)) subagentModels.push(subagentModel);
   if (subagentModel && subagentBaseUrl === baseUrl && !models.includes(subagentModel)) models.push(subagentModel);
   const addresses = [...new Set([baseUrl, ...(Array.isArray(value.addresses) ? value.addresses : []).slice(0, 19).map((item) => normalizeAddress(item))])];
-  const retryLimit = Number.isInteger(value.retryLimit) ? Math.min(2, Math.max(0, value.retryLimit)) : 1;
+  const retryLimit = Number.isInteger(value.retryLimit) ? Math.min(6, Math.max(0, value.retryLimit)) : 6;
   const maxOutputTokens = Number.isInteger(value.maxOutputTokens) && value.maxOutputTokens >= 128 && value.maxOutputTokens <= 128000 ? value.maxOutputTokens : 0;
   return { retryLimit, maxOutputTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol };
 }

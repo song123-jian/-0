@@ -299,6 +299,15 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .assistant-message-content hr { margin: 20px 0; border: 0; border-top: 1px solid var(--line); }
 .message-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; margin: 0 0 16px; color: var(--muted); font-size: calc(13px + var(--font-step, 0px)); line-height: 1.6; }
 .message-progress[data-state="complete"] .message-progress-line { display: none; }
+.message-execution { min-width: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.message-execution-summary { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 7px; padding: 0 0 9px; color: var(--muted); cursor: pointer; list-style: none; }
+.message-execution-summary::-webkit-details-marker { display: none; }
+.message-execution-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.message-execution-summary .message-progress { min-width: 0; margin: 0; }
+.message-execution-summary .message-progress-line { display: none; }
+.message-execution[open] > summary > .agent-chevron { transform: rotate(90deg); }
+.message-execution-body { min-width: 0; padding-bottom: 10px; }
+.message-execution-empty { margin: 2px 0; color: var(--muted); font-size: calc(13px + var(--font-step, 0px)); }
 .message-progress-label { display: inline-flex; gap: 7px; align-items: center; }.message-progress time { white-space: nowrap; }.message-progress-line { height: 1px; flex: 0 0 100%; margin-top: 5px; background: var(--line); }.message-time-note { margin-left: 5px; }
 .message-code-block { max-width: 100%; margin: 14px 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--ink) 3%, var(--paper)); }
 .message-code-toolbar { display: flex; min-height: 39px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; padding: 5px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 14px; }.message-code-toolbar > div { display: flex; gap: 6px; }.message-code-toolbar button { display: inline-flex; align-items: center; gap: 5px; }

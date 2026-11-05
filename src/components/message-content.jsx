@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Clipboard, FileCode2, LoaderCircle } from 'lucide-react';
-import { formatDuration, messageElapsedMs, parseInline, parseMessageBlocks } from '../lib/message-presentation.js';
+import { Check, ChevronRight, Clipboard, FileCode2, LoaderCircle } from 'lucide-react';
+import { formatDuration, messageElapsedMs, messageProgressState, parseInline, parseMessageBlocks } from '../lib/message-presentation.js';
+import { AgentActivity } from './agent-activity.jsx';
 
 function Inline({ text, tokens = parseInline(text) }) {
   return tokens.map((token, index) => {
@@ -67,4 +68,23 @@ export function MessageProgress({ message, collapsed = false }) {
     {elapsed !== null && <time title={inferred ? '根据历史操作记录起止时间计算' : '本条回复的实际处理时长'}>{formatDuration(elapsed)}{inferred && <span className="message-time-note">（操作耗时）</span>}</time>}
     <span className="message-progress-line" />
   </div>;
+}
+
+export function MessageExecution({ message, activity, ...actions }) {
+  const complete = messageProgressState(message) === 'complete';
+  const [expanded, setExpanded] = useState(!complete);
+  useEffect(() => { setExpanded(!complete); }, [message.id, complete, message.approval?.id]);
+  return <details className="message-execution agent-activity-shell" open={expanded} onToggle={(event) => {
+    if (event.target === event.currentTarget) setExpanded(event.currentTarget.open);
+  }}>
+    <summary className="message-execution-summary" aria-label="任务处理过程">
+      <MessageProgress message={message} collapsed={!expanded} />
+      <ChevronRight size={15} className="agent-chevron" aria-hidden="true" />
+    </summary>
+    <div className="message-execution-body">
+      {activity && <MessageContent content={activity} />}
+      <AgentActivity operations={message.operations} approval={message.approval} collapsed={complete} embedded {...actions} />
+      {!message.pending && !activity && !message.operations?.length && <p className="message-execution-empty">本次未执行工具操作。</p>}
+    </div>
+  </details>;
 }

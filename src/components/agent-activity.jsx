@@ -34,14 +34,13 @@ function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
   </details>;
 }
 
-export function AgentActivity({ operations = [], approval, onApproval, onOpenFile, onBrowser, onServices, collapsed = false }) {
+export function AgentActivity({ operations = [], approval, onApproval, onOpenFile, onBrowser, onServices, collapsed = false, embedded = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const hasUrgentActivity = Boolean(approval || operations.some((item) => !['succeeded', 'deferred'].includes(item.status)));
   const [expanded, setExpanded] = useState(hasUrgentActivity && !collapsed);
   useEffect(() => {
-    if (hasUrgentActivity) setExpanded(true);
-    else setExpanded(false);
+    setExpanded(hasUrgentActivity && !collapsed);
   }, [hasUrgentActivity, collapsed]);
   const plan = [...operations].reverse().find((item) => item.plan?.length)?.plan;
   const changes = new Map();
@@ -68,14 +67,15 @@ export function AgentActivity({ operations = [], approval, onApproval, onOpenFil
   const summaryLabel = labels.length <= 2 ? labels.join(' · ') : `${labels.slice(0, 2).join(' · ')} · 其他 ${labels.length - 2} 项`;
   const summaryStatus = approval || operations.some((item) => item.status === 'running') ? 'running' : operations.some((item) => item.status === 'failed') ? 'failed' : operations.some((item) => ['cancelled', 'interrupted'].includes(item.status)) ? 'cancelled' : 'succeeded';
   const summaryIcon = summaryStatus === 'running' ? <LoaderCircle size={16} className="spin" /> : summaryStatus === 'failed' ? <CircleAlert size={16} /> : summaryStatus === 'cancelled' ? <X size={16} /> : <ListChecks size={16} />;
+  const Shell = embedded ? 'div' : 'details';
   return <section className="agent-activity" aria-label="任务执行记录">
-    <details className="agent-activity-shell" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
-      <summary className="agent-activity-summary" aria-label={`任务执行记录：${summaryLabel || '已完成'}`}>
+    <Shell className={embedded ? 'agent-activity-embedded' : 'agent-activity-shell'} {...(!embedded ? { open: expanded, onToggle: (event) => { if (event.target === event.currentTarget) setExpanded(event.currentTarget.open); } } : {})}>
+      {!embedded && <summary className="agent-activity-summary" aria-label={`任务执行记录：${summaryLabel || '已完成'}`}>
         <span className={'agent-activity-summary-icon ' + summaryStatus}>{summaryIcon}</span>
         <span className="agent-activity-summary-title">{summaryLabel || '已完成操作'}</span>
         <small>{operations.length ? `${operations.length} 项` : '待审批'}</small>
         <ChevronRight size={15} className="agent-chevron" />
-      </summary>
+      </summary>}
       <div className="agent-activity-details">
         {plan && <details className="agent-plan-summary"><summary><ListChecks size={16} /><span>任务计划</span><small>{plan.filter((step) => step.status === 'completed').length}/{plan.length} 已完成</small><ChevronRight size={15} className="agent-chevron" /></summary><ol className="agent-plan" aria-label="任务计划">{plan.map((step, index) => <li key={index} className={step.status}><span>{step.status === 'completed' ? <Check size={15} /> : step.status === 'in_progress' ? <LoaderCircle size={15} className="spin" /> : index + 1}</span>{step.text}</li>)}</ol></details>}
         <div className="agent-operations">
@@ -85,6 +85,6 @@ export function AgentActivity({ operations = [], approval, onApproval, onOpenFil
         {changes.size > 0 && <details className="agent-changes-summary"><summary><FileCode2 size={16} /><span>{changes.size} 个文件已修改</span><ChevronRight size={15} className="agent-chevron" /></summary><ul>{[...changes.values()].map((item) => <li key={item.path}><button className="text-tool" disabled={!onOpenFile} onClick={() => onOpenFile(item.path)}>{item.path}</button><span className="agent-added">+{item.added}</span><span className="agent-removed">−{item.removed}</span></li>)}</ul></details>}
         {approval && <div className="agent-approval" role="region" aria-label={approval.kind === 'mcp' ? 'MCP 调用审批' : approval.kind === 'browser' ? '网页操作审批' : approval.kind === 'service' ? '开发服务审批' : approval.kind === 'spreadsheet' ? '表格修改审批' : approval.kind === 'image' ? '图片操作审批' : '命令审批'}><div><ShieldAlert size={20} /><strong>{approval.title}</strong></div><p>{approval.note}</p>{approval.server && <p className="agent-mcp-target">服务器：{approval.server} · 工具：{approval.tool}</p>}<div className="agent-operation-path">{approval.path}</div><pre>{approval.command}</pre><div className="agent-approval-actions"><button className="secondary-button" disabled={busy} onClick={() => decide(false)}>拒绝</button><button className="primary-button" disabled={busy} onClick={() => decide(true)}>{approval.allowLabel || '允许本次命令'}</button></div>{error && <p role="alert">{error}</p>}</div>}
       </div>
-    </details>
+    </Shell>
   </section>;
 }

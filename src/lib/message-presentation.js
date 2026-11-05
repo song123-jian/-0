@@ -27,6 +27,16 @@ export function messageProgressState(message = {}) {
   return 'complete';
 }
 
+export function messageContentParts(message = {}) {
+  const content = typeof message.content === 'string' ? message.content : '';
+  if (message.pending) return { activity: content, answer: '' };
+  const offset = message.finalContentOffset;
+  if (!message.error && !message.cancelled && Number.isInteger(offset) && offset > 0 && offset < content.length) {
+    return { activity: content.slice(0, offset).trim(), answer: content.slice(offset).trim() };
+  }
+  return { activity: '', answer: content };
+}
+
 export function formatDuration(value) {
   const bounded = boundedTime(value);
   if (bounded === null) return '';

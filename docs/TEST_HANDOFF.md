@@ -1,5 +1,34 @@
 # Test Handoff
 
+## Active Increment — 1.3.38, 2026-11-05
+
+- Goal: support up to six safe temporary-service retries and automatically fold completed execution into an elapsed-time summary with an arrow; retain final answer and actual file-change card.
+- Baseline: 1.3.37 / e947c35c0ab750cf62f8db00b629fbf58633aae6. Target 1.3.38 follows the established SemVer patch mapping.
+- Current checkpoint: implementation, focused tests 55/55, direct regression 33/33, renderer/unpacked builds and candidate UI acceptance complete. NSIS, replacement, installed acceptance 10/10 and real-profile startup/normal exit complete; source and Release publication pending. Scoped review passed 15 code/test/version files, no open finding.
+- Implementation: settings, config and runtime allow 0–6 retries. New configs default to six; existing explicit lower/off values remain supported. Retrying requires HTTP 429/502/503/504 before returned text or any tool operation; auth errors, broken streams, network failures and cancelled waits never replay.
+- Presentation: one native elapsed-time disclosure contains commentary and operations. Completion collapses it even if an earlier operation failed; failed/cancelled requests remain readable. A bounded finalContentOffset survives history normalization; old histories keep their entire original text.
+- Actual target: Scodex工作台.exe 1.3.38, Windows x64/Electron 45. Candidate release/win-unpacked/Scodex工作台.exe; final C:/Program Files/scodex-workbench/Scodex工作台.exe. Actual-app tests use owned isolated profiles, real renderer/IPC/Windows encryption/disk and loopback-only model responses.
+- Constraints: preserve user data, credentials, current model/reasoning, unrelated electron/third-party-licenses.json and earlier rejected cleanup paths. Apply only the user-requested current retry preference to six after installation.
+
+| Verification range | Actual result and evidence under release/delivery-1.3.38 |
+| --- | --- |
+| Focused behavior and config | 55/55, focused-tests.log; sixth retry success, exhaustion, cancel, nonreplay, persisted boundary |
+| Direct dependencies | 33/33, direct-regression.log; goal runtime, presentation and revision behavior |
+| Candidate actual UI | 10 accepted cases: r4 first six retry/settings/history cases, r5 tool/no-replay and folding cases, r8 keyboard/detached/persistence/layout. candidate-ui-r8/retry-completion-ui.json explicitly references reused evidence; all apps exited 0 except the rejected r2 harness cleanup |
+| Installed actual UI | 10/10, installed-ui/retry-completion-ui.json; normal exit 0; completion fold, safe retry, detached keyboard, persistence and narrow layout |
+| Real user profile | installed-profile-final.json passed: history/startup/normal exit, retryLimit 2 -> 6 only, encrypted credentials unchanged; no real model request |
+| Visual | r8 completed-fold.png, 1440x1000: current completed message summary is collapsed, final answer/card/actions visible; earlier fixture HTTP 503 is intentional. 390px bounds passed |
+| Builds | renderer-build.log and package-dir.log exit 0; actual packaged source matches tested implementation |
+
+- Resolved harness/preparation failures: initial CRLF insertion rejected without changing LF docs; r1 innerText newline; r2/r3 normalized-history completion race (corrected using actual rendered terminal state), r4 wrong seeded workspace path, r6 missing output cwd, r5/r7 native Enter missing character (focus proof retained). Only harness/preconditions changed; failures remain in their named reports/logs. r2 task-owned root PID 25228 was ownership-checked then stopped after timeout; no user process ended. r4/r5/r8 supersede only their affected scopes.
+- Evidence and single structured checkpoint: release/delivery-1.3.38/checkpoint.json. Unchanged 1.3.37 results below remain valid; no new public-provider speed/reliability claim.
+- Delivery identity: installer 181106391 bytes / SHA-256 0f823c74f293f9c01b9417dd92f03b68874cf697f12d9ec88d638ef0928386e2; installed EXE f6916183c338b7d7e2bb5fdbde94e3d9d5198cb3a1996bf47e7c0f81a27fd202; ASAR 9c10447dae742ce480a1a165ed6a3119e0297fa176af0c15f2e6d18eb6298e39. Installer exit 0, 27/27 candidate files match, five critical profile files unchanged at replacement. Backup: release/delivery-1.3.38/rollback-1.3.37, 29 verified application files; normal exit before restoring only app files, preserve APPDATA. final-installation.json and rollback-manifest.json provide details.
+- Verification-only corrections: electron-builder intentionally strips development metadata from packaged package.json; effective name/version/main/dependencies match. Initial same-path ASAR read retained a pre-install header cache; fresh-process read confirms 1.3.38, no reinstall. Initial verifier failure preserved; HKLM uninstall entry matches final path/version.
+- Cleanup: automatic approval rejected deletion as blocked by policy. Six ownership/path-checked fixtures moved into release/手动删除 with unique 1.3.38 names; original paths absent. Pending manual removal has no acceptance impact; cleanup.json lists original/current paths. Reports, screenshots, installer, rollback and earlier denied leftovers retained.
+- Next authorized increment: optimize main model, read-only exploration submodels and bounded advisor calls before plan lock, on repeated error and before completion. Not implemented in 1.3.38; preserve configured models and credentials. Continue after this publication and dual-handoff gate.
+- Skills reused: requirement-understanding 95 (30/20/16/15/9/5), systematic-debugging 95 (30/20/16/15/9/5), code-write-review 94 (30/20/15/15/9/5). Relevant requirements, fault-isolation and encoding/review procedures were directly verifiable; no subagents.
+- Project status: [Project Handoff](HANDOFF.md).
+
 ## Active Repair — 1.3.37, 2026-11-05
 
 - Current status: Stage 1 Skill/AGENTS, timeout and rule-display scope plus Stage 2 inline edit and direct retry have passed actual installed-program acceptance. Source bdfcf546359d40fbac5446e8ff60d27d3bf4475b is remotely verified, and v1.3.37 is published as Latest.

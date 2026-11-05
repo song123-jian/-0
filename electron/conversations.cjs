@@ -39,6 +39,7 @@ function normalizeMessage(message) {
   try { attachments = normalizeAttachmentRecords(message.attachments); } catch { /* Keep the message if an old attachment is invalid. */ }
   return {
     id: validId(message.id), role: message.role, content: message.content.slice(0, 64_000),
+    ...(message.role === 'assistant' && Number.isInteger(message.finalContentOffset) && message.finalContentOffset > 0 && message.finalContentOffset < Math.min(message.content.length, 64_000) ? { finalContentOffset: message.finalContentOffset } : {}),
     ...(message.executionEnabled === true ? { executionEnabled: true } : {}),
     ...(message.role === 'assistant' && Array.isArray(message.operations) && message.operations.length ? { operations: normalizeOperations(message.operations) } : {}),
     ...(message.role === 'assistant' && /^[0-9a-f-]{36}$/i.test(message.fileChanges?.id || '') ? { fileChanges: { id: message.fileChanges.id } } : {}),

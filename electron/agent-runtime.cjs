@@ -36,10 +36,14 @@ function structuredReply(message) {
   return { role: 'assistant', content: null, protocolText: raw, tool_calls: [{ id: 'call_' + crypto.randomUUID(), type: 'function', function: { name: value.name, arguments: JSON.stringify(value.arguments) } }] };
 }
 
+function isAuthenticationFailure(detail) {
+  return /(?:auth|credential)[\s\S]{0,120}(?:fail|invalid|denied)|(?:invalid|incorrect|expired)[\s\S]{0,40}(?:api[ _-]?key|credential)|\b(?:unauthorized|invalid_api_key|authentication_error)\b|鉴权失败|认证失败/i.test(detail);
+}
+
 function httpError(response, usingTools, detail = '') {
   if ([401, 403].includes(response.status)) return new Error(`模型服务拒绝了当前密钥（HTTP ${response.status}）。请检查“模型与连接”。`);
   if (response.status === 503) return new Error('中转站暂时不可用（HTTP 503）。消息和已执行的操作已保留。');
-  if (response.status === 502 && /(?:upstream[\s\S]{0,120}(?:auth|credential)[\s\S]{0,120}(?:fail|invalid)|(?:auth|credential)[\s\S]{0,120}failed)/i.test(detail)) {
+  if (response.status === 502 && isAuthenticationFailure(detail)) {
     return new Error('模型服务网关的上游鉴权失败（HTTP 502）。测速只检查 /models，不会生成回答；请联系服务管理员检查上游密钥和模型路由。消息和已完成的操作已保留。');
   }
   if (response.status === 400 && usingTools) return new Error('模型服务拒绝了工具请求（HTTP 400）。请确认所选模型支持 OpenAI 兼容 function tools；可以切回对话模式。');
@@ -170,7 +174,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     if (JSON.stringify(conversation).length > 900_000) {
       for (const item of conversation.slice(1, -2)) if (item.role === 'tool' && item.content.length > 2000) item.content = item.content.slice(0, 1800) + '\n[较早的工具输出已压缩；需要时重新读取文件]';
     }
-    let message;
+    let message, finalContentOffset = fullText.length;
     for (let attempt = 0; ; attempt += 1) {
       aborted(signal);
       const requestController = new AbortController();
@@ -198,11 +202,13 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         });
         responseHeadersMs = elapsed(); httpStatus = response.status;
         if (!response.ok) {
-          retry = [429, 502, 503, 504].includes(response.status) && attempt < Math.min(2, Math.max(0, connection.retryLimit || 0));
           const detail = await serviceErrorDetail(response, connection.apiKey);
+          retry = [429, 502, 503, 504].includes(response.status) && !isAuthenticationFailure(detail)
+            && !fullText && operations === 0 && attempt < Math.min(6, Math.max(0, connection.retryLimit || 0));
           if (!retry) throw httpError(response, Boolean(tools?.length && !structured), detail);
         } else {
           if (fullText && !fullText.endsWith('\n\n')) append('\n\n');
+          finalContentOffset = fullText.length;
           emit({ type: 'phase', phase: 'receiving', round: round + 1 });
           message = await readCompletion(response, { signal: requestSignal, usageGraceMs: connection.reportUsage ? 150 : 0,
             onProgress: touch,
@@ -241,7 +247,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     aborted(signal);
     if (!message.tool_calls?.length) {
       if (!message.content?.trim()) throw new Error('模型返回了空内容。');
-      if (!goal) return { text: fullText, operations, rounds: round + 1, usage: totalUsage };
+      if (!goal) return { text: fullText, finalContentOffset, operations, rounds: round + 1, usage: totalUsage };
       conversation.push(message, { role: 'user', content: '继续完成已授权目标，先核对现有结果，不要重复副作用。真正完成或需要用户输入时，调用 goal_finish，提供实际证据或阻塞原因。' });
       continue;
     }
@@ -269,8 +275,9 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       emit({ type: 'operation', operation: { id, name, status, startedAt, endedAt: new Date().toISOString(),
         ...(result?.activity || {}), ...(result?.error ? { output: [result.output, result.error].filter(Boolean).join('\n').slice(-24_000) } : {}) } });
       if (goalFinish) {
+        const finalContentOffset = fullText.length;
         append('\n\n' + goalFinish.summary + '\n依据：' + goalFinish.evidence);
-        return { text: fullText, operations, rounds: round + 1, usage: totalUsage, goalStatus: goalFinish.status, goalSummary: goalFinish.summary };
+        return { text: fullText, finalContentOffset, operations, rounds: round + 1, usage: totalUsage, goalStatus: goalFinish.status, goalSummary: goalFinish.summary };
       }
       const { activity: _activity, modelImages, ...modelResult } = result || { ok: true };
       if (['browser_screenshot', 'image_read', 'image_edit', 'desktop_screenshot', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_scroll'].includes(name) && status === 'succeeded') pendingImages.push(...normalizeChatImages(modelImages).slice(0, 1));

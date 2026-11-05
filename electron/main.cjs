@@ -810,7 +810,7 @@ async function callModel(webContents, requestId, payload, controller = new Abort
       tools: executionTools, executeTool, takeSteering: () => steeringQueue.drain(),
       emit: (event) => { if (event.type === 'request-metrics') { event = { ...event, preparationMs }; modelUsage.record(event).catch(() => sendChatEvent(webContents, { requestId, type: 'usage-warning', message: '用量记录未能保存。' })); } sendChatEvent(webContents, { requestId, ...event }); },
     });
-    terminalEvent = { type: 'complete', text: result.text, operations: result.operations, rounds: result.rounds, usage: result.usage, goalStatus: result.goalStatus, goalSummary: result.goalSummary };
+    terminalEvent = { type: 'complete', text: result.text, finalContentOffset: result.finalContentOffset, operations: result.operations, rounds: result.rounds, usage: result.usage, goalStatus: result.goalStatus, goalSummary: result.goalSummary };
   } catch (error) {
     const message = controller.signal.aborted ? '任务已停止；已完成的文件修改仍然保留，请查看操作记录。' : String(error?.message || '请求失败。').slice(0, 1000);
     terminalEvent = { type: controller.signal.aborted ? 'cancelled' : 'error', message };
