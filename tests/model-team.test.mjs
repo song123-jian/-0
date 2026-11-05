@@ -1,0 +1,176 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { createModelTeam, advisorReply } = require('../electron/model-team.cjs');
+const { runModelTask } = require('../electron/agent-runtime.cjs');
+const { createSubagentCoordinator } = require('../electron/subagent-coordinator.cjs');
+const { createSubagentTools } = require('../electron/subagent-tools.cjs');
+
+const review = () => JSON.stringify({ verdict: 'revise', summary: '核对范围和实际验证', checks: ['保持现有数据', '回读修改并验证'] });
+const connection = { endpoint: 'https://unit.example/v1/chat/completions', apiKey: 'main-unit-key', model: 'main', toolProtocol: 'native', retryLimit: 0 };
+const tools = ['update_plan', 'write_file', 'read_file', 'run_command', 'subagent_wait'].map(name => ({ type: 'function', function: { name, parameters: { type: 'object', properties: {} } } }));
+const call = (name, args = {}) => ({ id: 'call_' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+const response = message => Response.json({ choices: [{ message }] });
+
+test('advisor is idle for ordinary answers and successful read-only exploration', async () => {
+  let count = 0;
+  const team = createModelTeam({ enabled: true, consult: async () => { count++; return review(); } });
+  assert.equal(await team.beforeTool('read_file', { path: 'README.md' }), null);
+  await team.afterTool('read_file', {}, { ok: true, hash: 'read-hash' }, 'succeeded');
+  assert.equal(await team.beforeFinal('这是项目文档说明'), null);
+  assert.equal(count, 0);
+});
+
+test('one advisor request per gate, bounded redacted context, changed arguments share repeated-error gate', async () => {
+  const seen = [], events = [];
+  const team = createModelTeam({ enabled: true, task: 'requirement ' + 'x'.repeat(20000) + 'main-unit-key', secrets: ['main-unit-key'], emit: e => events.push(e),
+    consult: async input => { seen.push(input); return review(); } });
+  const gate = await team.beforeTool('update_plan', { steps: [{ text: 'main-unit-key', status: 'in_progress' }] });
+  assert.equal(gate.requires_advisor_review, true);
+  assert.equal(await team.beforeTool('write_file', { path: 'code.js' }), null);
+  assert.equal(await team.afterTool('run_command', { command: 'first' }, { ok: false, error: 'missing dependency', output: 'Bearer hidden-key' }, 'failed'), null);
+  await team.afterTool('read_file', {}, { ok: true }, 'succeeded');
+  assert.match(await team.afterTool('run_command', { command: 'changed command' }, { ok: false, error: 'missing dependency' }, 'failed'), /顾问/);
+  assert.equal(await team.afterTool('run_command', {}, { ok: false, error: 'missing dependency' }, 'failed'), null);
+  assert.match(await team.beforeFinal('draft'), /顾问/);
+  assert.equal(await team.beforeFinal('verified final'), null);
+  assert.deepEqual(seen.map(item => item.stage), ['plan', 'repeated-error', 'completion']);
+  for (const item of seen) { assert.ok(item.context.length < 12000); assert.doesNotMatch(item.context, /main-unit-key|hidden-key/); }
+  assert.equal(events.filter(e => e.operation.status === 'succeeded').length, 3);
+});
+
+test('failed or timed-out advisor disables further consultations and never claims a pass', async () => {
+  let count = 0;
+  const team = createModelTeam({ enabled: true, timeoutMs: 12, consult: ({ signal }) => { count++; return new Promise((_, reject) => signal.addEventListener('abort', () => reject(Error('aborted')), { once: true })); } });
+  const gate = await team.beforeTool('write_file', {});
+  assert.match(gate.advice, /未完成.*不再重试/);
+  assert.equal(await team.beforeFinal('result'), null);
+  assert.equal(team.snapshot().unavailable, true);
+  assert.equal(count, 1);
+});
+
+test('parent cancellation aborts advisor without continuing the task', async () => {
+  const parent = new AbortController(); let advisorSignal;
+  const team = createModelTeam({ enabled: true, signal: parent.signal, consult: async ({ signal }) => { advisorSignal = signal; parent.abort(); return review(); } });
+  await assert.rejects(team.beforeTool('write_file', {}), /停止/);
+  assert.equal(advisorSignal.aborted, true);
+});
+
+test('deferred directory rules and unrelated first failures do not escalate', async () => {
+  const seen = [];
+  const team = createModelTeam({ enabled: true, consult: async input => { seen.push(input); return review(); } });
+  await team.afterTool('read_file', {}, { ok: false, requires_instruction_review: true }, 'deferred');
+  await team.afterTool('read_file', {}, { ok: false, error: 'A' }, 'failed');
+  await team.afterTool('read_file', {}, { ok: false, error: 'B' }, 'failed');
+  assert.equal(seen.length, 0);
+  assert.throws(() => advisorReply('{"verdict":"ready","summary":"no checks"}'), /格式/);
+});
+
+for (const protocol of ['native', 'json']) test(protocol + ' runtime defers plan and batched effects; main incorporates completion advice once', async () => {
+  let requests = 0, writes = 0; const seen = [];
+  const team = createModelTeam({ enabled: true, consult: async input => { seen.push(input.stage); return review(); } });
+  const result = await runModelTask({ connection: { ...connection, toolProtocol: protocol }, messages: [{ role: 'user', content: 'modify one file' }], tools, team,
+    executeTool: async name => { if (name === 'write_file') writes++; return { ok: true }; },
+    fetchImpl: async (_, init) => {
+      requests++; const body = JSON.parse(init.body);
+      const step = protocol === 'native' ? [
+        { tool_calls: [call('update_plan', { steps: [{ text: 'write and verify' }] }), call('write_file', { path: 'file.js' })] },
+        { tool_calls: [call('write_file', { path: 'file.js' })] },
+        { content: 'draft answer' }, { content: 'verified answer' },
+      ] : [
+        { type: 'tool', name: 'update_plan', arguments: { steps: [{ text: 'write and verify' }] } },
+        { type: 'tool', name: 'write_file', arguments: { path: 'file.js' } },
+        { type: 'final', content: 'draft answer' }, { type: 'final', content: 'verified answer' },
+      ];
+      if (requests === 2) { assert.equal(writes, 0); assert.match(JSON.stringify(body.messages), /requires_advisor_review/); }
+      if (requests === 4) assert.match(JSON.stringify(body.messages), /顾问的独立核验意见/);
+      return response(protocol === 'native' ? step[requests - 1] : { content: JSON.stringify(step[requests - 1]) });
+    },
+  });
+  assert.equal(writes, 1); assert.equal(requests, 4);
+  assert.deepEqual(seen, ['plan', 'completion']);
+  assert.equal(result.text.slice(result.finalContentOffset), 'verified answer');
+});
+
+test('runtime keeps native tool call/results paired before adding repeated-error advice', async () => {
+  let requests = 0, invoked = 0;
+  const team = createModelTeam({ enabled: true, consult: async () => review() });
+  await runModelTask({ connection, messages: [], tools, team,
+    executeTool: async () => { invoked++; return { ok: false, error: 'same error' }; },
+    fetchImpl: async (_, init) => {
+      requests++; const body = JSON.parse(init.body);
+      if (requests === 1) return response({ tool_calls: [call('read_file', { path: 'a' }), { ...call('read_file', { path: 'b' }), id: 'b' }, { ...call('read_file', { path: 'c' }), id: 'c' }] });
+      if (requests === 2) {
+        assert.equal(invoked, 2);
+        assert.deepEqual(body.messages.slice(1, 4).map(m => m.role), ['tool', 'tool', 'tool']);
+      }
+      return response({ content: requests === 2 ? 'draft' : 'verified' });
+    },
+  });
+});
+
+test('unfinished child work blocks main completion even with advisor disabled', async () => {
+  let active = true, requests = 0;
+  const team = createModelTeam({ activeTasks: () => active ? [{ id: 'sub-pending', status: 'running' }] : [] });
+  const result = await runModelTask({ connection, messages: [], tools, team,
+    executeTool: async name => { assert.equal(name, 'subagent_wait'); active = false; return { ok: true, status: 'complete' }; },
+    fetchImpl: async () => { requests++; return response(requests === 1 ? { content: 'premature' } : requests === 2 ? { tool_calls: [call('subagent_wait', { task_id: 'sub-pending' })] } : { content: 'integrated' }); },
+  });
+  assert.equal(result.text.slice(result.finalContentOffset), 'integrated'); assert.equal(requests, 3);
+});
+
+test('completed goal_finish is deferred for advisor, then commits the verified result', async () => {
+  let requests = 0; const seen = [];
+  const team = createModelTeam({ enabled: true, consult: async input => { seen.push(input.stage); return review(); } });
+  const result = await runModelTask({ connection, messages: [], tools, team, goal: { maxRequests: 8 }, executeTool: async () => ({ ok: true }),
+    fetchImpl: async () => { requests++; return response({ tool_calls: [requests < 3 ? call('update_plan', { steps: [{ text: 'work' }] }) : call('goal_finish', { status: 'completed', summary: 'done', evidence: 'actual file check' })] }); },
+  });
+  assert.equal(result.goalStatus, 'completed'); assert.equal(requests, 4); assert.deepEqual(seen, ['plan', 'completion']);
+});
+
+test('explorers enforce a task budget and merge only identical active work, without locking main writes', async () => {
+  const release = new Map(); let runs = 0;
+  const coordinator = createSubagentCoordinator({ workspaceRoot: 'C:/workspace', maxConcurrent: 2, maxTasks: 2,
+    run: async ({ id }) => { runs++; return new Promise(resolve => release.set(id, resolve)); } });
+  const args = { task: 'read docs', mode: 'analysis', paths: ['docs'], parentRequestId: 'parent' };
+  const first = await coordinator.start(args);
+  const duplicate = await coordinator.start(args);
+  assert.equal(duplicate.id, first.id); assert.equal(duplicate.reused, true); assert.equal(runs, 1);
+  assert.doesNotThrow(() => coordinator.assertWritable('C:/workspace/docs/guide.md'));
+  const second = await coordinator.start({ ...args, task: 'read interfaces' });
+  await assert.rejects(coordinator.start({ ...args, task: 'third' }), /最多同时/);
+  release.get(first.id)('first'); release.get(second.id)('second');
+  await coordinator.wait(first.id, 1000, 'parent'); await coordinator.wait(second.id, 1000, 'parent');
+  await assert.rejects(coordinator.start({ ...args, task: 'next' }), /最多分配/);
+});
+
+test('read-only delegation rejects edits before network preparation', async () => {
+  let prepare = 0;
+  const delegation = createSubagentTools({ coordinator: {}, parentRequestId: 'parent', allowEdits: false, prepare: async () => { prepare++; } });
+  const start = delegation.definitions.find(item => item.function.name === 'subagent_start');
+  assert.deepEqual(start.function.parameters.properties.mode.enum, ['analysis']);
+  await assert.rejects(delegation.execute('subagent_start', { task: 'edit', mode: 'edit', paths: ['file'] }), /默认只读/);
+  assert.equal(prepare, 0);
+});
+
+test('active task deduplication never shares results with another parent', async () => {
+  const release = [];
+  const coordinator = createSubagentCoordinator({ workspaceRoot: 'C:/workspace', run: async () => new Promise(resolve => release.push(resolve)) });
+  const input = { task: 'same file analysis', mode: 'analysis', paths: ['docs'] };
+  const a = await coordinator.start({ ...input, parentRequestId: 'parent-a' });
+  const b = await coordinator.start({ ...input, parentRequestId: 'parent-b' });
+  assert.notEqual(a.id, b.id); assert.equal(release.length, 2);
+  await assert.rejects(coordinator.read(a.id, 'parent-b'), /不属于/);
+  release.forEach(resolve => resolve('done'));
+  await Promise.all([coordinator.wait(a.id, 1000, 'parent-a'), coordinator.wait(b.id, 1000, 'parent-b')]);
+});
+
+test('escaped context stays bounded and quoted credential fields are redacted', async () => {
+  let context;
+  const team = createModelTeam({ enabled: true, task: '\0'.repeat(5000), consult: async input => { context = input.context; return review(); } });
+  await team.beforeTool('write_file', { content: '\0'.repeat(5000), apiKey: 'quoted-unit-secret' });
+  assert.ok(context.length <= 12000); assert.doesNotThrow(() => JSON.parse(context));
+  const { redact } = require('../electron/model-team.cjs');
+  assert.doesNotMatch(redact('{"apiKey":"quoted-unit-secret"}'), /quoted-unit-secret/);
+});

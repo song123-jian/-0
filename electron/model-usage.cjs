@@ -17,6 +17,8 @@ function createUsageLedger(file) {
       const operation = queue.then(async () => {
         await ensure();
         const record = { at: new Date().toISOString(), model: String(input.model || '').slice(0, 200), status: ['succeeded', 'failed', 'cancelled'].includes(input.status) ? input.status : 'failed', durationMs: count(Math.round(input.durationMs)) ?? 0, firstTokenMs: count(input.firstTokenMs), httpStatus: count(input.httpStatus), usage: normalizeUsage(input.usage) };
+        record.role = ['main', 'explorer', 'advisor'].includes(input.role) ? input.role : 'main';
+        if (['plan', 'repeated-error', 'completion'].includes(input.stage)) record.stage = input.stage;
         for (const key of ['preparationMs', 'responseHeadersMs', 'firstByteMs', 'firstToolCallMs', 'firstTextMs']) record[key] = count(input[key]);
         const next = [...records, record].slice(-1000); const temporary = file + '.' + crypto.randomUUID() + '.tmp';
         await fs.mkdir(path.dirname(file), { recursive: true });

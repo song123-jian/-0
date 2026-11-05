@@ -159,3 +159,49 @@ test('tool protocol selection survives save and old Grok configurations gain com
   const reopened=createModelConnection(file,{encryption,legacyKey:()=> 'legacy-unit-key'});
   assert.equal((await reopened.get()).toolProtocol,'native');
 });
+
+test('legacy configs keep model choices, default to two read-only explorers and leave advisor off', () => {
+  const result = normalizeConnection({ ...DEFAULT_CONNECTION, model: 'existing-model', subagentModel: 'existing-child' });
+  assert.equal(result.model, 'existing-model'); assert.equal(result.subagentModel, 'existing-child');
+  assert.equal(result.subagentMaxConcurrent, 2); assert.equal(result.subagentAllowEdits, false);
+  assert.equal(result.advisorEnabled, false); assert.equal(result.advisorModel, '');
+  assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, subagentMaxConcurrent: 999 }).subagentMaxConcurrent, 3);
+});
+
+test('advisor uses its independently encrypted connection with no retries or tools protocol inheritance', async t => {
+  const { file, service } = await fixture(t);
+  const saved = await service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://main.example/v1', apiKey: 'main-secret', model: 'main-model', toolProtocol: 'json',
+    subagentBaseUrl: 'https://child.example/v1', subagentApiKey: 'child-secret', subagentModel: 'child-model',
+    advisorEnabled: true, advisorBaseUrl: 'https://advisor.example/v1', advisorApiKey: 'advisor-secret', advisorModel: 'advisor-model', advisorReasoningEffort: 'high' });
+  assert.doesNotMatch(JSON.stringify(saved), /main-secret|child-secret|advisor-secret/);
+  assert.doesNotMatch(await fs.readFile(file, 'utf8'), /main-secret|child-secret|advisor-secret/);
+  const reopened = createModelConnection(file, { encryption });
+  const advisor = await reopened.request('advisor');
+  assert.equal(advisor.endpoint, 'https://advisor.example/v1/chat/completions'); assert.equal(advisor.apiKey, 'advisor-secret');
+  assert.equal(advisor.model, 'advisor-model'); assert.equal(advisor.reasoning_effort, 'high');
+  assert.equal(advisor.retryLimit, 0); assert.equal(advisor.maxOutputTokens, 1200); assert.equal(advisor.toolProtocol, 'native');
+  assert.equal((await reopened.request('main')).apiKey, 'main-secret'); assert.equal((await reopened.request('subagent')).apiKey, 'child-secret');
+});
+
+test('advisor requires a model and exact service key, including disabled address changes', async t => {
+  const { service } = await fixture(t);
+  const input = { ...DEFAULT_CONNECTION, baseUrl: 'https://provider.example/v1', apiKey: 'main-key', advisorEnabled: true };
+  await assert.rejects(service.save(input), /选择顾问模型/);
+  const saved = await service.save({ ...input, advisorModel: 'advisor', advisorBaseUrl: 'https://provider.example/advisor/v1', advisorApiKey: 'advisor-key' });
+  const disabled = await service.save({ ...saved, advisorEnabled: false, advisorBaseUrl: 'https://provider.example/new/v1' });
+  await assert.rejects(service.request('advisor'), /尚未配置或启用/);
+  await assert.rejects(service.save({ ...disabled, advisorEnabled: true }), /独立 API Key/);
+  assert.equal((await service.get()).advisorEnabled, false);
+  await assert.rejects(service.models(disabled, 'advisor'), /独立 API Key/);
+  const followed = await service.save({ ...disabled, advisorEnabled: true, advisorBaseUrl: input.baseUrl });
+  assert.equal((await service.request('advisor')).apiKey, 'main-key'); assert.equal(followed.hasAdvisorCredential, true);
+});
+
+test('advisor discovery routes its own address and key and validates independent effort', async t => {
+  let seen;
+  const { service } = await fixture(t, { fetchImpl: async (url, options) => { seen = { url, key: options.headers.authorization }; return Response.json({ data: [{ id: 'advisor' }] }); } });
+  const input = { ...DEFAULT_CONNECTION, baseUrl: 'https://main.example/v1', apiKey: 'main-key', advisorBaseUrl: 'https://advisor.example/v1', advisorApiKey: 'advisor-key' };
+  assert.deepEqual((await service.models(input, 'advisor')).models, ['advisor']);
+  assert.deepEqual(seen, { url: 'https://advisor.example/v1/models', key: 'Bearer advisor-key' });
+  assert.throws(() => normalizeConnection({ ...input, advisorReasoningEffort: 'invented' }), /推理强度/);
+});

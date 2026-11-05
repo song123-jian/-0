@@ -44,7 +44,9 @@ test('unscoped analysis covers the workspace without blocking another read-only 
   const second = await coordinator.start({ task: '并行分析', mode: 'analysis', parentRequestId: 'parent-3' });
   assert.deepEqual(first.paths, ['.']);
   assert.deepEqual(second.paths, ['.']);
-  assert.throws(() => coordinator.assertWritable('C:/workspace/src/a.js', 'parent-3'), /子任务修改/);
+  assert.doesNotThrow(() => coordinator.assertWritable('C:/workspace/src/a.js', 'parent-3'));
+  assert.doesNotThrow(() => coordinator.assertNoActiveTasks({ writesOnly: true }));
+  assert.throws(() => coordinator.assertNoActiveTasks(), /子任务.*运行/);
   await assert.rejects(coordinator.start({ task: '修改文件', mode: 'edit', paths: ['src/a.js'], parentRequestId: 'parent-3' }), /路径正在由另一个子任务处理/);
   release.forEach((resolve) => resolve({ text: 'done' }));
   await Promise.all([coordinator.wait(first.id, 1000, 'parent-3'), coordinator.wait(second.id, 1000, 'parent-3')]);

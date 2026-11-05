@@ -1,5 +1,30 @@
 # Test Handoff
 
+## Active Increment — 1.3.39, 2026-11-05
+
+- Target: Scodex工作台.exe 1.3.39, Windows x64/Electron 45. Candidate release/win-unpacked/Scodex工作台.exe; final C:/Program Files/scodex-workbench/Scodex工作台.exe installed and verified 1.3.39. Baseline source 1556890ddb7087a6fc31a15a2c0a0a4bd1998586.
+- Environment: owned isolated profiles; real Electron/React/IPC, Windows encrypted credentials, workspace files and history. Only three model responses use loopback fixtures, so public supplier quality, latency and cost savings are not verified.
+- Preconditions for remaining acceptance: normally exited old installed app (PID 11136 and known children are absent); verify accepted installer/candidate identity, application-only rollback, five critical user-profile files unchanged at replacement. Do not change existing model/reasoning/retry configuration during real-profile acceptance.
+
+| Scope / operation and expected result | Actual status | Evidence under release/delivery-1.3.39 |
+| --- | --- | --- |
+| Focused config/runtime/team/revision logic; bounded roles, three gates, paired tool protocol and deferral | Passed 67/67 | focused-tests.log |
+| Scoped fixes: parent-specific active dedup, post-escaping context cap; reuse unaffected checks | Passed 17/17 | review-repair-tests.log |
+| Seven affected Electron modules syntax, UTF-8/no BOM | Passed | existing syntax/encoding evidence and incremental-review.json |
+| Renderer, Electron candidate and NSIS builds; await finite completion | Passed, all exit 0 | renderer-build.log, package-dir-r2.log, installer-build.log |
+| Final candidate actual UI: configure/defaults/encrypted independent keys/save/reload; three advisor gates/two explorers/one main effect and completion ownership; ordinary chat zero advisor calls; 503 no retry and main continues; stop cancels request and original write; role usage/history/390px controls | Passed 6/6, app exit 0 | candidate-ui-r2/model-team-ui.json; candidate-ui-r2/model-team-settings.png |
+| Scoped code review: 17 current code/test/version files; main runtime/config/usage/subtask dependencies, UI state and meaningful regression cases; candidate Electron bytes match | Passed, no unresolved finding | incremental-review.json |
+| Install accepted candidate over 1.3.38; verify all candidate files, HKLM registration, fresh-process ASAR version, profile and user license integrity | Passed: installer exit 0, 27/27 file hashes match, five profile files and license unchanged | final-installation.json, rollback-manifest.json |
+| Installed app: repeat the six affected actual-UI scenarios with a new isolated profile | Passed 6/6, normal exit 0; installed EXE matches accepted candidate | installed-ui/model-team-ui.json, installed-ui.log |
+| Real user profile: existing history/settings/connection preserved, advisor defaults off, launch and quit normally, no real model request | Passed: 1 conversation/2 messages, four critical profile files unchanged, encrypted memory valid, exit 0 | installed-profile-final.json, real-profile.log |
+
+- Candidate EXE SHA-256 c65b818bc36eae4c3bbe6ea063718c622e5439827787e6e7e817dd0340200a78. Accepted installer: 181111687 bytes, SHA-256 614f19ec62bbbdfc6ed48366ba94f1a9e6a5ee144c7b7aa5c49b133e8e333171. Installed EXE c65b818bc36eae4c3bbe6ea063718c622e5439827787e6e7e817dd0340200a78; ASAR 890f95472ce5033913f0e03a0c7bc15390909b257ef548f552380a835488ce9c. Rollback-1.3.38 contains 29 verified application files. Fresh-process ASAR version and HKLM registry are 1.3.39; normal quit then restore app files only, preserve APPDATA.
+- Failure retained: candidate-ui/model-team-ui.json and failure-diagnostic.json show the initial harness omitted a nested disclosure. r2 corrected the harness and exercised the final packaged application; no failed result was relabelled passing. Initial documentation CRLF assumption changed no document; LF-preserving update passed.
+- Visual: candidate-ui-r2/model-team-settings.png inspected at 1440x1000; current device/page/viewport/data state has no visible layout error. 390px control bounds/no horizontal overflow passed. Installed screenshot inspected with the same current-state result; installed 390px bounds/no overflow passed. cleanup.json records two owned fixtures moved into release/手动删除 after automatic approval rejected deletion as blocked by policy; originals absent, reports/screenshots and rollback retained. No acceptance impact.
+- Existing results: unchanged 1.3.38 retry/folding and 1.3.37 Skill/AGENTS/inline edit paths remain valid; not rerun merely because this delivery resumes. Actual provider tests from earlier versions do not validate this new role feature.
+- Entry and commands: SCODEX_TEAM_EXE=<actual exe>, SCODEX_TEAM_OUTPUT=<evidence dir>, node tests/model-team-ui.cjs. Test process exits normally and writes role requests plus physical file assertions. See [Project Handoff](HANDOFF.md) for build/role budgets and constraints.
+- Remaining: source/Latest Release publication and remote readback only. Incremental review results/source hashes remain valid; no finite build/test or verification app remains running. Public supplier model quality/latency/cost remain outside the loopback evidence.
+
 ## Active Increment — 1.3.38, 2026-11-05
 
 - Goal: support up to six safe temporary-service retries and automatically fold completed execution into an elapsed-time summary with an arrow; retain final answer and actual file-change card.

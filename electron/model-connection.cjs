@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const EFFORTS = ['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const DEFAULT_CONNECTION = { name: '聚合模组 2', note: '', website: 'https://catbee.online', baseUrl: 'https://catbee.online/v1', addresses: ['https://catbee.online/v1'], models: ['grok-4.7'], model: 'grok-4.7', reasoningEffort: '', toolProtocol: 'json', subagentReasoningEffort: '', subagentToolProtocol: '' };
+const DEFAULT_CONNECTION = { name: '聚合模组 2', note: '', website: 'https://catbee.online', baseUrl: 'https://catbee.online/v1', addresses: ['https://catbee.online/v1'], models: ['grok-4.7'], model: 'grok-4.7', reasoningEffort: '', toolProtocol: 'json', subagentReasoningEffort: '', subagentToolProtocol: '', subagentMaxConcurrent: 2, subagentAllowEdits: false, advisorEnabled: false, advisorModel: '', advisorReasoningEffort: '' };
 const clean = (value, limit = 200) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
 function modelId(value) { const id = clean(value); if (/[\x00-\x20\x7f]/.test(id)) throw new Error('模型 ID 不能包含空格或控制字符。'); return id; }
 function normalizeAddress(value, website = false) {
@@ -22,8 +22,9 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   const name = clean(value.name, 80); if (!name) throw new Error('请填写服务名称。');
   const baseUrl = normalizeAddress(value.baseUrl);
   const subagentBaseUrl = normalizeAddress(input.subagentBaseUrl || baseUrl);
+  const advisorBaseUrl = normalizeAddress(input.advisorBaseUrl || baseUrl);
   const model = modelId(value.model); if (requireModel && !model) throw new Error('请填写默认模型。');
-  if (!EFFORTS.includes(value.reasoningEffort) || !EFFORTS.includes(value.subagentReasoningEffort)) throw new Error('推理强度无效。');
+  if (!EFFORTS.includes(value.reasoningEffort) || !EFFORTS.includes(value.subagentReasoningEffort) || !EFFORTS.includes(value.advisorReasoningEffort)) throw new Error('推理强度无效。');
   if (!['native', 'json'].includes(value.toolProtocol)) throw new Error('工具执行通道无效。');
   if (!['', 'native', 'json'].includes(value.subagentToolProtocol)) throw new Error('子模型工具执行通道无效。');
   const models = [...new Set([...(Array.isArray(value.models) ? value.models : []).slice(0, 500).map(modelId).filter(Boolean), ...(model ? [model] : [])])];
@@ -31,10 +32,14 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   const subagentModel = modelId(input.subagentModel || (subagentBaseUrl === baseUrl ? model : ''));
   if (subagentModel && !subagentModels.includes(subagentModel)) subagentModels.push(subagentModel);
   if (subagentModel && subagentBaseUrl === baseUrl && !models.includes(subagentModel)) models.push(subagentModel);
+  const advisorModels = [...new Set([...(Array.isArray(input.advisorModels) ? input.advisorModels : advisorBaseUrl === baseUrl ? models : []).slice(0, 500).map(modelId).filter(Boolean)])];
+  const advisorModel = modelId(value.advisorModel);
+  if (advisorModel && !advisorModels.includes(advisorModel)) advisorModels.push(advisorModel);
+  const subagentMaxConcurrent = Number.isInteger(value.subagentMaxConcurrent) ? Math.min(3, Math.max(1, value.subagentMaxConcurrent)) : 2;
   const addresses = [...new Set([baseUrl, ...(Array.isArray(value.addresses) ? value.addresses : []).slice(0, 19).map((item) => normalizeAddress(item))])];
   const retryLimit = Number.isInteger(value.retryLimit) ? Math.min(6, Math.max(0, value.retryLimit)) : 6;
   const maxOutputTokens = Number.isInteger(value.maxOutputTokens) && value.maxOutputTokens >= 128 && value.maxOutputTokens <= 128000 ? value.maxOutputTokens : 0;
-  return { retryLimit, maxOutputTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol };
+  return { retryLimit, maxOutputTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol, subagentMaxConcurrent, subagentAllowEdits: value.subagentAllowEdits === true, advisorEnabled: value.advisorEnabled === true, advisorBaseUrl, advisorModels, advisorModel, advisorReasoningEffort: value.advisorReasoningEffort };
 }
 function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch, blankOnMissing = false }) {
   let state; let readError = ''; let queue = Promise.resolve();
@@ -42,20 +47,30 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
     if (state) return;
     try {
       const saved = JSON.parse(await fs.readFile(file, 'utf8'));
-      state = { config: normalizeConnection(saved.config), encryptedKey: clean(saved.encryptedKey, 32000), keyOrigin: saved.keyOrigin || '', encryptedSubagentKey: clean(saved.encryptedSubagentKey, 32000), subagentKeyOrigin: saved.subagentKeyOrigin || '' };
+      state = { config: normalizeConnection(saved.config), encryptedKey: clean(saved.encryptedKey, 32000), keyOrigin: saved.keyOrigin || '', encryptedSubagentKey: clean(saved.encryptedSubagentKey, 32000), subagentKeyOrigin: saved.subagentKeyOrigin || '', encryptedAdvisorKey: clean(saved.encryptedAdvisorKey, 32000), advisorKeyOrigin: saved.advisorKeyOrigin || '' };
     } catch (error) {
       if (error.code !== 'ENOENT') readError = '模型配置无法读取；原文件已保留，请修正后重启程序。';
       const config = blankOnMissing ? { ...DEFAULT_CONNECTION, name: '', website: '', baseUrl: '', addresses: [], models: [], model: '', subagentBaseUrl: '', subagentModels: [], subagentModel: '', reasoningEffort: '', subagentReasoningEffort: '', subagentToolProtocol: '' } : normalizeConnection();
-      state = { config, encryptedKey: '', keyOrigin: '', encryptedSubagentKey: '', subagentKeyOrigin: '' };
+      state = { config, encryptedKey: '', keyOrigin: '', encryptedSubagentKey: '', subagentKeyOrigin: '', encryptedAdvisorKey: '', advisorKeyOrigin: '' };
     }
   };
   const origin = (config) => config.baseUrl ? new URL(config.baseUrl).origin : '';
   const hasMainKey = (config) => (state.encryptedKey && state.keyOrigin === origin(config)) || (!state.encryptedKey && origin(config) === 'https://catbee.online' && Boolean(legacyKey));
   const hasStoredSubagentKey = (config) => state.encryptedSubagentKey && state.subagentKeyOrigin === origin({ baseUrl: config.subagentBaseUrl }) && state.config.subagentBaseUrl === config.subagentBaseUrl;
   const hasSubagentKey = (config) => hasStoredSubagentKey(config) || (config.subagentBaseUrl === config.baseUrl && hasMainKey(config));
-  const publicState = () => ({ ...state.config, hasCredential: Boolean(hasMainKey(state.config)), hasSubagentCredential: Boolean(hasSubagentKey(state.config)), subagentCredentialSource: hasStoredSubagentKey(state.config) ? 'Windows 加密凭据' : hasSubagentKey(state.config) ? '跟随主模型凭据' : '', credentialSource: state.encryptedKey ? 'Windows 加密凭据' : hasMainKey(state.config) ? '原有 DPAPI 凭据' : '', error: readError });
+  const hasStoredAdvisorKey = (config) => state.encryptedAdvisorKey && state.advisorKeyOrigin === config.advisorBaseUrl;
+  const hasAdvisorKey = (config) => hasStoredAdvisorKey(config) || (config.advisorBaseUrl === config.baseUrl && hasMainKey(config));
+  const publicState = () => ({ ...state.config, hasCredential: Boolean(hasMainKey(state.config)), hasSubagentCredential: Boolean(hasSubagentKey(state.config)), subagentCredentialSource: hasStoredSubagentKey(state.config) ? 'Windows 加密凭据' : hasSubagentKey(state.config) ? '跟随主模型凭据' : '', hasAdvisorCredential: Boolean(hasAdvisorKey(state.config)), advisorCredentialSource: hasStoredAdvisorKey(state.config) ? 'Windows 加密凭据' : hasAdvisorKey(state.config) ? '跟随主模型凭据' : '', credentialSource: state.encryptedKey ? 'Windows 加密凭据' : hasMainKey(state.config) ? '原有 DPAPI 凭据' : '', error: readError });
   const keyFor = async (config, supplied, profile = 'main') => {
     if (typeof supplied === 'string' && supplied.trim()) { if (supplied.length > 8192 || /[\r\n]/.test(supplied)) throw new Error('API Key 格式无效。'); return supplied.trim(); }
+    if (profile === 'advisor') {
+      if (hasStoredAdvisorKey(config)) {
+        if (!encryption.isEncryptionAvailable()) throw new Error('当前 Windows 用户的顾问凭据加密不可用。');
+        try { return encryption.decryptString(Buffer.from(state.encryptedAdvisorKey, 'base64')); } catch { throw new Error('当前 Windows 用户无法解密顾问 API Key，请重新填写。'); }
+      }
+      if (config.advisorBaseUrl === config.baseUrl) return keyFor(config, undefined, 'main');
+      throw new Error('请为顾问服务地址填写独立 API Key。');
+    }
     if (profile === 'subagent') {
       const childOrigin = origin({ baseUrl: config.subagentBaseUrl });
       if (hasStoredSubagentKey(config)) {
@@ -100,7 +115,7 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
         await ensure(); if (readError) throw new Error(readError);
         const config = normalizeConnection(input); let encryptedKey = state.encryptedKey; let keyOrigin = state.keyOrigin;
         if (config.subagentBaseUrl !== config.baseUrl && !config.subagentModel) throw new Error('请先选择子模型。');
-        if (input.apiKey !== undefined && typeof input.apiKey !== 'string' || input.subagentApiKey !== undefined && typeof input.subagentApiKey !== 'string') throw new Error('API Key 格式无效。');
+        if (input.apiKey !== undefined && typeof input.apiKey !== 'string' || input.subagentApiKey !== undefined && typeof input.subagentApiKey !== 'string' || input.advisorApiKey !== undefined && typeof input.advisorApiKey !== 'string') throw new Error('API Key 格式无效。');
         if (input.apiKey?.trim()) {
           const key = await keyFor(config, input.apiKey);
           if (!encryption.isEncryptionAvailable()) throw new Error('Windows 凭据加密不可用，未保存 API Key。');
@@ -117,7 +132,17 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
         const hasCandidateMainKey = (encryptedKey && keyOrigin === origin(config)) || (!encryptedKey && origin(config) === 'https://catbee.online' && Boolean(legacyKey));
         const hasCandidateSubagentKey = encryptedSubagentKey && subagentKeyOrigin === childOrigin && (input.subagentApiKey?.trim() || state.config.subagentBaseUrl === config.subagentBaseUrl);
         if (!input.subagentApiKey?.trim() && !(hasCandidateSubagentKey || (followsMain && hasCandidateMainKey))) throw new Error('请为子模型服务填写 API Key；更换子模型地址后需要独立密钥。');
-        const next = { config, encryptedKey, keyOrigin, encryptedSubagentKey, subagentKeyOrigin }; const temporary = file + '.' + crypto.randomUUID() + '.tmp';
+        let encryptedAdvisorKey = state.encryptedAdvisorKey; let advisorKeyOrigin = state.advisorKeyOrigin;
+        if (input.advisorApiKey?.trim()) {
+          const key = await keyFor(config, input.advisorApiKey, 'advisor');
+          if (!encryption.isEncryptionAvailable()) throw new Error('Windows 凭据加密不可用，未保存顾问 API Key。');
+          encryptedAdvisorKey = encryption.encryptString(key).toString('base64'); advisorKeyOrigin = config.advisorBaseUrl;
+        }
+        if (config.advisorEnabled) {
+          if (!config.advisorModel) throw new Error('请先选择顾问模型。');
+          if (!(encryptedAdvisorKey && advisorKeyOrigin === config.advisorBaseUrl) && !(config.advisorBaseUrl === config.baseUrl && hasCandidateMainKey)) throw new Error('请为顾问服务填写独立 API Key；更换地址后不能转发旧密钥。');
+        }
+        const next = { config, encryptedKey, keyOrigin, encryptedSubagentKey, subagentKeyOrigin, encryptedAdvisorKey, advisorKeyOrigin }; const temporary = file + '.' + crypto.randomUUID() + '.tmp';
         await fs.mkdir(path.dirname(file), { recursive: true });
         try { await fs.writeFile(temporary, JSON.stringify(next, null, 2), { flag: 'wx' }); await fs.rename(temporary, file); } catch (error) { await fs.rm(temporary, { force: true }).catch(() => {}); throw error; }
         state = next; return publicState();
@@ -125,12 +150,18 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
     },
     async models(input, profile = 'main') {
       await ensure(); const config = normalizeConnection(input, { requireModel: false });
+      if (profile === 'advisor') return list({ ...config, baseUrl: config.advisorBaseUrl }, input.advisorApiKey || (config.advisorBaseUrl === config.baseUrl ? input.apiKey : undefined), config, 'advisor');
       if (profile !== 'subagent') return list(config, input.apiKey);
       const childConfig = { ...config, baseUrl: config.subagentBaseUrl };
       return list(childConfig, input.subagentApiKey || (config.subagentBaseUrl === config.baseUrl ? input.apiKey : undefined), config, 'subagent');
     },
     async request(kind, selectedEffort, selectedModel) {
       await ensure(); if (readError) throw new Error(readError); const config = state.config;
+      if (kind === 'advisor') {
+        if (!config.advisorEnabled || !config.advisorModel) throw new Error('顾问模型尚未配置或启用。');
+        if (!config.advisorModels.includes(config.advisorModel)) throw new Error('顾问模型已不在配置列表中。');
+        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model: config.advisorModel, toolProtocol: 'native', retryLimit: 0, reportUsage: config.reportUsage, maxOutputTokens: 1200, ...(config.advisorReasoningEffort ? { reasoning_effort: config.advisorReasoningEffort } : {}) };
+      }
       const subagent = kind === 'subagent';
       const childOwnService = config.subagentBaseUrl !== config.baseUrl;
       let model = subagent ? config.subagentModel || (childOwnService ? '' : config.model) : config.model;

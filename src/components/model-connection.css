@@ -4,6 +4,13 @@
 .model-connection-form input:focus, .model-connection-form select:focus, .model-effort > button:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
 .model-connection-form input::placeholder { color: var(--muted); opacity: .85; }
 .model-connection-form button { font-family: inherit; }
+.model-connection-form input[type=checkbox] { width: 16px; height: 16px; min-height: 16px; flex: 0 0 16px; padding: 0; accent-color: var(--accent); }
+.model-team-roles { margin: 0 0 28px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.model-team-roles h2 { margin: 0 0 12px; font-size: calc(16px + var(--font-step)); }
+.model-team-roles dl { margin: 0 0 16px; }
+.model-team-roles dl > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; margin: 9px 0; line-height: 1.6; }
+.model-team-roles dt { font-weight: 600; }
+.model-team-roles dd { margin: 0; color: var(--muted); }
 .model-field { margin-bottom: 26px; min-width: 0; }
 .model-field label, .model-field-heading { display: flex; align-items: center; gap: 5px; }
 .model-field > label, .model-field-heading { margin-bottom: 9px; min-height: 22px; }

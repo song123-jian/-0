@@ -189,7 +189,7 @@ const actionLabels = {
   artifact_read: '读取办公成品', artifact_write: '保存办公成品', artifact_image: '生成图片', goal_finish: '报告目标结果',
 };
 export function operationCaption(operation) {
-  if (operation.status === 'deferred') return '已加载目录规则 · 原操作未执行';
+  if (operation.status === 'deferred') return operation.name === 'advisor_gate' ? '等待主模型核验 · 原操作未执行' : '已加载目录规则 · 原操作未执行';
   const action = actionLabels[operation.name] || operation.title || operation.name || '操作';
   const prefix = { succeeded: '已', running: '正在', failed: '', cancelled: '', interrupted: '' }[operation.status] || '';
   const suffix = { failed: '失败', cancelled: '已停止', interrupted: '已中断' }[operation.status] || '';
