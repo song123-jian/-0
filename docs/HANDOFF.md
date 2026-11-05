@@ -4,8 +4,8 @@
 
 - Goal: main model owns planning, implementation, commands, verification and final answer; explorers perform bounded read-only investigation by default; optional independent advisor reviews plan, repeated tool error and completion. Named models in the example are not assumed available or hardcoded.
 - Baseline: delivered/installed/published 1.3.38; source 1556890ddb7087a6fc31a15a2c0a0a4bd1998586. Fixed target 1.3.39 uses the established SemVer patch mapping.
-- Current status: implementation, scoped review, builds, installation, installed functional acceptance 6/6 and unchanged real-profile startup/history/normal exit complete. Source/Latest Release publication is the only remaining delivery step.
-- Effective remaining steps: (1) commit only this increment, preserving the unrelated license change; (2) publish the byte-identical source commit and accepted installer as v1.3.39 Latest, then verify remote identities; (3) synchronize final publication handoffs.
+- Current status: implementation, scoped review, builds, installation, installed functional acceptance 6/6, unchanged real-profile startup/history/normal exit and source/Latest Release publication complete and verified.
+- Delivery: no program implementation or acceptance remains. Publication handoffs are synchronized separately from the code tag; this does not change the accepted installer. No evidence-supported additional refactor is proposed.
 - Roles/budgets: default two concurrent explorers (configurable 1–3), maximum four subtasks per main task, six rounds and 1,600 output tokens per child round; active duplicate work is merged only within the same parent. Read-only investigation does not block main-model writes. Optional write delegation requires explicit configuration and retains path/hash/permission locks.
 - Advisor: disabled until user selects/enables an available model; independent endpoint/encrypted key/model/reasoning. At most three consultations, one per gate; each is tool-free, 30 seconds, 1,200 output tokens and no HTTP retry. Original operations and subsequent same-batch calls are deferred; main integrates advice. Failure records unverified status and main continues; cancellation prevents the original write. Running child work prevents premature completion even without advisor.
 - Constraints: preserve credentials, current models/reasoning, user data and unrelated electron/third-party-licenses.json; no automatic paid-model choice, guessed prices or recursive delegation. Usage is recorded by main/explorer/advisor and advisor stage. Advisor context is redacted and bounded after JSON escaping.
@@ -20,6 +20,7 @@
 - Checkpoint: release/delivery-1.3.38/checkpoint.json. Evidence: release/delivery-1.3.39. Still-valid unchanged 1.3.38/1.3.37 checks are reused.
 - Limits: actual Electron/React/IPC/Windows encryption and disk were tested; model responses were controlled loopback fixtures. Public supplier capability, quality, latency and monetary savings are not measured. Existing user connections remain unchanged and advisor is not automatically enabled.
 - Skills reused: requirement-understanding 95, code-write-review 94, systematic-debugging 95; no Codex subagent delegation.
+- Publication: source 837a035642bfbc1521256d756a9caa353affff65 matches remote main byte-for-byte; [Release v1.3.39](https://github.com/song123-jian/-0/releases/tag/v1.3.39) is published as Latest. Tag commit, installer size 181111687 and server SHA-256 614f19ec62bbbdfc6ed48366ba94f1a9e6a5ee144c7b7aa5c49b133e8e333171 match accepted delivery. Evidence: source-publication-final.json and release-publication-final.json. No credential was printed or stored by publication helpers.
 
 ## Active Increment — 1.3.38, 2026-11-05
 
