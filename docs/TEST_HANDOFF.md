@@ -17,7 +17,7 @@
 
 - Failure/recovery: the old `tests/model-team-ui.cjs` candidate run stopped at an HTTP 500 because its fixture still asserted the removed “还有子任务未结束” prompt; the report is retained as failed evidence and excluded from pass counts. The dedicated candidate verifier had two harness-only failures (syntax and a broad DOM selector), both corrected before the final 3/3 acceptance. No product failure was inferred.
 - Build prerequisite: `node_modules/electron/dist` was absent and the Electron download failed with `fetch failed`; the verified installed Electron 45 runtime was copied to the ignored `release/electron-dist-45.0.0` directory and used only for the candidate/installer build.
-- Cleanup and coverage: six exact isolated fixture directories moved to `release/手动删除/1.3.42-fixtures`; verifier source removed. No installed-program replacement, real user profile write, external model call or native mouse/keyboard acceptance was performed. The final review fix was validated by `node --check electron/main.cjs` and the 79-test affected logic suite; source publication and any installed-path acceptance remain pending until the user-requested upload workflow completes.
+- Cleanup and coverage: six exact isolated fixture directories moved to `release/手动删除/1.3.42-fixtures`; verifier source removed. No installed-program replacement, real user profile write, external model call or native mouse/keyboard acceptance was performed. The final review fix was validated by `node --check electron/main.cjs` and the 79-test affected logic suite. Source tree readback and `v1.3.42` Release readback passed; installed-path acceptance remains outside this increment.
 
 ## Active Increment — 1.3.41, 2026-11-05
 
