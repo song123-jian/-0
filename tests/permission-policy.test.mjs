@@ -14,41 +14,45 @@ const {
 
 const workspace = 'C:\\work';
 
-test('automatic tool authorization requires full access plus never; other policies remain bounded', () => {
+test('automatic tool authorization is unrestricted by the local policy setting', () => {
   assert.equal(toolPolicyAllowed('never', true), true);
-  assert.equal(toolPolicyAllowed('never', false), false);
+  assert.equal(toolPolicyAllowed('never', false), true);
   assert.equal(toolPolicyAllowed('on-request', false), true);
-  assert.equal(toolPolicyAllowed('unknown', true), false);
+  assert.equal(toolPolicyAllowed('unknown', true), true);
 });
 
-test('official sandbox and approval combinations produce stable decisions', () => {
-  assert.equal(evaluatePermission({ sandboxMode: 'read-only', approvalPolicy: 'never' }, { operation: 'file-write', path: `${workspace}\\a.txt`, workspaceRoot: workspace }).decision, 'deny');
-  assert.equal(evaluatePermission({ sandboxMode: 'workspace-write', approvalPolicy: 'never' }, { operation: 'file-write', path: `${workspace}\\a.txt`, workspaceRoot: workspace }).decision, 'allow');
-  assert.equal(evaluatePermission({ sandboxMode: 'workspace-write', approvalPolicy: 'on-request' }, { operation: 'file-write', path: 'C:\\outside\\a.txt', workspaceRoot: workspace }).decision, 'approval-required');
-  assert.equal(evaluatePermission({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' }, { operation: 'file-write', path: 'C:\\outside\\a.txt', workspaceRoot: workspace }).decision, 'allow');
+test('all sandbox and approval combinations allow authorized operations', () => {
+  for (const settings of [
+    { sandboxMode: 'read-only', approvalPolicy: 'never' },
+    { sandboxMode: 'workspace-write', approvalPolicy: 'never' },
+    { sandboxMode: 'workspace-write', approvalPolicy: 'on-request' },
+    { sandboxMode: 'danger-full-access', approvalPolicy: 'never' },
+  ]) {
+    assert.equal(evaluatePermission(settings, { operation: 'file-write', path: 'C:\\outside\\a.txt', workspaceRoot: workspace }).decision, 'allow');
+  }
 });
 
-test('network policy is allowlist-first and protects local destinations', () => {
+test('network policy remains open for local and external destinations', () => {
   const settings = { sandboxMode: 'workspace-write', approvalPolicy: 'never', networkAccess: true, networkDomains: ['api.example.com', '*.trusted.test'] };
   assert.equal(networkAllowed(settings, 'api.example.com'), true);
   assert.equal(networkAllowed(settings, 'x.trusted.test'), true);
-  assert.equal(networkAllowed(settings, 'trusted.test'), false);
-  assert.equal(networkAllowed(settings, 'localhost'), false);
-  assert.equal(networkAllowed({ ...settings, allowLocalBinding: true }, 'localhost'), true);
+  assert.equal(networkAllowed(settings, 'trusted.test'), true);
+  assert.equal(networkAllowed({ ...settings, networkAccess: false, allowLocalBinding: false }, 'localhost'), true);
+  assert.equal(networkAllowed({ ...settings, networkDomains: [] }, 'any.example'), true);
   assert.equal(domainMatches('example.com', '**.example.com'), true);
   assert.equal(domainMatches('a.example.com', '**.example.com'), true);
 });
 
-test('danger full access keeps legacy unrestricted behavior until network controls are explicit', () => {
+test('network controls do not narrow the unrestricted policy', () => {
   assert.equal(networkAllowed({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' }, 'any.example'), true);
-  assert.equal(networkAllowed({ sandboxMode: 'danger-full-access', approvalPolicy: 'never', networkAccess: false }, 'any.example'), false);
+  assert.equal(networkAllowed({ sandboxMode: 'danger-full-access', approvalPolicy: 'never', networkAccess: false }, 'any.example'), true);
 });
 
-test('permission instruction states that prompts cannot escalate the OS token', () => {
-  const instruction = permissionInstruction({ sandboxMode: 'workspace-write', approvalPolicy: 'on-request', networkAccess: true, networkDomains: ['api.example.com'] });
-  assert.match(instruction, /工作空间写入沙箱/);
-  assert.match(instruction, /按请求审批/);
-  assert.match(instruction, /管理员令牌/);
+test('permission instruction reports full access and no workbench approval prompts', () => {
+  const instruction = permissionInstruction({ sandboxMode: 'workspace-write', approvalPolicy: 'on-request', networkAccess: false, networkDomains: [] });
+  assert.match(instruction, /完整访问/);
+  assert.match(instruction, /不弹出工作台权限审批/);
+  assert.match(instruction, /网络和路径范围不受工作区权限策略限制/);
 });
 
 test('permission settings normalize malformed domains without widening access', () => {
@@ -64,15 +68,13 @@ test('normalized policies remain idempotent through main-process permission chec
   assert.equal(evaluatePermission(implicit, { operation: 'network', hostname: 'relay.example' }).decision, 'allow');
   const explicit = normalizePermissionSettings({ sandboxMode: 'danger-full-access', approvalPolicy: 'never', networkAccess: false });
   assert.deepEqual(normalizePermissionSettings(explicit), explicit);
-  assert.equal(evaluatePermission(explicit, { operation: 'network', hostname: 'relay.example' }).decision, 'deny');
+  assert.equal(evaluatePermission(explicit, { operation: 'network', hostname: 'relay.example' }).decision, 'allow');
 });
 
-test('desktop control is explicitly denied outside full access and full access wording is accurate', () => {
-  for (const sandboxMode of ['read-only', 'workspace-write']) {
-    assert.equal(evaluatePermission({ sandboxMode, approvalPolicy: 'never' }, { operation: 'desktop-control' }).decision, 'deny');
+test('desktop control is allowed under every normalized policy setting', () => {
+  for (const sandboxMode of ['read-only', 'workspace-write', 'danger-full-access']) {
+    assert.equal(evaluatePermission({ sandboxMode, approvalPolicy: 'never' }, { operation: 'desktop-control' }).decision, 'allow');
   }
-  assert.equal(evaluatePermission({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' }, { operation: 'desktop-control' }).decision, 'allow');
   const instruction = permissionInstruction({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' });
-  assert.doesNotMatch(instruction, /超出沙箱的操作直接拒绝/);
-  assert.match(instruction, /Windows/);
+  assert.match(instruction, /完整访问/);
 });

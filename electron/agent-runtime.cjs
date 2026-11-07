@@ -3,10 +3,9 @@ const { normalizeUsage } = require('./model-usage.cjs');
 const { normalizeChatImages, modelMessageContent } = require('./chat-images.cjs');
 const { redact } = require('./model-team.cjs');
 
-const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
-const MAX_TOOL_CALLS = 8;
-const MAX_ROUNDS = 24;
-const MAX_OPERATIONS = 64;
+const MAX_TOOL_CALLS = Number.POSITIVE_INFINITY;
+const MAX_ROUNDS = Number.POSITIVE_INFINITY;
+const MAX_OPERATIONS = Number.POSITIVE_INFINITY;
 
 function aborted(signal) {
   if (signal?.aborted) throw new Error('任务已停止。');
@@ -62,7 +61,7 @@ async function readCompletion(response, { signal, apiKey, onDelta = () => {}, on
   const cancelRead = () => { reader.cancel().catch(() => {}); };
   signal?.addEventListener('abort', cancelRead, { once: true });
   const calls = new Map();
-  let buffer = ''; let text = ''; let bytes = 0; let finished = false; let reason = ''; let completedAt = null, hasUsage = false;
+  let buffer = ''; let text = ''; let finished = false; let reason = ''; let completedAt = null, hasUsage = false;
   const activities = new Set();
   const activity = kind => { if (!activities.has(kind)) { activities.add(kind); onActivity(kind); } };
   const jsonResponse = /application\/json/i.test(response.headers.get('content-type') || '');
@@ -114,8 +113,6 @@ async function readCompletion(response, { signal, apiKey, onDelta = () => {}, on
       const { value, done } = chunk;
       if (done) break;
       activity('transport');
-      bytes += value.byteLength;
-      if (bytes > MAX_RESPONSE_BYTES) throw new Error('模型单次响应超过 4 MB，已停止。');
       buffer += decoder.decode(value, { stream: true });
       if (jsonResponse) continue;
       const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
@@ -138,12 +135,10 @@ async function readCompletion(response, { signal, apiKey, onDelta = () => {}, on
   } finally { signal?.removeEventListener('abort', cancelRead); await reader.cancel().catch(() => {}); }
 }
 
-async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null, requestTimeouts = {}, team = null }) {
-  const idleMs = Number.isFinite(requestTimeouts.idleMs) && requestTimeouts.idleMs > 0 ? Math.min(120_000, requestTimeouts.idleMs) : 120_000;
-  const totalMs = Number.isFinite(requestTimeouts.totalMs) && requestTimeouts.totalMs > 0 ? Math.min(600_000, requestTimeouts.totalMs) : 600_000;
+async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null, requestTimeouts = {}, team = null, waitIfPaused = async () => {} }) {
+  maxRounds = Number.POSITIVE_INFINITY;
   let goalFinish = null;
   if (goal) {
-    maxRounds = Math.min(MAX_ROUNDS, Math.max(1, Number.isInteger(goal.maxRequests) ? goal.maxRequests : 8));
     tools = [...(tools || []), { type: 'function', function: { name: 'goal_finish', description: '目标已完成或确实受阻时调用。必须引用实际结果或明确阻塞，不能仅凭计划宣告完成。', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['completed', 'blocked'] }, summary: { type: 'string' }, evidence: { type: 'string' } }, required: ['status', 'summary', 'evidence'], additionalProperties: false } } }];
     const delegate = executeTool;
     executeTool = async (name, args, context) => {
@@ -162,9 +157,10 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     else conversation.unshift({ role: 'system', content: protocol });
   }
   const totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reportedRequests: 0, unknownRequests: 0 };
-  let fullText = ''; let operations = 0; let failureSignature = ''; let repeatedFailures = 0;
+  let fullText = ''; let operations = 0;
   const append = (value) => { fullText += value; emit({ type: 'delta', text: value }); };
   for (let round = 0; round < maxRounds; round += 1) {
+    await waitIfPaused();
     aborted(signal);
     const steeringItems = typeof takeSteering === 'function' ? (takeSteering() || []) : [];
     for (const item of steeringItems) {
@@ -174,21 +170,16 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       if (item.id) emit({ type: 'steering-accepted', steeringId: item.id });
     }
     emit({ type: 'phase', phase: 'model', round: round + 1 });
-    if (goal) emit({ type: 'goal-state', status: 'running', rounds: round + 1, maxRequests: maxRounds });
+    if (goal) emit({ type: 'goal-state', status: 'running', rounds: round + 1 });
     // Keep complete tool-call/result pairs while reducing old, verbose results.
     if (JSON.stringify(conversation).length > 900_000) {
       for (const item of conversation.slice(1, -2)) if (item.role === 'tool' && item.content.length > 2000) item.content = item.content.slice(0, 1800) + '\n[较早的工具输出已压缩；需要时重新读取文件]';
     }
     let message, finalContentOffset = fullText.length;
     for (let attempt = 0; ; attempt += 1) {
+      await waitIfPaused();
       aborted(signal);
-      const requestController = new AbortController();
-      let timeoutKind = '', idleTimer;
-      const expire = kind => { timeoutKind = kind; requestController.abort(); };
-      const touch = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => expire('idle'), idleMs); };
-      const timer = setTimeout(() => expire('total'), totalMs);
-      touch();
-      const requestSignal = signal ? AbortSignal.any([signal, requestController.signal]) : requestController.signal;
+      const requestSignal = signal;
       const started = performance.now(); let usage = null; let firstTokenMs = null, firstToolCallMs = null, firstTextMs = null, firstByteMs = null, responseHeadersMs = null; let httpStatus = null; let status = 'failed'; let retry = false;
       const elapsed = () => Math.max(0, Math.round(performance.now() - started));
       let pendingDelta = '', deltaTimer, sentDelta = false;
@@ -222,7 +213,6 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
           finalContentOffset = fullText.length;
           emit({ type: 'phase', phase: 'receiving', round: round + 1 });
           message = await readCompletion(response, { signal: requestSignal, apiKey: connection.apiKey, usageGraceMs: connection.reportUsage ? 150 : 0,
-            onProgress: touch,
             onUsage: value => { usage = value; },
             onActivity: kind => {
               if (kind === 'transport') { firstByteMs ??= elapsed(); return; }
@@ -236,14 +226,9 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         }
       } catch (error) {
         if (signal?.aborted) status = 'cancelled';
-        if (requestController.signal.aborted && !signal?.aborted) throw new Error(timeoutKind === 'total'
-          ? '模型单次请求达到时长上限（' + Math.ceil(totalMs / 60_000) + ' 分钟）。已执行的操作已保留，可继续任务。'
-          : '模型连续 ' + Math.ceil(idleMs / 1000) + ' 秒没有新的正文、推理或工具参数，已暂停。已执行的操作已保留，可继续任务。');
         throw error;
       } finally {
         flushDelta();
-        clearTimeout(timer);
-        clearTimeout(idleTimer);
         if (usage) { for (const key of ['inputTokens', 'outputTokens', 'totalTokens']) totalUsage[key] += usage[key]; totalUsage.reportedRequests++; } else totalUsage.unknownRequests++;
         emit({ type: 'request-metrics', model: connection.model, status, httpStatus, firstTokenMs, firstToolCallMs, firstTextMs, firstByteMs, responseHeadersMs, durationMs: elapsed(), usage });
       }
@@ -260,9 +245,9 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       if (!message.content?.trim()) throw new Error('模型返回了空内容。');
       if (!goal) {
         const review = await team?.beforeFinal(message.content);
+        await waitIfPaused();
         aborted(signal);
         if (review) {
-          if (round + 1 >= maxRounds) throw Error('核验意见已返回，但本轮请求预算不足以整合；尚未宣告任务完成，请检查记录后继续。');
           conversation.push(message, { role: 'user', content: '主模型须继续核对实际结果，处理以下核验资料后再提交最终答复；不要重复已经成功的副作用。\n' + review });
           continue;
         }
@@ -272,13 +257,12 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       continue;
     }
     if (!tools?.length || !executeTool) throw new Error('当前模式不允许执行工具。');
-    if (goal && (operations + message.tool_calls.length > MAX_OPERATIONS || round + 1 >= maxRounds && !message.tool_calls.every(c => c.function.name === 'goal_finish'))) break;
-    if (!goal && (operations + message.tool_calls.length > MAX_OPERATIONS || round + 1 >= maxRounds)) throw new Error('任务已到达本轮操作上限，请检查已有结果后继续；不会自动重复执行。');
     conversation.push(structured ? { role: 'assistant', content: message.protocolText } : message);
     const pendingImages = [];
     const teamNotes = [];
     let teamDeferral = '';
     for (const call of message.tool_calls) {
+      await waitIfPaused();
       aborted(signal); operations += 1;
       const id = crypto.randomUUID(); const name = call.function.name;
       let args; let result; let status = 'succeeded';
@@ -313,11 +297,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
         teamDeferral = '重复错误的顾问意见已返回；请主模型调整处理方式后继续。';
         teamNotes.push('请主模型核实以下错误诊断资料，改变失败条件或方法后再继续，不能盲目重复操作。\n' + advice);
       }
-      const signature = status === 'failed' ? JSON.stringify([name, args, result?.error]) : '';
-      repeatedFailures = signature && signature === failureSignature ? repeatedFailures + 1 : signature ? 1 : 0;
-      failureSignature = signature;
       aborted(signal);
-      if (repeatedFailures >= 3) throw new Error('同一操作连续失败三次，已停止重复尝试。请查看操作记录并修正条件。');
     }
     if (teamNotes.length) conversation.push({ role: 'user', content: teamNotes.join('\n\n') });
     if (pendingImages.length) {
@@ -326,8 +306,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       while (imageEvidence.length > 3) imageEvidence.shift().content = '[较早的图片证据已从模型上下文释放；操作记录保留缩略图。需要时经批准重新读取或截图。]';
     }
   }
-  if (goal) return { text: fullText || '已达到本轮预算；请检查现有结果后手动恢复。', operations, rounds: maxRounds, usage: totalUsage, goalStatus: 'budget', goalSummary: '已达到本轮请求或操作预算，未宣告目标完成。' };
-  throw new Error('任务已到达本轮请求上限。');
+  throw new Error('模型任务已结束但未返回最终结果。');
 }
 
 module.exports = { MAX_OPERATIONS, MAX_ROUNDS, readCompletion, runModelTask, structuredReply };

@@ -197,6 +197,8 @@ contextBridge.exposeInMainWorld('scodex', {
   undoTaskChanges: (id, conversationId) => ipcRenderer.invoke('task-changes:undo', id, conversationId),
   sendMessage: (payload) => ipcRenderer.invoke('chat:send', payload),
   cancelMessage: (requestId) => ipcRenderer.invoke('chat:cancel', requestId),
+  pauseMessage: (requestId) => ipcRenderer.invoke('chat:pause', requestId),
+  resumeMessage: (requestId) => ipcRenderer.invoke('chat:resume', requestId),
   steerMessage: (payload) => ipcRenderer.invoke('chat:steer', payload),
   onChatEvent: (listener) => {
     const handler = (_event, payload) => listener(payload);

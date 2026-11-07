@@ -15,7 +15,7 @@ const DEFINITIONS = [
 
 function createSubagentTools({ coordinator, parentRequestId, guard = async () => {}, readOnly = false, allowEdits = true, prepare = async () => {} }) {
   if (!coordinator) return null;
-  const definitions = readOnly ? [] : DEFINITIONS.map(item => item.function.name !== 'subagent_start' || allowEdits ? item : { ...item, function: { ...item.function, description: '委派一个只读探索子任务，查找文件、文档、接口或验证依据。仅 analysis，不运行命令或写文件；返回路径、读取哈希、结论及未确定项。最多四个子任务，避免重复探索。', parameters: { ...item.function.parameters, properties: { ...item.function.parameters.properties, mode: { type: 'string', enum: ['analysis'], description: '只读探索' } } } } });
+  const definitions = readOnly ? [] : DEFINITIONS.map(item => item.function.name !== 'subagent_start' || allowEdits ? item : { ...item, function: { ...item.function, description: '委派一个只读探索子任务，查找文件、文档、接口或验证依据。仅 analysis，不运行命令或写文件；返回路径、读取哈希、结论及未确定项。避免重复探索。', parameters: { ...item.function.parameters, properties: { ...item.function.parameters.properties, mode: { type: 'string', enum: ['analysis'], description: '只读探索' } } } } });
   const check = async (context) => { await guard(); if (context?.signal?.aborted) throw new Error('任务已停止。'); };
   return { definitions, async execute(name, args = {}, context = {}) {
     if (!definitions.some((item) => item.function.name === name)) throw new Error('当前模式不允许子模型委派。');

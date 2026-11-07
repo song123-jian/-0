@@ -46,9 +46,16 @@ function Blocks({ blocks, onApplyCode }) {
   });
 }
 
-export function MessageContent({ content, onApplyCode }) {
+export function MessageContent({ content, onApplyCode, collapsible = false }) {
   const blocks = useMemo(() => parseMessageBlocks(content), [content]);
-  return <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} /></div>;
+  const [expanded, setExpanded] = useState(true);
+  if (!collapsible) return <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} /></div>;
+  return <details className="assistant-message-disclosure" open={expanded} onToggle={(event) => {
+    if (event.target === event.currentTarget) setExpanded(event.currentTarget.open);
+  }}>
+    <summary aria-label="答复内容"><span>答复内容</span><ChevronRight size={15} className="agent-chevron" aria-hidden="true" /></summary>
+    <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} /></div>
+  </details>;
 }
 
 export function MessageProgress({ message, collapsed = false }) {
@@ -60,7 +67,7 @@ export function MessageProgress({ message, collapsed = false }) {
     return () => window.clearInterval(timer);
   }, [message.pending, message.startedAt]);
   const elapsed = messageElapsedMs(message, now);
-  const phases = { preparing: '正在准备请求', model: '正在准备模型上下文', waiting: '等待模型响应', receiving: '已连接，等待模型内容', reasoning: '模型正在推理', 'tool-input': '正在接收工具参数', streaming: '正在接收答复', tool: '正在执行', retry: '服务重试等待中' };
+  const phases = { preparing: '正在准备请求', model: '正在准备模型上下文', waiting: '等待模型响应', receiving: '已连接，等待模型内容', reasoning: '模型正在推理', 'tool-input': '正在接收工具参数', streaming: '正在接收答复', tool: '正在执行', retry: '服务重试等待中', paused: '已暂停，点击继续' };
   const label = message.pending ? message.approval ? '等待审批' : phases[message.phase] || '正在准备请求' : message.error ? '处理失败' : message.cancelled ? '已停止' : '已处理';
   const inferred = !message.pending && !Number.isFinite(message.elapsedMs) && !Number.isFinite(message.stoppedAfter) && elapsed !== null;
   const skills = usedSkillNames(message.operations);

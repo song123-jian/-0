@@ -32,8 +32,6 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
   const [searchResult, setSearchResult] = useState({ items: [], truncated: false });
   const [searching, setSearching] = useState(false);
   const [goalDraft, setGoalDraft] = useState('');
-  const [goalRequests, setGoalRequests] = useState(8);
-  const [goalMinutes, setGoalMinutes] = useState(10);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const rootRef = useRef(null);
@@ -175,11 +173,9 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
           {page === 'goal' && <form className="composer-goal-form" onSubmit={(event) => { event.preventDefault(); run(() => onGoal(goalDraft.trim())); }}>
             <label htmlFor="composer-goal">希望这次对话达成什么？</label>
             <textarea id="composer-goal" value={goalDraft} onChange={(event) => setGoalDraft(event.target.value)} placeholder="例如：完成一个可运行的小程序，并说明验证方法。" maxLength={2000} rows={5} />
-            <p>保存只记录目标；点击开始后在本轮预算内连续执行。可随时停止，关闭程序后暂停，恢复时先核对已有结果。</p>
-            <label>请求轮数上限<input aria-label="目标请求轮数" type="number" min="1" max="24" value={goalRequests} onChange={e => setGoalRequests(Number(e.target.value))} /></label>
-            <label>时间上限（分钟）<input aria-label="目标时间上限" type="number" min="1" max="15" value={goalMinutes} onChange={e => setGoalMinutes(Number(e.target.value))} /></label>
-            {goalRun && <p role="status">{({ running: '执行中', completed: '模型报告完成', blocked: '需要处理阻塞', budget: '达到预算', paused: '已暂停' })[goalRun.status]} · {goalRun.rounds}/{goalRun.maxRequests} 轮。{goalRun.summary}</p>}
-            <button type="button" className="primary-button" disabled={working || busy || restricted || mode === 'plan' || !goalDraft.trim()} onClick={() => { const text = goalDraft.trim(); dismiss(); Promise.resolve(onGoalStart(text, { maxRequests: goalRequests, minutes: goalMinutes })).catch(caught => setError(errorText(caught))); }}>{goalRun && goalRun.status !== 'completed' ? '恢复目标执行' : '开始目标执行'}</button>
+            <p>保存只记录目标；点击开始后持续执行，直到完成、需要你处理阻塞或手动停止。关闭程序后可恢复，恢复时先核对已有结果。</p>
+            {goalRun && <p role="status">{({ running: '执行中', completed: '模型报告完成', blocked: '需要处理阻塞', paused: '已暂停' })[goalRun.status] || '未开始'}。{goalRun.summary}</p>}
+            <button type="button" className="primary-button" disabled={working || busy || restricted || mode === 'plan' || !goalDraft.trim()} onClick={() => { const text = goalDraft.trim(); dismiss(); Promise.resolve(onGoalStart(text)).catch(caught => setError(errorText(caught))); }}>{goalRun && goalRun.status !== 'completed' ? '恢复目标执行' : '开始目标执行'}</button>
             <div><button type="button" className="secondary-button" disabled={!goal || busy} onClick={() => run(() => onGoal(''))}>清除目标</button><button className="primary-button" type="submit" disabled={working || busy}>保存目标</button></div>
           </form>}
         </div>

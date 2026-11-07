@@ -101,7 +101,7 @@ function normalizeLibrary(value, now = new Date().toISOString()) {
       mode: validMode(entry.mode), draft: String(entry.draft || '').slice(0, 64_000),
       ...(entry.executionEnabled === true ? { executionEnabled: true } : {}),
       goal: typeof entry.goal === 'string' ? entry.goal.slice(0, 2000) : '',
-      ...(entry.goalRun && typeof entry.goalRun === 'object' ? { goalRun: { status: ['completed','blocked','budget','paused'].includes(entry.goalRun.status) ? entry.goalRun.status : 'paused', rounds: Math.min(24, Math.max(0, Number(entry.goalRun.rounds) || 0)), maxRequests: Math.min(24, Math.max(1, Number(entry.goalRun.maxRequests) || 8)), minutes: Math.min(15, Math.max(1, Number(entry.goalRun.minutes) || 10)), summary: String(entry.goalRun.summary || '').slice(0, 4000) } } : {}),
+      ...(entry.goalRun && typeof entry.goalRun === 'object' ? { goalRun: { status: ['completed','blocked','paused'].includes(entry.goalRun.status) ? entry.goalRun.status : 'paused', rounds: Math.max(0, Math.floor(Number(entry.goalRun.rounds) || 0)), summary: String(entry.goalRun.summary || '').slice(0, 4000) } } : {}),
       ...(validEffort(entry.reasoningEffort) ? { reasoningEffort: entry.reasoningEffort } : {}),
       ...(validModel(entry.model) ? { model: validModel(entry.model) } : {}),
       ...(validProjectId(entry.projectId) ? { projectId: entry.projectId } : {}),

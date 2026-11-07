@@ -32,22 +32,21 @@ test('progressive complete tool arguments execute exactly once beyond the old-st
     fetchImpl: async () => ++requests === 1 ? timedResponse(chunks) : timedResponse([frame({content:'完成'},'stop')]) });
   assert.equal(result.operations,1); assert.equal(executed,1); assert.equal(requests,2);
 });
-test('heartbeats and empty frames do not extend idle timeout or replay completed effects', async () => {
+test('heartbeats and empty frames do not replay completed effects', async () => {
   let requests=0,executed=0;
   await assert.rejects(runModelTask({ connection, messages: [], requestTimeouts: {idleMs:100,totalMs:2000},
     tools:[{type:'function',function:{name:'write_file'}}],executeTool:async()=>{executed++;return {ok:true};},
-    fetchImpl:async()=>++requests===1?timedResponse([frame({tool_calls:[{index:0,id:'done_1',function:{name:'write_file',arguments:'{}'}}]},'tool_calls')]):timedResponse(Array.from({length:30},()=>': keepalive\n\n'+frame({})),10) }), /没有新的正文/);
+    fetchImpl:async()=>++requests===1?timedResponse([frame({tool_calls:[{index:0,id:'done_1',function:{name:'write_file',arguments:'{}'}}]},'tool_calls')]):timedResponse(Array.from({length:30},()=>': keepalive\n\n'+frame({})),10) }), /流提前中断/);
   assert.equal(executed,1);assert.equal(requests,2);
 });
-test('continuous meaningful progress still has a finite total request bound', async () => {
+test('continuous meaningful progress is not stopped by a finite total request bound', async () => {
   let executed=0;
   await assert.rejects(runModelTask({ connection,messages:[],requestTimeouts:{idleMs:110,totalMs:180},executeTool:async()=>{executed++;},
-    fetchImpl:async()=>timedResponse(Array.from({length:30},()=>frame({reasoning_content:'working'})),20) }), /时长上限/);
+    fetchImpl:async()=>timedResponse(Array.from({length:30},()=>frame({reasoning_content:'working'})),20) }), /流提前中断/);
   assert.equal(executed,0);
 });
-test('waiting for headers is idle-bounded and user cancellation remains distinct', async () => {
+test('waiting for headers has no automatic timeout and user cancellation remains distinct', async () => {
   const fetchImpl=async(_url,{signal})=>new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
-  await assert.rejects(runModelTask({connection,messages:[],requestTimeouts:{idleMs:75,totalMs:2000},fetchImpl}),/没有新的正文/);
   const controller=new AbortController();setTimeout(()=>controller.abort(),25);
-  await assert.rejects(runModelTask({connection,messages:[],signal:controller.signal,fetchImpl}),error=>!/没有新的正文|时长上限/.test(error.message));
+  await assert.rejects(runModelTask({connection,messages:[],signal:controller.signal,fetchImpl}),error=>/停止|abort|aborted/i.test(error.message));
 });

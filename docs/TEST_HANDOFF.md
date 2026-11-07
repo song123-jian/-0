@@ -1,5 +1,24 @@
 # Test Handoff
 
+## Active Increment — 1.3.42, 2026-11-07
+
+- Target: rebuilt candidate `release/win-unpacked/Scodex工作台.exe`, Windows x64/Electron 45.0.0, file version `1.3.42`, isolated profile under `release/手动删除/1.3.42-fixtures`; the installed `C:/Program Files/scodex-workbench/Scodex工作台.exe` was not replaced in this increment.
+- Environment: Node 24, actual packaged Electron/React/IPC/PowerShell renderer, isolated Windows profile and workspace, local loopback OpenAI-compatible response fixture. The loopback model is only a deterministic test dependency; no public provider quality or latency claim is made.
+
+| Scope, operation and expected result | Actual result | Status and evidence |
+| --- | --- | --- |
+| Affected logic: no 4 MiB response ceiling, no automatic request/round/operation/repeated-failure/time budget, complete stream parsing and explicit cancellation | 79/79 tests passed, including large response, no automatic timeout/total bound, no repeated-failure stop, goal continuation, unlimited chat runs, unlimited explorer tasks and permission-open cases | Passed: command `node --test tests/agent-runtime.test.mjs tests/chat-runs.test.mjs tests/goal-runtime.test.mjs tests/model-request-timeouts.test.mjs tests/model-team.test.mjs tests/message-progress.test.mjs tests/message-presentation.test.mjs tests/permission-policy.test.mjs tests/subagent-coordinator.test.mjs tests/subagent-runtime.test.mjs` |
+| Renderer build | Vite completed with exit 0; current source bundle generated from the 1.3.42 checkout | Passed: `npm exec vite build` |
+| Candidate pause/resume | Start a real task, allow the first tool request to finish, pause at the second request, verify the task remains pending and shows “已暂停，点击继续”, release the current response, resume and verify completion; request count stayed at 2 | Passed: `release/delivery-1.3.42/candidate-core-ui.json`, check `pause-keeps-task-pending-after-safe-request-boundary` |
+| Candidate answer folding | Completed answer exposes “答复内容”; clicking it closes the detail and the final screenshot hides the answer body while retaining the entry and actions | Passed: `candidate-core-ui.json`, `answer-collapsed.png` |
+| Candidate output folding and typography | Real PowerShell command output is initially under an independent “操作输出” disclosure; expanding shows both output lines; computed output font is 13px and answer font is 15px | Passed: `candidate-core-ui.json`, `operation-output-expanded.png` |
+| Candidate artifact identity | Rebuilt unpacked EXE file version 1.3.42, SHA-256 `317a924eb2a279cbe6d4501090a3a661c46b742a922e83077e32d1c8dfd8eccc`; `app.asar` SHA-256 `24dd7be3e20cc0ee06a34175419f979c6572716875884f180d2debfcc8317a05` | Passed: file version, size and hash readback after the pause-gate review fix |
+| NSIS installer | Rebuilt `Scodex-Workbench-Setup-1.3.42-x64.exe`, exit 0, 181114245 bytes, SHA-256 `7adcf6e067747afe073c4a70443625cc3745f7cd0ed38508e065d594f811847b` | Passed: `npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=release/electron-dist-45.0.0` |
+
+- Failure/recovery: the old `tests/model-team-ui.cjs` candidate run stopped at an HTTP 500 because its fixture still asserted the removed “还有子任务未结束” prompt; the report is retained as failed evidence and excluded from pass counts. The dedicated candidate verifier had two harness-only failures (syntax and a broad DOM selector), both corrected before the final 3/3 acceptance. No product failure was inferred.
+- Build prerequisite: `node_modules/electron/dist` was absent and the Electron download failed with `fetch failed`; the verified installed Electron 45 runtime was copied to the ignored `release/electron-dist-45.0.0` directory and used only for the candidate/installer build.
+- Cleanup and coverage: six exact isolated fixture directories moved to `release/手动删除/1.3.42-fixtures`; verifier source removed. No installed-program replacement, real user profile write, external model call or native mouse/keyboard acceptance was performed. The final review fix was validated by `node --check electron/main.cjs` and the 79-test affected logic suite; source publication and any installed-path acceptance remain pending until the user-requested upload workflow completes.
+
 ## Active Increment — 1.3.41, 2026-11-05
 
 - Target: installed Scodex工作台.exe 1.3.41, Windows x64/Electron 45, C:/Program Files/scodex-workbench/Scodex工作台.exe; candidate release/win-unpacked/Scodex工作台.exe. Existing Node 24. Evidence root release/delivery-1.3.41. Source/Latest Release publication pending.

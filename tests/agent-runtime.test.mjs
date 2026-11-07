@@ -94,13 +94,19 @@ test('unsupported tool and malformed arguments are reported as failed without ex
   }
 });
 
-test('consecutive identical failure stops loops; command failure keeps real output', async () => {
+test('consecutive identical failures do not impose an automatic stop; command failure keeps real output', async () => {
   const events = []; let requests = 0;
-  await assert.rejects(runModelTask({ connection, messages: [], tools, emit: (e) => events.push(e),
+  const result = await runModelTask({ connection, messages: [], tools, emit: (e) => events.push(e),
     executeTool: async () => ({ ok: false, error: '失败', output: '实际 stderr', activity: { output: '实际 stderr' } }),
-    fetchImpl: async () => { requests++; return toolReply(); } }), /连续失败三次/);
-  assert.equal(requests, 3);
+    fetchImpl: async () => { requests++; return requests <= 3 ? toolReply() : stream([delta({ content: '已根据实际错误继续处理。' }), delta({}, 'stop')]); } });
+  assert.equal(requests, 4); assert.match(result.text, /继续处理/);
   assert.match(events.filter((e) => e.type === 'operation').at(-1).operation.output, /实际 stderr\n失败/);
+});
+
+test('responses larger than four megabytes are accepted when the stream is complete', async () => {
+  const content = '长响应'.repeat(1_500_000);
+  const result = await runModelTask({ connection, messages: [], fetchImpl: async () => stream([delta({ content }), delta({}, 'stop')], true, 64 * 1024) });
+  assert.equal(result.text, content);
 });
 
 test('cancelled task cannot execute a later tool in the same batch', async () => {

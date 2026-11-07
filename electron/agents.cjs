@@ -14,7 +14,6 @@ function createAgentService(root, execute) {
     async start(input) {
       const prompt = typeof input?.prompt === 'string' ? input.prompt.trim() : '';
       if (!prompt || prompt.length > 16_000) throw new Error('请填写 1–16000 字的子任务。');
-      if (running.size >= 3) throw new Error('最多同时运行 3 个子智能体，请等待或停止现有任务。');
       const task = { id: crypto.randomUUID(), parentId: String(input.parentId || '').slice(0, 100), prompt,
         title: prompt.replace(/[\r\n]+/g, ' ').slice(0, 80), result: '', status: 'queued', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       const controller = new AbortController();

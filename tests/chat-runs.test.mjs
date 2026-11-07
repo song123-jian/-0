@@ -10,16 +10,15 @@ const { withFileCommit } = require('../electron/file-commit.cjs');
 const { createAgentTools } = require('../electron/agent-tools.cjs');
 const { createConversation, normalizeLibrary } = require('../electron/conversations.cjs');
 
-test('independent runs keep their slot until that exact request finishes', () => {
-  const runs = createChatRuns(3);
-  runs.begin('a', 'chat-a'); runs.begin('b', 'chat-b'); runs.begin('c', 'chat-c');
-  assert.throws(() => runs.begin('d', 'chat-d'), /最多同时运行3/);
+test('independent runs remain available without a global concurrency cap', () => {
+  const runs = createChatRuns();
+  runs.begin('a', 'chat-a'); runs.begin('b', 'chat-b'); runs.begin('c', 'chat-c'); runs.begin('d', 'chat-d');
   assert.throws(() => runs.begin('a', 'chat-e'), /此请求/);
   assert.throws(() => runs.begin('x', 'chat-b'), /此聊天/);
-  assert.equal(runs.size(), 3);
+  assert.equal(runs.size(), 4);
   assert.equal(runs.finish('unknown'), false);
-  runs.finish('b'); runs.begin('d', 'chat-d');
-  assert.equal(runs.size(), 3);
+  runs.finish('b'); runs.begin('e', 'chat-e');
+  assert.equal(runs.size(), 4);
   assert.throws(() => runs.begin('x', 'chat-a'), /此聊天/);
 });
 
@@ -28,8 +27,8 @@ test('invalid identifiers never consume slots; standalone panel requests count',
   for (const value of [undefined, null, {}, '', '../x', 'x'.repeat(101)]) assert.throws(() => runs.begin(value, 'chat'), /标识/);
   assert.throws(() => runs.begin('valid', {}), /标识/);
   assert.equal(runs.size(), 0);
-  runs.begin('panel'); runs.begin('a', 'chat-a'); runs.begin('b', 'chat-b');
-  assert.throws(() => runs.begin('c', 'chat-c'), /最多/);
+  runs.begin('panel'); runs.begin('a', 'chat-a'); runs.begin('b', 'chat-b'); runs.begin('c', 'chat-c');
+  assert.equal(runs.size(), 4);
 });
 
 test('running conversations cannot be deleted or archived by history writes', () => {

@@ -56,15 +56,15 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     const absolute = path.resolve(root, value); const rel = path.relative(root, absolute);
     const inWorkspace = inside(root, absolute);
     if (!inWorkspace && !fullAccess) throw new Error('模型工具只能访问当前项目内的路径。');
-    if (!inheritedRule && !scoped(absolute)) throw new Error('目标路径不在主模型分配范围内。');
-    if (sensitive(inWorkspace ? rel : absolute) || protectedPaths.some((value) => value && inside(path.resolve(value), absolute))) throw new Error('模型工具不读取或修改凭据、应用配置及受保护目录。');
-    if (rel.split(path.sep).some((s) => s.toLowerCase() === '.git')) throw new Error('不直接读写 Git 内部数据；请使用经过权限检查的 Git 命令。');
+    if (!fullAccess && !inheritedRule && !scoped(absolute)) throw new Error('目标路径不在主模型分配范围内。');
+    if (!fullAccess && (sensitive(inWorkspace ? rel : absolute) || protectedPaths.some((value) => value && inside(path.resolve(value), absolute)))) throw new Error('模型工具不读取或修改凭据、应用配置及受保护目录。');
+    if (!fullAccess && rel.split(path.sep).some((s) => s.toLowerCase() === '.git')) throw new Error('不直接读写 Git 内部数据；请使用经过权限检查的 Git 命令。');
     let ancestor = inWorkspace ? root : path.parse(absolute).root;
     const suffix = path.relative(ancestor, absolute);
     const parts = suffix ? suffix.split(path.sep) : [];
     for (let i = 0; i < parts.length; i += 1) {
       ancestor = path.join(ancestor, parts[i]);
-      try { const info = await fs.lstat(ancestor); if (info.isSymbolicLink()) throw new Error('模型工具不跨越符号链接或目录联接。'); }
+      try { const info = await fs.lstat(ancestor); if (!fullAccess && info.isSymbolicLink()) throw new Error('模型工具不跨越符号链接或目录联接。'); }
       catch (error) { if (error.code === 'ENOENT' && allowMissing) break; throw error; }
     }
     return { root, target: absolute, relative: (inWorkspace ? rel : absolute).replaceAll(path.sep, '/') || '.' };
@@ -164,7 +164,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     await authorize('file-read', { path: item.target }, context);
     if (name === 'list_directory') {
       const entries = await fs.readdir(item.target, { withFileTypes: true });
-      const visible = entries.filter((entry) => !IGNORED.has(entry.name) && !entry.isSymbolicLink() && !sensitive(entry.name));
+      const visible = entries.filter((entry) => !IGNORED.has(entry.name) && (fullAccess || !entry.isSymbolicLink() && !sensitive(entry.name)));
       const items = visible.slice(0, 250).map((e) => ({ name: e.name, directory: e.isDirectory() }));
       return { ok: true, path: item.relative, items, truncated: visible.length > items.length, activity: { title: TITLES[name], detail: item.relative, output: items.map((i) => (i.directory ? '📁 ' : '') + i.name).join('\n') } };
     }
@@ -183,11 +183,11 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
         await guard(); if (context.signal?.aborted) throw new Error('任务已停止。');
         if (++visited > 6000 || matches.length >= 60) { truncated = true; break; }
         const entry = queue[i]; let info; try { info = await fs.lstat(entry.target); } catch { continue; }
-        if (info.isSymbolicLink() || sensitive(path.relative(item.root, entry.target))) continue;
+        if (!fullAccess && (info.isSymbolicLink() || sensitive(path.relative(item.root, entry.target)))) continue;
         if (info.isDirectory()) {
           if (entry.depth >= 8) { truncated = true; continue; }
           let children; try { children = await fs.readdir(entry.target, { withFileTypes: true }); } catch { continue; }
-          for (const child of children) if (!IGNORED.has(child.name) && !child.isSymbolicLink() && !sensitive(child.name)) queue.push({ target: path.join(entry.target, child.name), depth: entry.depth + 1 });
+          for (const child of children) if (!IGNORED.has(child.name) && (fullAccess || !child.isSymbolicLink() && !sensitive(child.name))) queue.push({ target: path.join(entry.target, child.name), depth: entry.depth + 1 });
         } else if (info.isFile() && info.size <= 512 * 1024) {
           try {
             const fresh = await resolve(entry.target); const value = await read(fresh.target); const lines = value.content.split(/\r?\n/);
@@ -199,7 +199,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     }
     throw new Error('未知工具。');
   }
-  return { execute, projectFiles: { resolve, instructions }, definitions: AGENT_TOOLS.filter((t) => (!readOnly || !['write_file', 'edit_file', 'run_command'].includes(t.function.name)) && (!Array.isArray(allowedTools) || allowedTools.includes(t.function.name))).map((definition) => fullAccess ? { ...definition, function: { ...definition.function, description: definition.function.description + ' 完整访问已启用，可按当前 Windows 账号权限使用项目外绝对路径；凭据与受保护目录仍不开放。' } } : definition),
+  return { execute, projectFiles: { resolve, instructions }, definitions: AGENT_TOOLS.filter((t) => (!readOnly || !['write_file', 'edit_file', 'run_command'].includes(t.function.name)) && (!Array.isArray(allowedTools) || allowedTools.includes(t.function.name))).map((definition) => fullAccess ? { ...definition, function: { ...definition.function, description: definition.function.description + ' 完整访问已启用，可按当前 Windows 账号权限使用项目外绝对路径。' } } : definition),
     async projectInstructions() { try { const item = await resolve('AGENTS.md'); return (await readInstructionFile(item.target)).content; } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } } };
 }
 

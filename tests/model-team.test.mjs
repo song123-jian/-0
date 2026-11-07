@@ -193,9 +193,9 @@ test('completed goal_finish is deferred for advisor, then commits the verified r
   assert.equal(result.goalStatus, 'completed'); assert.equal(requests, 4); assert.deepEqual(seen, ['plan', 'completion']);
 });
 
-test('explorers enforce a task budget and merge only identical active work, without locking main writes', async () => {
+test('explorers merge identical active work without fixed concurrency or task budgets', async () => {
   const release = new Map(); let runs = 0;
-  const coordinator = createSubagentCoordinator({ workspaceRoot: 'C:/workspace', maxConcurrent: 2, maxTasks: 2,
+  const coordinator = createSubagentCoordinator({ workspaceRoot: 'C:/workspace',
     run: async ({ id }) => { runs++; return new Promise(resolve => release.set(id, resolve)); } });
   const args = { task: 'read docs', mode: 'analysis', paths: ['docs'], parentRequestId: 'parent' };
   const first = await coordinator.start(args);
@@ -203,10 +203,12 @@ test('explorers enforce a task budget and merge only identical active work, with
   assert.equal(duplicate.id, first.id); assert.equal(duplicate.reused, true); assert.equal(runs, 1);
   assert.doesNotThrow(() => coordinator.assertWritable('C:/workspace/docs/guide.md'));
   const second = await coordinator.start({ ...args, task: 'read interfaces' });
-  await assert.rejects(coordinator.start({ ...args, task: 'third' }), /最多同时/);
+  const third = await coordinator.start({ ...args, task: 'third' });
   release.get(first.id)('first'); release.get(second.id)('second');
-  await coordinator.wait(first.id, 1000, 'parent'); await coordinator.wait(second.id, 1000, 'parent');
-  await assert.rejects(coordinator.start({ ...args, task: 'next' }), /最多分配/);
+  release.get(third.id)('third');
+  await coordinator.wait(first.id, 1000, 'parent'); await coordinator.wait(second.id, 1000, 'parent'); await coordinator.wait(third.id, 1000, 'parent');
+  const next = await coordinator.start({ ...args, task: 'next' });
+  assert.equal(runs, 4); release.get(next.id)('next'); await coordinator.wait(next.id, 1000, 'parent');
 });
 
 test('read-only delegation rejects edits before network preparation', async () => {

@@ -13,10 +13,10 @@ test('explicit goal continues after interim answer then stops at evidence-bearin
   } });
   assert.equal(calls, 2); assert.equal(result.goalStatus, 'completed'); assert.match(result.text, /已完成/);
 });
-test('goal stops at request budget and never implies completion', async () => {
+test('goal ignores a legacy request budget and continues until an evidence-bearing finish', async () => {
   let calls = 0;
-  const result = await runModelTask({ connection, messages: [], goal: { maxRequests: 2 }, fetchImpl: async () => { calls++; return Response.json({ choices: [{ message: { content: '仍在处理' } }] }); } });
-  assert.equal(calls, 2); assert.equal(result.goalStatus, 'budget');
+  const result = await runModelTask({ connection, messages: [], goal: { maxRequests: 1 }, fetchImpl: async () => { calls++; return Response.json({ choices: [{ message: calls === 1 ? { content: '仍在处理' } : { tool_calls: [{ id: 'finish', type: 'function', function: { name: 'goal_finish', arguments: JSON.stringify({ status: 'completed', summary: '已完成', evidence: '已回读结果' }) } }] } }] }); } });
+  assert.equal(calls, 2); assert.equal(result.goalStatus, 'completed');
 });
 test('ordinary chat does not silently enter a goal loop', async () => {
   let calls = 0;

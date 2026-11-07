@@ -15,7 +15,7 @@ import {
   ChevronLeft, ChevronRight, CircleAlert, Clipboard, Columns3, Crop, FileCode2,
   FileImage, FilePlus2, FileSpreadsheet, Files, FolderOpen, Image as ImageIcon, Library,
   GitBranch, Pin, Archive, CalendarClock, LoaderCircle, MessageSquare, Paperclip, Paintbrush, PanelLeftClose,
-  PanelLeftOpen, PanelRightOpen, Plus, RotateCcw, RotateCw, Save, Search, Send, Sheet,
+  PanelLeftOpen, PanelRightOpen, Pause, Play, Plus, RotateCcw, RotateCw, Save, Search, Send, Sheet,
   Sparkles, StopCircle, Sun, Table2, Target, Type, X, Puzzle, Clock3, Ellipsis, SlidersHorizontal, SquarePlus,
 } from 'lucide-react';
 import { parseCsv, stringifyCsv } from './lib/csv.js';
@@ -391,7 +391,15 @@ function App() {
     if (['complete', 'cancelled', 'error'].includes(event.type)) updateRequestMessages(items => settleSteeringMessages(items, event.requestId));
     if (['complete', 'cancelled', 'error'].includes(event.type) && event.fileChanges) updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, fileChanges: event.fileChanges } : item));
     if (event.type === 'goal-state') {
-      updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.status, rounds: event.rounds, maxRequests: event.maxRequests } }), request.conversationId);
+      updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.status, rounds: event.rounds } }), request.conversationId);
+    } else if (event.type === 'paused' || event.type === 'resumed') {
+      const active = activeRequestsRef.current.get(event.requestId);
+      if (active) {
+        if (event.type === 'paused') active.pausedPhase = active.phase || 'model';
+        active.paused = event.type === 'paused';
+        setLiveRequests([...activeRequestsRef.current.values()]);
+      }
+      updateRequestMessages(items => items.map((item) => item.id === event.requestId ? { ...item, phase: event.type === 'paused' ? 'paused' : activeRequestsRef.current.get(event.requestId)?.pausedPhase || item.phase } : item));
     } else if (event.type === 'steering-queued') {
       updateRequestMessages(items => updateSteeringStatus(items, event.requestId, event.steeringId, 'queued'));
       showNotice('引导已提交，当前模型继续运行');
@@ -402,6 +410,8 @@ function App() {
       updateRequestMessages(items => updateSteeringStatus(items, event.requestId, event.steeringId, 'expired'));
       showNotice(event.message || '当前任务已结束，引导未能注入');
     } else if (event.type === 'phase') {
+      const active = activeRequestsRef.current.get(event.requestId);
+      if (active) active.phase = event.phase;
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, phase: event.phase } : item));
     } else if (event.type === 'operation') {
       updateRequestMessages((items) => items.map((item) => {
@@ -409,7 +419,7 @@ function App() {
         const operations = [...(item.operations || [])];
         const index = operations.findIndex((operation) => operation.id === event.operation.id);
         if (index < 0) operations.push(event.operation); else operations[index] = { ...operations[index], ...event.operation };
-        return { ...item, phase: 'tool', operations: operations.slice(0, 64) };
+        return { ...item, phase: 'tool', operations };
       }));
     } else if (event.type === 'approval') {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, approval: event.approval } : item));
@@ -432,7 +442,7 @@ function App() {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: event.text, finalContentOffset: event.finalContentOffset, pending: false, approval: null, phase: '', ...settledTiming(item) } : item));
       window.scodex.notify('complete').catch(() => {});
     } else if (event.type === 'cancelled') {
-      if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'paused', summary: '已停止或到达时间预算；已执行结果保留。' } }), request.conversationId);
+      if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'paused', summary: '已停止；已执行结果保留。' } }), request.conversationId);
       finishRequest(event.requestId);
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId
         ? { ...item, pending: false, approval: null, operations: item.operations?.map((operation) => operation.status === 'running' ? { ...operation, status: 'cancelled' } : operation), cancelled: true, stoppedAfter: Math.max(0, Math.floor((Date.now() - (item.startedAt || Date.now())) / 1000)), ...settledTiming(item) }
@@ -1514,7 +1524,6 @@ function App() {
       ? retryContent.reasoningEffort : availableReasoningEfforts.includes(targetChat.reasoningEffort) ? targetChat.reasoningEffort : agentSettings.defaultReasoningEffort;
     if ((!text && !outgoingImages.length && !outgoingAttachments.length) || attachmentReading.current || storageBusyRef.current || !targetChat) { if (detached) throw Error('工作台正在处理附件或聊天存储，请稍候。'); return; }
     if ([...activeRequestsRef.current.values()].some((request) => request.conversationId === targetChat.id)) { if (detached) throw Error('此聊天仍在运行。'); return; }
-    if (activeRequestsRef.current.size >= 3) { if (detached) throw Error('最多同时运行 3 个聊天任务，请等待或停止其中一项。'); showNotice('最多同时运行 3 个聊天任务，请等待或停止其中一项。'); return; }
     if (!canShareContext && (outgoingImages.length || outgoingAttachments.length)) { if (revisionAction) throw Error('当前为仅对话权限，请先更改权限再重试附件'); showNotice('当前为仅对话权限，请先更改权限再重试附件'); return; }
     // Infer each message mode unless the composer menu sets a one-shot override.
     const requestMode = retryContent?.mode || (!detached && pendingModeOverride?.conversationId === targetChat?.id ? pendingModeOverride.mode : inferWorkMode(text, Boolean(!detached && fileContext || outgoingImages.length || outgoingAttachments.length)));
@@ -1535,7 +1544,7 @@ function App() {
     if (!revisionPlan) updateChat(() => ({ draft: '' }), targetChat.id);
     if (!detached) { setImageAttachments([]); setAttachments([]); setFileContext(null); }
     const requestProjectId = targetChat.projectId || '';
-    activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId, goalExecution });
+    activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId, goalExecution, phase: 'preparing', paused: false });
     if (goalExecution) updateChat(() => ({ goalRun: { ...goalExecution, status: 'running', rounds: 0, summary: '' } }), targetChat.id);
     setLiveRequests([...activeRequestsRef.current.values()]);
     const dispatch = async () => { try {
@@ -1624,6 +1633,16 @@ function App() {
   const cancelRequest = async (requestId = activeRequestId) => {
     if (!activeRequestsRef.current.has(requestId)) return;
     await window.scodex.cancelMessage(requestId).catch((error) => showNotice(readableError(error)));
+  };
+
+  const pauseRequest = async (requestId = activeRequestId) => {
+    if (!activeRequestsRef.current.has(requestId)) return;
+    await window.scodex.pauseMessage(requestId).catch((error) => showNotice(readableError(error)));
+  };
+
+  const resumeRequest = async (requestId = activeRequestId) => {
+    if (!activeRequestsRef.current.has(requestId)) return;
+    await window.scodex.resumeMessage(requestId).catch((error) => showNotice(readableError(error)));
   };
 
   useEffect(() => {
@@ -1958,7 +1977,7 @@ function App() {
                       mode={composerMode}
                       goal={currentChat?.goal || ''}
                       goalRun={currentChat?.goalRun}
-                      onGoalStart={(text, budget) => { updateChat(() => ({ goal: text })); return sendMessage('继续此目标：' + text + '\n先核对已有结果，保留已完成的修改，完成或受阻时提供证据。', null, null, null, null, budget); }}
+                      onGoalStart={(text) => { updateChat(() => ({ goal: text })); return sendMessage('继续此目标：' + text + '\n先核对已有结果，保留已完成的修改，完成或受阻时提供证据。', null, null, null, null, {}); }}
                       contextAccess={preferences.contextAccess}
                       busy={!currentChat || sending || storageBusy || attachmentLoading}
                       onFile={(filePath) => filePath ? attachFilePath(filePath) : attachmentInputRef.current?.click()}
@@ -1986,7 +2005,7 @@ function App() {
                         {availableReasoningEfforts.map((effort) => <option key={effort} value={effort}>{REASONING_EFFORT_LABELS[effort] || effort}</option>)}
                       </select>
                     </label>
-                    {sending ? <><button className="send-button stop-button" aria-label="停止生成" title="停止生成" onClick={() => cancelRequest()}><span className="stop-square" /></button><button className="send-button steering-send-button" aria-label="提交引导但不中断模型运行" title="提交引导 · 不中断模型运行" disabled={storageBusy || attachmentLoading || !prompt.trim()} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button></> : <button className="send-button" aria-label="发送消息" title={preferences.sendShortcut === 'enter' ? 'Enter 发送 · Shift Enter 换行' : 'Ctrl Enter 发送'} disabled={storageBusy || liveRequests.length >= 3 || attachmentLoading || (!prompt.trim() && imageAttachments.length === 0 && attachments.length === 0)} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button>}
+                    {sending ? <><button className="send-button pause-button" aria-label={currentRequest?.paused ? '恢复任务' : '暂停任务'} title={currentRequest?.paused ? '恢复任务' : '暂停任务'} onClick={() => (currentRequest?.paused ? resumeRequest() : pauseRequest())}>{currentRequest?.paused ? <Play size={15} /> : <Pause size={15} />}</button><button className="send-button stop-button" aria-label="停止生成" title="停止生成" onClick={() => cancelRequest()}><span className="stop-square" /></button><button className="send-button steering-send-button" aria-label="提交引导但不中断模型运行" title="提交引导 · 不中断模型运行" disabled={storageBusy || attachmentLoading || !prompt.trim()} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button></> : <button className="send-button" aria-label="发送消息" title={preferences.sendShortcut === 'enter' ? 'Enter 发送 · Shift Enter 换行' : 'Ctrl Enter 发送'} disabled={storageBusy || attachmentLoading || (!prompt.trim() && imageAttachments.length === 0 && attachments.length === 0)} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button>}
                   </div>
                 </div>
               </div>
@@ -2199,7 +2218,7 @@ export function MessageBubble({ message, conversationId, copied, onCopy, onFork,
   const parts = messageContentParts(message);
   return <article data-message-id={message.id} className="assistant-message"><div className="assistant-message-mark"><Sparkles size={15} /></div><div className="assistant-message-main"><div className="assistant-message-label">{message.model || '助手'}</div>
     <MessageExecution message={message} activity={parts.activity} onApproval={onApproval} onOpenFile={onOpenFile} onBrowser={onBrowser} onServices={onServices} />
-    {parts.answer && <MessageContent content={parts.answer} onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
+    {parts.answer && <MessageContent content={parts.answer} collapsible onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
     {!message.pending && message.fileChanges && <TaskFileChanges record={message.fileChanges} conversationId={conversationId} disabled={actionsDisabled} />}
     {message.error && <div className="message-error"><CircleAlert size={16} /><span>{message.error}</span></div>}
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}

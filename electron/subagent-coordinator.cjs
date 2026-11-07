@@ -4,7 +4,6 @@ const crypto = require('node:crypto');
 const MAX_TASK_BYTES = 16_000;
 const MAX_PATHS = 20;
 const MAX_WAIT_MS = 30_000;
-const DEFAULT_MAX_CONCURRENT = 3;
 
 function inside(root, candidate) {
   const relative = path.relative(root, candidate);
@@ -37,7 +36,7 @@ function overlapping(left, right) {
   return left.some((a) => right.some((b) => inside(a.target, b.target) || inside(b.target, a.target)));
 }
 
-function createSubagentCoordinator({ workspaceRoot, run, maxConcurrent = DEFAULT_MAX_CONCURRENT, maxTasks = 4 }) {
+function createSubagentCoordinator({ workspaceRoot, run }) {
   if (typeof run !== 'function') throw new Error('子任务执行器未配置。');
   const root = path.resolve(workspaceRoot);
   const tasks = new Map();
@@ -75,8 +74,6 @@ function createSubagentCoordinator({ workspaceRoot, run, maxConcurrent = DEFAULT
         const other = tasks.get(id);
         return (mode === 'edit' || other.mode === 'edit') && overlapping(other.paths, paths);
       })) throw new Error('路径正在由另一个子任务处理，请拆分任务或等待完成。');
-      if (active.size >= maxConcurrent) throw new Error(`最多同时运行 ${maxConcurrent} 个子任务，请等待已有任务完成。`);
-      if (tasks.size >= maxTasks) throw new Error(`本次主任务最多分配 ${maxTasks} 个子任务；请主模型整合已有结果继续。`);
       const id = 'sub_' + crypto.randomUUID();
       const controller = new AbortController();
       const taskState = { id, parentRequestId: String(input.parentRequestId || '').slice(0, 160), title: String(input.title || task).replace(/[\r\n]+/g, ' ').slice(0, 100), task, mode, paths,

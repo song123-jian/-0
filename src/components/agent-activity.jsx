@@ -24,7 +24,10 @@ function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
       {operation.name === 'run_command' && <div className="agent-command-line"><Terminal size={16} /><code>{operation.detail}</code></div>}
       {operation.path && <div className="agent-operation-path">{operation.path}</div>}
       {operation.diff && <pre className="agent-diff" aria-label={'文件差异 ' + (index + 1)}>{operation.diff.split('\n').map((line, i) => <span className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''} key={i}>{line}</span>)}</pre>}
-      {operation.output && <pre className="agent-operation-output" aria-label={'操作输出 ' + (index + 1)}>{operation.output}</pre>}
+      {operation.output && <details className="agent-output-disclosure">
+        <summary aria-label={'展开操作输出 ' + (index + 1)}><span>操作输出</span><small>{operation.output.split(/\r?\n/).length} 行</small><ChevronRight size={15} className="agent-chevron" /></summary>
+        <pre className="agent-operation-output" aria-label={'操作输出 ' + (index + 1)}>{operation.output}</pre>
+      </details>}
       {operation.screenshot && <figure className="agent-web-screenshot"><img src={operation.screenshot.dataUrl} alt={operation.name?.startsWith('image_') ? '获准处理的项目图片' : '获准截取的网页视口'} loading="lazy" /><figcaption>{operation.name?.startsWith('image_') ? '本轮项目图片' : '本轮网页截图'}</figcaption></figure>}
       {operation.name?.startsWith('browser_') && onBrowser && <button className="text-tool" onClick={onBrowser}>在第三工作台查看网页</button>}
       {operation.name?.startsWith('service_') && onServices && <button className="text-tool" onClick={onServices}>查看运行与预览</button>}
