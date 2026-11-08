@@ -9,6 +9,8 @@
 - 重启验收：候选和正式 `SCODEX_CDP_SCOPE=restart-only` 各 2/2，通过版本 `1.3.55`、设置保存和跨重启恢复；报告分别为 `release/formal-build-1.3.55-20261108/candidate-restart/cdp-ui-verification.json` 和 `release/formal-build-1.3.55-20261108/formal-restart/cdp-ui-verification.json`。
 - 产物身份：候选/正式 EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`；候选/正式 ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`；旧版回滚备份 `release/formal-build-1.3.55-20261108/rollback-1.3.54`。
 - 构建记录：默认构建因 Electron 联网检查超时而失败，随后使用本机 Electron 45、`npmRebuild=false`、`signAndEditExecutable=false` 和 `electronDist=node_modules/electron/dist` 成功；失败路径未用于替换。
+- GitHub 发布：[Release `v1.3.55`](https://github.com/song123-jian/-0/releases/tag/v1.3.55)（ID `438314791`）已公开；[EXE 下载](https://github.com/song123-jian/-0/releases/download/v1.3.55/Scodex-Workbench-1.3.55-x64.exe)，资产 ID `724365962`、状态 `uploaded`、大小 249798144 字节，GitHub SHA-256 与正式 EXE 一致。资产记录见 `release/formal-build-1.3.55-20261108/github-asset-upload.json`。
+- 匿名下载检查：HEAD 返回 HTTP 302 公开重定向；完整流式下载经当前代理/CDN 长时间未取得有效进度后停止，完整下载及下载文件 SHA-256 尚未完成验证。该未完成检查不影响 GitHub 已确认的上传状态和资产摘要匹配结论。
 - 限制：三模型流程使用 loopback fixture，不能代表公网模型质量、速度或费用；本轮未读取、打印或写入模型凭据。
 
 <!-- formal-build-1.3.55:end -->

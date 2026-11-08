@@ -1,11 +1,12 @@
 <!-- formal-build-1.3.55:start -->
-## 当前检查点：1.3.55 模型三完成态文案与正式入口替换已完成
+## 当前检查点：1.3.55 模型三完成态文案、正式入口与 GitHub 发布已完成
 
 - 当前目标：模型三独立提案返回结构化结果后，活动记录显示“正在模型三 · 独立提案已返回结构化结果”，并将改动构建替换到正式入口。
 - 已完成：`src/lib/message-presentation.js` 和两个相关断言已更新；版本 `package.json`、`package-lock.json` 为 `1.3.55`；候选与正式模型团队 UI 各 8/8，候选与正式 `restart-only` 各 2/2。
 - 增量审查：模型三成功态前缀仅在独立提案结构化结果分支生效；模型一/二及失败、取消、评议状态保持原行为并由 43/43 逻辑测试覆盖，未发现高置信度问题。
 - 产物：候选/正式 EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`；候选/正式 ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`；正式入口 `E:/GDP/Scodex/App/Scodex工作台.exe`，ASAR `E:/GDP/Scodex/App/resources/app.asar`。
 - 回滚：旧 `1.3.54` EXE/ASAR 位于 `release/formal-build-1.3.55-20261108/rollback-1.3.54`；报告 `release/formal-build-1.3.55-20261108/formal-replacement.json`。
+- GitHub：[`v1.3.55`](https://github.com/song123-jian/-0/releases/tag/v1.3.55) 已正式发布；资产 ID `724365962`、大小 `249798144` 字节，GitHub SHA-256 与正式 EXE 相同，证据 `release/formal-build-1.3.55-20261108/github-asset-upload.json`。匿名 HEAD 返回 302；完整匿名下载经代理/CDN 长时间无有效进度后停止，未完成下载文件哈希核验。
 - 构建恢复：默认 Electron 打包因联网检查超时，改用本机 Electron 45、`npmRebuild=false`、`signAndEditExecutable=false` 和 `electronDist=node_modules/electron/dist` 后成功；失败目录未用于替换。
 - 限制：三模型完整流程使用 loopback fixture；本轮未读取、打印或落盘模型凭据，未新增公网请求。
 

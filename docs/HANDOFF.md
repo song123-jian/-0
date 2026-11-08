@@ -9,6 +9,8 @@
 - 增量审查：仅检查模型三独立提案成功态分支、直接文案拼接和版本/产物引用；模型一/二成功态及失败、取消、评议路径由回归断言覆盖，未发现高置信度问题。
 - 构建与产物：首次默认构建因 Electron 联网检查 `connect ETIMEDOUT 20.205.243.166:443` 失败；随后复用本机 Electron 45、关闭依赖重建和签名编辑后成功生成候选。候选/正式 EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`；ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`。
 - 正式替换：旧 `1.3.54` EXE/ASAR 已保存到 `release/formal-build-1.3.55-20261108/rollback-1.3.54`；正式入口与候选哈希一致，用户数据、配置和凭据未作为替换对象。报告：`release/formal-build-1.3.55-20261108/formal-replacement.json`。
+- GitHub 发布：[`v1.3.55`](https://github.com/song123-jian/-0/releases/tag/v1.3.55) 已正式发布，Release ID `438314791`；EXE 资产 ID `724365962`，大小 `249798144` 字节，GitHub SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9` 与正式入口一致。下载地址：https://github.com/song123-jian/-0/releases/download/v1.3.55/Scodex-Workbench-1.3.55-x64.exe。
+- 发布验证边界：GitHub 返回资产状态 `uploaded`；匿名下载 HEAD 返回公开重定向 `302`。匿名完整流式下载因当前代理/CDN 长时间无有效进度而停止，未取得下载文件的完整哈希，不据此声称匿名完整下载验收通过。资产上传及 API 摘要核对记录：`release/formal-build-1.3.55-20261108/github-asset-upload.json`。
 - 限制：三模型完整流程使用 loopback fixture；本轮未读取、打印或落盘模型凭据，也未新增公网模型请求。
 
 <!-- formal-build-1.3.55:end -->
