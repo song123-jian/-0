@@ -1,5 +1,18 @@
 # 测试交接
 
+<!-- formal-build-1.3.55:start -->
+## 当前增量验证：1.3.55 模型三完成态文案、正式 UI 与入口（已完成）
+
+- 测试对象：源码 `E:/GDP/Scodex/workbench`、候选 `release/formal-build-1.3.55-20261108/candidate-r2/win-unpacked/Scodex工作台.exe`、正式入口 `E:/GDP/Scodex/App/Scodex工作台.exe`；Windows、Node.js `v24.11.0`、Electron `45.0.0`。
+- 定向逻辑验证：`node --test tests/message-presentation.test.mjs tests/model-team.test.mjs` 43/43；相关 `node --check` 和 `git diff --check` 通过。
+- 实际 UI：候选 `node tests/model-team-ui.cjs` 8/8，正式入口同脚本 8/8；模型三独立提案成功行实际标题为“正在模型三 · 独立提案已返回结构化结果”，模型一/二、交叉评议、监督和接手场景均通过。报告分别为 `release/formal-build-1.3.55-20261108/candidate-ui/model-team-ui.json` 和 `release/formal-build-1.3.55-20261108/formal-ui/model-team-ui.json`。
+- 重启验收：候选和正式 `SCODEX_CDP_SCOPE=restart-only` 各 2/2，通过版本 `1.3.55`、设置保存和跨重启恢复；报告分别为 `release/formal-build-1.3.55-20261108/candidate-restart/cdp-ui-verification.json` 和 `release/formal-build-1.3.55-20261108/formal-restart/cdp-ui-verification.json`。
+- 产物身份：候选/正式 EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`；候选/正式 ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`；旧版回滚备份 `release/formal-build-1.3.55-20261108/rollback-1.3.54`。
+- 构建记录：默认构建因 Electron 联网检查超时而失败，随后使用本机 Electron 45、`npmRebuild=false`、`signAndEditExecutable=false` 和 `electronDist=node_modules/electron/dist` 成功；失败路径未用于替换。
+- 限制：三模型流程使用 loopback fixture，不能代表公网模型质量、速度或费用；本轮未读取、打印或写入模型凭据。
+
+<!-- formal-build-1.3.55:end -->
+
 <!-- formal-hello-1.3.54:start -->
 ## 当前增量验证：正式入口真实 `你好` 与模型上限定向核对（已完成）
 
@@ -115,9 +128,9 @@
 
 ## 当前测试对象
 
-- 源码：`E:/GDP/Scodex/workbench`，当前版本 `1.3.54`。
-- 正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本1.3.54。
-- 本轮最终候选：`E:/GDP/Scodex/workbench/release/formal-build-1.3.54-20261108/candidate/win-unpacked/Scodex工作台.exe`，版本1.3.54；EXE SHA-256 `f77326e9b380482b4c126df5d1481921600f41e122c7788b1057e5e775767e4c`，ASAR SHA-256 `00b39e491f3413e054c42416fc3456d9824cf1e8b5bb52a72a054cf80a553563`。
+- 源码：`E:/GDP/Scodex/workbench`，当前版本 `1.3.55`。
+- 正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本1.3.55。
+- 本轮最终候选：`E:/GDP/Scodex/workbench/release/formal-build-1.3.55-20261108/candidate-r2/win-unpacked/Scodex工作台.exe`，版本1.3.55；EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`，ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`。
 - 环境：Windows；候选和正式入口 UI 均使用实际 Electron/React/IPC，候选功能流程使用独立 profile、临时 `.codex` 目录、临时工作区和 loopback 模型服务；正式 `restart-only` 使用隔离 profile，真实连通性单独使用正式默认 profile 发送一次 `你好`。凭据仅由应用读取，未读出或写入测试记录。
 
 ## 仍有效的已有结果

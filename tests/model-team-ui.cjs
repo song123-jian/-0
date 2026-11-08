@@ -233,7 +233,7 @@ async function main() {
     await click(css + ' .agent-operation-group > summary');
     assert.ok(await page.evaluate('document.querySelector(' + json(css) + ').innerText.includes("重复错误诊断")'));
     const modelThreeProposalCaption = await page.evaluate('(() => { const row = [...document.querySelectorAll(' + json(css + ' .agent-operation[data-operation-name="model_debate_proposal"]') + ')].find(item => item.textContent.includes("模型三 · 独立提案")); return row?.querySelector(".agent-operation-title")?.textContent.trim() || ""; })()');
-    assert.equal(modelThreeProposalCaption, '模型三 · 独立提案已返回结构化结果');
+    assert.equal(modelThreeProposalCaption, '正在模型三 · 独立提案已返回结构化结果');
     return { stages, advisorEffortAdaptation: 'ultra -> max', savedEffortUnchanged: (await page.evaluate('window.scodex.getModelConnection()')).advisorReasoningEffort, writes: 1, parallelExplorers: 2, prematureCompletionPrevented: true, answerAndRealFileCardVisible: true };
   });
   const sendSteering = async (tag, targetPage, sendSelector, text) => {

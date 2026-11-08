@@ -1,12 +1,25 @@
+<!-- formal-build-1.3.55:start -->
+## 当前检查点：1.3.55 模型三完成态文案与正式入口替换已完成
+
+- 当前目标：模型三独立提案返回结构化结果后，活动记录显示“正在模型三 · 独立提案已返回结构化结果”，并将改动构建替换到正式入口。
+- 已完成：`src/lib/message-presentation.js` 和两个相关断言已更新；版本 `package.json`、`package-lock.json` 为 `1.3.55`；候选与正式模型团队 UI 各 8/8，候选与正式 `restart-only` 各 2/2。
+- 增量审查：模型三成功态前缀仅在独立提案结构化结果分支生效；模型一/二及失败、取消、评议状态保持原行为并由 43/43 逻辑测试覆盖，未发现高置信度问题。
+- 产物：候选/正式 EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`；候选/正式 ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`；正式入口 `E:/GDP/Scodex/App/Scodex工作台.exe`，ASAR `E:/GDP/Scodex/App/resources/app.asar`。
+- 回滚：旧 `1.3.54` EXE/ASAR 位于 `release/formal-build-1.3.55-20261108/rollback-1.3.54`；报告 `release/formal-build-1.3.55-20261108/formal-replacement.json`。
+- 构建恢复：默认 Electron 打包因联网检查超时，改用本机 Electron 45、`npmRebuild=false`、`signAndEditExecutable=false` 和 `electronDist=node_modules/electron/dist` 后成功；失败目录未用于替换。
+- 限制：三模型完整流程使用 loopback fixture；本轮未读取、打印或落盘模型凭据，未新增公网请求。
+
+<!-- formal-build-1.3.55:end -->
+
 <!-- formal-hello-1.3.54:start -->
 ## 当前检查点：正式入口真实 `你好` 连通性与上限审计已完成
 
 - 当前目标：在正式 `1.3.54` 入口验证保存连接、确认模型三完成态文案已交付，并核对模型上下文/输出无应用层固定上限。
 - 已完成：正式 EXE 发送一次 `你好`，HTTP 200、完成事件、模型 `gpt-6.1-sol`、输出 31 tokens、退出码 0；连接配置哈希不变，隔离凭据副本已清理。响应长度 40，严格等于 `你好` 的断言为 false，已如实记录。
-- 文案状态：源码和正式包中的模型三结构化成功态为“模型三 · 独立提案已返回结构化结果”；候选 UI 8/8 和正式重启验收 2/2 仍有效。
+- 文案状态：源码和正式包中的模型三结构化成功态为“正在模型三 · 独立提案已返回结构化结果”；1.3.55 候选/正式模型团队 UI 各 8/8，候选/正式重启验收各 2/2。
 - 上限结论：上下文压缩、服务默认输出、模型轮数/工具调用路径均为动态或无限；文件大小、列表/地址/密钥格式、技能与日志边界保留为资源防护；讨论等待超时保留为失败重试和诚实降级条件。
 - 证据：`release/formal-build-1.3.54-20261108/formal-hello/external-latency.json`；交接同步写入 `docs/HANDOFF.md`、`docs/TEST_HANDOFF.md`。
-- 遗留：本轮三个临时 profile 因策略拒绝删除，均已移入根目录 `手动删除/` 待手动删除；本轮代码已提交 `6f34a8d` 并推送 `origin/main`，远端核对为 `6f34a8d5d1d43e5232623b3102549595e1a7477b`，本次连通性记录更新待提交。
+- 遗留：本轮三个临时 profile 因策略拒绝删除，均已移入根目录 `手动删除/` 待手动删除；连通性记录已归档于项目交接，基线提交为 `0683956`。
 
 <!-- formal-hello-1.3.54:end -->
 

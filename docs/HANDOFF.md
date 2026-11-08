@@ -1,5 +1,18 @@
 # 项目交接
 
+<!-- formal-build-1.3.55:start -->
+## 当前增量：1.3.55 模型三完成态文案、正式构建与 EXE 替换（已完成）
+
+- 目标：模型三独立提案返回结构化结果后，活动记录显示“正在模型三 · 独立提案已返回结构化结果”，并将包含本次改动的正式 `1.3.55` EXE 替换到入口。
+- 源码变更：`src/lib/message-presentation.js` 仅对模型三独立提案成功态合并目标文案；`tests/message-presentation.test.mjs` 与 `tests/model-team-ui.cjs` 同步精确断言；`package.json`、`package-lock.json` 递增为 `1.3.55`。
+- 验证：`node --test tests/message-presentation.test.mjs tests/model-team.test.mjs` 43/43；相关 `node --check` 与 `git diff --check` 通过；候选模型团队 UI 8/8、正式入口模型团队 UI 8/8；候选/正式 `restart-only` 各 2/2。
+- 增量审查：仅检查模型三独立提案成功态分支、直接文案拼接和版本/产物引用；模型一/二成功态及失败、取消、评议路径由回归断言覆盖，未发现高置信度问题。
+- 构建与产物：首次默认构建因 Electron 联网检查 `connect ETIMEDOUT 20.205.243.166:443` 失败；随后复用本机 Electron 45、关闭依赖重建和签名编辑后成功生成候选。候选/正式 EXE SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9`；ASAR SHA-256 `208e5f3d9f4f86f047661851ba34d01949187ad39b37ddf3a2be99e169b6b4c4`。
+- 正式替换：旧 `1.3.54` EXE/ASAR 已保存到 `release/formal-build-1.3.55-20261108/rollback-1.3.54`；正式入口与候选哈希一致，用户数据、配置和凭据未作为替换对象。报告：`release/formal-build-1.3.55-20261108/formal-replacement.json`。
+- 限制：三模型完整流程使用 loopback fixture；本轮未读取、打印或落盘模型凭据，也未新增公网模型请求。
+
+<!-- formal-build-1.3.55:end -->
+
 <!-- formal-hello-1.3.54:start -->
 ## 当前增量：正式入口真实 `你好` 连通性与上限审计（已完成）
 
@@ -118,11 +131,11 @@
 
 ## 当前状态
 
-- 当前源码基线：`1.3.54`，位于 `E:/GDP/Scodex/workbench`。
-- 当前正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本 `1.3.54`；候选、正式入口和回滚证据见上方 `formal-build-1.3.54` 增量。
+- 当前源码基线：`1.3.55`，位于 `E:/GDP/Scodex/workbench`。
+- 当前正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本 `1.3.55`；候选、正式入口和回滚证据见上方 `formal-build-1.3.55` 增量。
 - 已完成基线：`.codex` 浏览器、电脑操控、SKILL 配置、键盘快捷键和三模型协作能力已在 1.3.46 正式入口完成定向验收。
-- 当前目标：交付包含当前工作区实现的 `1.3.52` 正式 EXE，完成候选/正式身份核对、回滚备份、重启验收和真实连通性验证。
-- 当前阶段：`1.3.54` 候选构建、模型团队 UI 8/8、候选与正式 `restart-only` 各 2/2、正式 EXE/ASAR 替换和哈希核对已完成；正式入口与候选哈希一致，报告 `release/formal-build-1.3.54-20261108/formal-replacement.json`。
+- 当前目标：交付包含模型三完成态文案修正的 `1.3.55` 正式 EXE，并完成候选/正式身份核对、回滚备份和 UI/重启验收。
+- 当前阶段：`1.3.55` 候选与正式模型团队 UI 各 8/8、候选与正式 `restart-only` 各 2/2、正式 EXE/ASAR 替换和哈希核对已完成；报告 `release/formal-build-1.3.55-20261108/formal-replacement.json`。
 
 ## 已完成需求记录
 

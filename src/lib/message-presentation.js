@@ -206,7 +206,9 @@ export function operationCaption(operation) {
       const phaseResult = ['model_debate_proposal', 'model_debate_review'].includes(operation.name);
       const phase = phaseResult ? title.split(' · ').at(-1) : '';
       const resultDetail = phase && detail.startsWith(phase) ? detail.slice(phase.length) : detail;
-      return title + (resultDetail ? (phaseResult ? '' : ' · ') + resultDetail : '');
+      const caption = title + (resultDetail ? (phaseResult ? '' : ' · ') + resultDetail : '');
+      if (operation.name === 'model_debate_proposal' && title === '模型三 · 独立提案' && resultDetail === '已返回结构化结果') return '正在' + caption;
+      return caption;
     }
     const suffix = { failed: '失败', cancelled: '已停止', interrupted: '已中断' }[operation.status] || '';
     return title + (suffix ? ' · ' + suffix : '');
