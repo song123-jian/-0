@@ -6,7 +6,7 @@
 - 文案状态：源码和正式包中的模型三结构化成功态为“模型三 · 独立提案已返回结构化结果”；候选 UI 8/8 和正式重启验收 2/2 仍有效。
 - 上限结论：上下文压缩、服务默认输出、模型轮数/工具调用路径均为动态或无限；文件大小、列表/地址/密钥格式、技能与日志边界保留为资源防护；讨论等待超时保留为失败重试和诚实降级条件。
 - 证据：`release/formal-build-1.3.54-20261108/formal-hello/external-latency.json`；交接同步写入 `docs/HANDOFF.md`、`docs/TEST_HANDOFF.md`。
-- 遗留：本轮临时 profile 因策略拒绝删除，已移入根目录 `手动删除/formal-hello-1.3.54-fixture-a3a406cb-2633-4fbd-bb40-101c03d48a48` 待手动删除；GitHub 发布仍需网络可用且需先确定提交范围。
+- 遗留：本轮临时 profile 因策略拒绝删除，已移入根目录 `手动删除/formal-hello-1.3.54-fixture-a3a406cb-2633-4fbd-bb40-101c03d48a48` 待手动删除；本轮代码已提交 `6f34a8d` 并推送 `origin/main`，远端核对为 `6f34a8d5d1d43e5232623b3102549595e1a7477b`。
 
 <!-- formal-hello-1.3.54:end -->
 
