@@ -5,10 +5,10 @@
 
 - 测试对象：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本 `1.3.54`；Windows，隔离 profile，正式默认连接配置的加密凭据由应用读取。
 - 场景与操作：通过 `tests/latency-external-smoke.cjs` 的安全模式发送精确 `你好`；脚本复制加密配置和 `Local State` 到临时 profile，不解密、不打印、不落盘明文密钥，等待完成事件后退出。
-- 预期与实际：预期收到终态并保留必要非敏感指标；实际 `complete`、HTTP 200、模型 `gpt-6.1-sol`、输出 14 tokens、退出码 0，连接配置原文件哈希不变。
-- 证据：`release/formal-build-1.3.54-20261108/formal-hello/external-latency.json`；记录 `status=passed`、`originalConnectionUnchanged=true`、`copiedEncryptedCredentialRemoved=true`，无响应正文和 Authorization。
+- 预期与实际：预期收到终态并保留必要非敏感指标；实际 `complete`、HTTP 200、模型 `gpt-6.1-sol`、输出 31 tokens、退出码 0，连接配置原文件哈希不变；响应长度 40，`responseExactlyHello=false`。
+- 证据：`release/formal-build-1.3.54-20261108/formal-hello/external-latency.json`；记录连接 `status=passed`、`originalConnectionUnchanged=true`、`copiedEncryptedCredentialRemoved=true`，精确回复断言未通过；无响应正文和 Authorization。
 - 上限核对：`electron/context-compression.cjs` 在未配置容量时使用服务默认容量，配置容量按实际容量动态压缩；`electron/agent-runtime.cjs` 的工具调用、轮数和操作常量为无限值；请求仅在配置了 `maxOutputTokens` 时发送输出参数。保留文件/资源输入边界和讨论等待超时，未发现会对模型上下文或输出做固定字符/消息条数截断的路径。
-- 清理状态：临时 profile 递归删除被策略拒绝，未重复删除；已移动到 `E:/GDP/Scodex/workbench/手动删除/formal-hello-1.3.54-fixture-a3a406cb-2633-4fbd-bb40-101c03d48a48`，原路径不存在，待手动删除。
+- 清理状态：临时 profile 递归删除被策略拒绝，未重复删除；本轮三个 fixture 已移动到 `E:/GDP/Scodex/workbench/手动删除/`，原路径均不存在，待手动删除。
 
 <!-- formal-hello-1.3.54:end -->
 

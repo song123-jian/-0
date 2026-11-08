@@ -32,12 +32,16 @@ async function main() {
   socket = new WebSocket(target.webSocketDebuggerUrl); await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); }); cdp = connect(socket);
   await wait(() => cdp.evaluate('Boolean(document.querySelector("[aria-label=输入工作内容]"))'), 'Renderer ready');
   const s = await cdp.evaluate('window.scodex.getAppState()'); report.version = s.version; assert.equal(s.version, require('../package.json').version);
-  await cdp.evaluate('window.__externalEvents=[];window.__externalEnd=null;window.scodex.onChatEvent(e=>{if(e.type==="request-metrics")window.__externalEvents.push(e);if(["complete","error","cancelled"].includes(e.type))window.__externalEnd={type:e.type,message:e.message};});true');
+  await cdp.evaluate('window.__externalEvents=[];window.__externalText="";window.__externalEnd=null;window.scodex.onChatEvent(e=>{if(e.type==="request-metrics")window.__externalEvents.push(e);if(e.type==="delta")window.__externalText+=typeof e.text==="string"?e.text:"";if(["complete","error","cancelled"].includes(e.type))window.__externalEnd={type:e.type,message:e.message};});true');
   const requestId = crypto.randomUUID();
   await cdp.evaluate('window.scodex.sendMessage(' + JSON.stringify({ requestId, conversationId: s.library.activeId, prompt, mode: 'answer', messages: [] }) + ').catch(e=>window.__externalEnd={type:"invoke-error",message:e.message});true');
   await wait(() => cdp.evaluate('window.__externalEnd'), 'Configured service generation terminal event', 135000);
-  report.terminal = await cdp.evaluate('window.__externalEnd'); report.requests = await cdp.evaluate('window.__externalEvents');
-  report.status = report.terminal.type === 'complete' ? 'passed' : 'failed';
+  const terminal = await cdp.evaluate('window.__externalEnd');
+  const responseText = String(await cdp.evaluate('window.__externalText || ""')).trim();
+  report.terminal = { type: terminal?.type || '', requestIdPresent: Boolean(requestId) };
+  report.response = { received: Boolean(responseText), contentLength: responseText.length, ...(prompt === '你好' ? { responseExactlyHello: responseText === '你好' } : {}) };
+  report.requests = await cdp.evaluate('window.__externalEvents');
+  report.status = report.terminal.type === 'complete' && report.response.received ? 'passed' : 'failed';
 }
 main().catch(error => { report.status = 'failed'; report.error = error.stack; process.exitCode = 1; }).finally(async () => {
   try { if (child?.exitCode === null && cdp) { await cdp.evaluate('window.scodex.quitApp()'); await wait(() => child.exitCode !== null, 'Normal application exit', 30000); } } catch (error) { report.shutdownError = error.stack; process.exitCode = 1; }
