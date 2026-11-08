@@ -5,6 +5,37 @@ const { normalizeFileOpenMode } = require('./file-open.cjs');
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const FONT_FAMILIES = require('./font-families.json').map(([value]) => value);
 const DESKTOP_APP_IDS = ['chrome', 'edge', 'excel'];
+const DEFAULT_SHORTCUTS = Object.freeze({
+  commandPalette: 'Ctrl+Shift+P', newChat: 'Ctrl+K', files: 'Ctrl+P', terminal: 'Ctrl+J', settings: 'Ctrl+,',
+  historyBack: 'Alt+ArrowLeft', historyForward: 'Alt+ArrowRight', save: 'Ctrl+S', browser: 'Ctrl+Shift+B',
+  rename: 'Ctrl+Alt+R', pin: 'Ctrl+Alt+P', unread: 'Ctrl+Shift+U', archive: 'Ctrl+Shift+A',
+});
+const SHORTCUT_MODIFIERS = new Set(['Ctrl', 'Alt', 'Shift']);
+const SHORTCUT_ALIASES = { CTRL: 'Ctrl', CONTROL: 'Ctrl', COMMAND: 'Ctrl', CMD: 'Ctrl', META: 'Ctrl', ALT: 'Alt', OPTION: 'Alt', SHIFT: 'Shift', ESC: 'Escape', LEFT: 'ArrowLeft', RIGHT: 'ArrowRight', UP: 'ArrowUp', DOWN: 'ArrowDown' };
+
+function normalizeShortcut(value, fallback = '') {
+  const parts = String(value || '').trim().replace(/[＋]/g, '+').replace(/[\s]+/g, '+').split('+').map(item => item.trim()).filter(Boolean);
+  if (!parts.length) return fallback;
+  const normalized = [];
+  for (const item of parts) {
+    const alias = SHORTCUT_ALIASES[item.toUpperCase()];
+    const key = alias || (/^[A-Za-z0-9]$/.test(item) ? item.toUpperCase() : item);
+    const validKey = /^F(?:[1-9]|1[0-2])$/i.test(key) || /^[A-Za-z0-9]$/.test(key)
+      || /^(Arrow(?:Left|Right|Up|Down)|Enter|Escape|Tab|Backspace|Delete|Home|End|PageUp|PageDown|Insert|Space|,|\.|\/|;|'|\[|\]|`|-|=)$/.test(key);
+    if (!SHORTCUT_MODIFIERS.has(key) && !validKey) return fallback;
+    if (!SHORTCUT_MODIFIERS.has(key) && normalized.some(entry => !SHORTCUT_MODIFIERS.has(entry))) return fallback;
+    normalized.push(key);
+  }
+  const main = normalized.at(-1);
+  const modifiers = [...new Set(normalized.slice(0, -1))];
+  if (!main || SHORTCUT_MODIFIERS.has(main) || modifiers.length !== normalized.length - 1) return fallback;
+  return [...['Ctrl', 'Alt', 'Shift'].filter(item => modifiers.includes(item)), main].join('+');
+}
+
+function normalizeShortcuts(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return Object.fromEntries(Object.entries(DEFAULT_SHORTCUTS).map(([id, fallback]) => [id, normalizeShortcut(source[id], fallback)]));
+}
 
 function boundedStrings(value, maxItems, maxLength) {
   if (!Array.isArray(value)) return [];
@@ -57,15 +88,21 @@ function normalizePreferences(value = {}) {
     minimizeToTray: Boolean(value.minimizeToTray),
     browserPanelWidth: Number.isFinite(value.browserPanelWidth) ? Math.min(660, Math.max(320, Math.round(value.browserPanelWidth))) : 400,
     sendShortcut: value.sendShortcut === 'enter' ? 'enter' : 'ctrl-enter',
+    shortcuts: normalizeShortcuts(value.shortcuts),
     showEditorStatusBar: value.showEditorStatusBar === undefined ? true : Boolean(value.showEditorStatusBar),
     defaultFullView: Boolean(value.defaultFullView),
     skillsEnabled: value.skillsEnabled === undefined ? true : Boolean(value.skillsEnabled),
     disabledSkillIds: boundedStrings(value.disabledSkillIds, 1000, 512),
     skillDirectories: absoluteDirectories(value.skillDirectories),
+    codexReferenceDirectory: typeof value.codexReferenceDirectory === 'string' && value.codexReferenceDirectory.length <= 1024 && path.isAbsolute(value.codexReferenceDirectory) ? value.codexReferenceDirectory : null,
     computerControlEnabled: Boolean(value.computerControlEnabled),
+    computerAccentColor: HEX_COLOR.test(value.computerAccentColor || '') ? value.computerAccentColor.toUpperCase() : '#339CFF',
+    computerLocale: value.computerLocale === 'en-US' ? 'en-US' : 'zh-CN',
     computerAllowedApps: [...new Set(boundedStrings(value.computerAllowedApps, DESKTOP_APP_IDS.length, 20).filter((id) => DESKTOP_APP_IDS.includes(id)))],
     browserAiEnabled: Boolean(value.browserAiEnabled),
     browserCdpEnabled: Boolean(value.browserCdpEnabled),
+    browserApprovalMode: ['never_ask', 'always_ask'].includes(value.browserApprovalMode) ? value.browserApprovalMode : 'inherit',
+    browserDownloadApprovalMode: value.browserDownloadApprovalMode === 'never_ask' ? 'never_ask' : 'ask',
     browserShowFullUrl: value.browserShowFullUrl === undefined ? true : Boolean(value.browserShowFullUrl),
     browserLinkOpenTarget: value.browserLinkOpenTarget === 'system' ? 'system' : 'builtin',
     browserLocalUrlTarget: value.browserLocalUrlTarget === 'system' ? 'system' : 'builtin',
@@ -122,4 +159,4 @@ function gitTaskInstruction(preferences, payload = {}) {
   return `Git 任务偏好（只作为回答指引；Scodex 不会因此执行 Git 命令或创建远端 Pull Request）：\n${values.join('\n')}`;
 }
 
-module.exports = { normalizePreferences, assertContextAccess, gitTaskInstruction, validGitBranchPrefix, normalizeSiteRules, DESKTOP_APP_IDS, FONT_FAMILIES };
+module.exports = { normalizePreferences, assertContextAccess, gitTaskInstruction, validGitBranchPrefix, normalizeSiteRules, normalizeShortcuts, DEFAULT_SHORTCUTS, DESKTOP_APP_IDS, FONT_FAMILIES };

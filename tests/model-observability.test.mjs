@@ -41,3 +41,16 @@ test('usage ledger persists bounded metadata only, with unknown usage kept disti
   assert.equal(stats.requests, 2); assert.equal(stats.unknownUsage, 1); assert.equal(stats.totalTokens, 30);
   assert.doesNotMatch(await fs.readFile(file, 'utf8'), /private|secret/);
 });
+
+test('usage ledger persists independent proposal and review stages', async t => {
+  const { createUsageLedger } = require('../electron/model-usage.cjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-debate-usage-')); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const file = path.join(root, 'usage.json'); const ledger = createUsageLedger(file);
+  for (const stage of ['debate-proposal', 'debate-review']) await ledger.record({
+    model: 'fixture', role: 'advisor', stage, status: 'succeeded', durationMs: 10,
+    usage: { inputTokens: 4, outputTokens: 3, totalTokens: 7 },
+  });
+  const records = (await createUsageLedger(file).get()).records;
+  assert.deepEqual(records.map(record => record.stage), ['debate-review', 'debate-proposal']);
+  assert.ok(records.every(record => record.role === 'advisor'));
+});

@@ -1,4 +1,3 @@
-import { truncateUtf8 } from './text.js';
 export function newChatRecord(projectId = '', mode = 'answer', now = new Date().toISOString()) {
   return { id: crypto.randomUUID(), title: '新对话', projectId, mode, draft: '', pinned: false, unreadResult: false, archivedAt: null, createdAt: now, updatedAt: now, messages: [] };
 }
@@ -88,5 +87,5 @@ export function conversationText(chat, project, plain = false) {
     if (m.cancelled) lines.push('', '此回复已停止。');
     lines.push('');
   }
-  return truncateUtf8(lines.join('\n'), 4 * 1024 * 1024);
+  return lines.join('\n');
 }

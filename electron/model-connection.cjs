@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const EFFORTS = ['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const DEFAULT_CONNECTION = { name: '聚合模组 2', note: '', website: 'https://catbee.online', baseUrl: 'https://catbee.online/v1', addresses: ['https://catbee.online/v1'], models: ['grok-4.7'], model: 'grok-4.7', reasoningEffort: '', toolProtocol: 'json', subagentReasoningEffort: '', subagentToolProtocol: '', subagentMaxConcurrent: 2, subagentAllowEdits: false, advisorEnabled: false, advisorModel: '', advisorReasoningEffort: '' };
+const DEFAULT_CONNECTION = { name: '聚合模组 2', note: '', website: 'https://catbee.online', baseUrl: 'https://catbee.online/v1', addresses: ['https://catbee.online/v1'], models: ['grok-4.7'], model: 'grok-4.7', reasoningEffort: '', toolProtocol: 'auto', contextWindowTokens: 0, subagentReasoningEffort: '', subagentToolProtocol: '', subagentContextWindowTokens: 0, subagentMaxConcurrent: 2, subagentAllowEdits: false, advisorEnabled: false, advisorModel: '', advisorReasoningEffort: '', advisorToolProtocol: '', advisorContextWindowTokens: 0 };
 const clean = (value, limit = 200) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
 function modelId(value) { const id = clean(value); if (/[\x00-\x20\x7f]/.test(id)) throw new Error('模型 ID 不能包含空格或控制字符。'); return id; }
 function normalizeAddress(value, website = false) {
@@ -25,8 +25,9 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   const advisorBaseUrl = normalizeAddress(input.advisorBaseUrl || baseUrl);
   const model = modelId(value.model); if (requireModel && !model) throw new Error('请填写默认模型。');
   if (!EFFORTS.includes(value.reasoningEffort) || !EFFORTS.includes(value.subagentReasoningEffort) || !EFFORTS.includes(value.advisorReasoningEffort)) throw new Error('推理强度无效。');
-  if (!['native', 'json'].includes(value.toolProtocol)) throw new Error('工具执行通道无效。');
-  if (!['', 'native', 'json'].includes(value.subagentToolProtocol)) throw new Error('子模型工具执行通道无效。');
+  if (!['auto', 'native', 'json'].includes(value.toolProtocol)) throw new Error('工具执行通道无效。');
+  if (!['', 'auto', 'native', 'json'].includes(value.subagentToolProtocol)) throw new Error('子模型工具执行通道无效。');
+  if (!['', 'auto', 'native', 'json'].includes(value.advisorToolProtocol)) throw new Error('模型三任务执行通道无效。');
   const models = [...new Set([...(Array.isArray(value.models) ? value.models : []).slice(0, 500).map(modelId).filter(Boolean), ...(model ? [model] : [])])];
   const subagentModels = [...new Set([...(Array.isArray(input.subagentModels) ? input.subagentModels : subagentBaseUrl === baseUrl ? models : []).slice(0, 500).map(modelId).filter(Boolean)])];
   const subagentModel = modelId(input.subagentModel || (subagentBaseUrl === baseUrl ? model : ''));
@@ -37,9 +38,12 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   if (advisorModel && !advisorModels.includes(advisorModel)) advisorModels.push(advisorModel);
   const subagentMaxConcurrent = Number.isInteger(value.subagentMaxConcurrent) ? Math.min(3, Math.max(1, value.subagentMaxConcurrent)) : 2;
   const addresses = [...new Set([baseUrl, ...(Array.isArray(value.addresses) ? value.addresses : []).slice(0, 19).map((item) => normalizeAddress(item))])];
-  const retryLimit = Number.isInteger(value.retryLimit) ? Math.min(6, Math.max(0, value.retryLimit)) : 6;
-  const maxOutputTokens = Number.isInteger(value.maxOutputTokens) && value.maxOutputTokens >= 128 && value.maxOutputTokens <= 128000 ? value.maxOutputTokens : 0;
-  return { retryLimit, maxOutputTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol, subagentMaxConcurrent, subagentAllowEdits: value.subagentAllowEdits === true, advisorEnabled: value.advisorEnabled === true, advisorBaseUrl, advisorModels, advisorModel, advisorReasoningEffort: value.advisorReasoningEffort };
+  const retryLimit = Number.isSafeInteger(value.retryLimit) && value.retryLimit >= 0 ? value.retryLimit : 6;
+  const maxOutputTokens = Number.isSafeInteger(value.maxOutputTokens) && value.maxOutputTokens >= 128 ? value.maxOutputTokens : 0;
+  const contextWindowTokens = Number.isSafeInteger(value.contextWindowTokens) && value.contextWindowTokens > 0 ? value.contextWindowTokens : 0;
+  const subagentContextWindowTokens = Number.isSafeInteger(value.subagentContextWindowTokens) && value.subagentContextWindowTokens > 0 ? value.subagentContextWindowTokens : 0;
+  const advisorContextWindowTokens = Number.isSafeInteger(value.advisorContextWindowTokens) && value.advisorContextWindowTokens > 0 ? value.advisorContextWindowTokens : 0;
+  return { retryLimit, maxOutputTokens, contextWindowTokens, subagentContextWindowTokens, advisorContextWindowTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol, subagentMaxConcurrent, subagentAllowEdits: true, advisorEnabled: value.advisorEnabled === true, advisorBaseUrl, advisorModels, advisorModel, advisorReasoningEffort: value.advisorReasoningEffort, advisorToolProtocol: value.advisorToolProtocol };
 }
 function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch, blankOnMissing = false }) {
   let state; let readError = ''; let queue = Promise.resolve();
@@ -50,7 +54,7 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
       state = { config: normalizeConnection(saved.config), encryptedKey: clean(saved.encryptedKey, 32000), keyOrigin: saved.keyOrigin || '', encryptedSubagentKey: clean(saved.encryptedSubagentKey, 32000), subagentKeyOrigin: saved.subagentKeyOrigin || '', encryptedAdvisorKey: clean(saved.encryptedAdvisorKey, 32000), advisorKeyOrigin: saved.advisorKeyOrigin || '' };
     } catch (error) {
       if (error.code !== 'ENOENT') readError = '模型配置无法读取；原文件已保留，请修正后重启程序。';
-      const config = blankOnMissing ? { ...DEFAULT_CONNECTION, name: '', website: '', baseUrl: '', addresses: [], models: [], model: '', subagentBaseUrl: '', subagentModels: [], subagentModel: '', reasoningEffort: '', subagentReasoningEffort: '', subagentToolProtocol: '' } : normalizeConnection();
+      const config = blankOnMissing ? { ...DEFAULT_CONNECTION, name: '', website: '', baseUrl: '', addresses: [], models: [], model: '', subagentBaseUrl: '', subagentModels: [], subagentModel: '', reasoningEffort: '', subagentReasoningEffort: '', subagentToolProtocol: '', advisorToolProtocol: '' } : normalizeConnection();
       state = { config, encryptedKey: '', keyOrigin: '', encryptedSubagentKey: '', subagentKeyOrigin: '', encryptedAdvisorKey: '', advisorKeyOrigin: '' };
     }
   };
@@ -160,7 +164,7 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
       if (kind === 'advisor') {
         if (!config.advisorEnabled || !config.advisorModel) throw new Error('顾问模型尚未配置或启用。');
         if (!config.advisorModels.includes(config.advisorModel)) throw new Error('顾问模型已不在配置列表中。');
-        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model: config.advisorModel, toolProtocol: 'native', retryLimit: 0, temperature: null, reportUsage: config.reportUsage, maxOutputTokens: 1200, ...(config.advisorReasoningEffort ? { reasoning_effort: config.advisorReasoningEffort } : {}) };
+        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model: config.advisorModel, toolProtocol: config.advisorToolProtocol || config.toolProtocol, retryLimit: config.retryLimit, temperature: null, reportUsage: config.reportUsage, maxOutputTokens: config.maxOutputTokens, contextWindowTokens: config.advisorContextWindowTokens, ...(config.advisorReasoningEffort ? { reasoning_effort: config.advisorReasoningEffort } : {}) };
       }
       const subagent = kind === 'subagent';
       const childOwnService = config.subagentBaseUrl !== config.baseUrl;
@@ -175,7 +179,7 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
       if (subagent && !models.includes(model)) throw new Error('所选子模型已不在子模型列表中，请重新获取模型列表。');
       const effort = subagent ? config.subagentReasoningEffort : selectedEffort || config.reasoningEffort;
       const target = subagent ? { ...config, baseUrl: config.subagentBaseUrl } : config;
-      return { endpoint: target.baseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, subagent ? 'subagent' : 'main'), model, toolProtocol: subagent ? config.subagentToolProtocol || config.toolProtocol : config.toolProtocol, retryLimit: config.retryLimit, reportUsage: config.reportUsage, maxOutputTokens: config.maxOutputTokens, imageModel: config.imageModel, ...(effort ? { reasoning_effort: effort } : {}) };
+      return { endpoint: target.baseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, subagent ? 'subagent' : 'main'), model, toolProtocol: subagent ? config.subagentToolProtocol || config.toolProtocol : config.toolProtocol, retryLimit: config.retryLimit, reportUsage: config.reportUsage, maxOutputTokens: config.maxOutputTokens, contextWindowTokens: subagent ? config.subagentContextWindowTokens : config.contextWindowTokens, imageModel: config.imageModel, ...(effort ? { reasoning_effort: effort } : {}) };
     },
     flush: () => queue,
   };

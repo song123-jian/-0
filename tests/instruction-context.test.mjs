@@ -20,9 +20,10 @@ test('changed, removed and newly created effective rules stop an active request'
  c=await createInstructionContext({workspaceRoot:f.root});await fs.unlink(path.join(f.root,'AGENTS.md'));await assert.rejects(c.assertCurrent(),/已变化/);
  c=await createInstructionContext({workspaceRoot:f.root});await fs.writeFile(path.join(f.base,'AGENTS.md'),'new ancestor');await assert.rejects(c.assertCurrent(),/已变化/);
 });
-test('invalid, oversized or junction instructions fail clearly instead of being ignored',async t=>{
+test('invalid or junction instructions fail clearly while long rules remain intact',async t=>{
  const f=await fixture(t),file=path.join(f.root,'AGENTS.md');
- for(const bytes of [Buffer.from([255]),Buffer.from([0]),Buffer.alloc(128*1024+1,65)]){await fs.writeFile(file,bytes);await assert.rejects(createInstructionContext({workspaceRoot:f.root}),/UTF-8|二进制|128 KiB/);}
+ for(const bytes of [Buffer.from([255]),Buffer.from([0])]){await fs.writeFile(file,bytes);await assert.rejects(createInstructionContext({workspaceRoot:f.root}),/UTF-8|二进制/);}
+ const long='规则'.repeat(70000);await fs.writeFile(file,long);const loaded=await createInstructionContext({workspaceRoot:f.root});assert.equal(loaded.entries[0].content,long);
  await fs.unlink(file);await fs.writeFile(path.join(f.global,'AGENTS.md'),'outside');await fs.symlink(path.join(f.global,'AGENTS.md'),file,'file').catch(async()=>{await fs.symlink(f.global,path.join(f.root,'linked'),'junction');});
  if(await fs.lstat(file).catch(()=>null))await assert.rejects(createInstructionContext({workspaceRoot:f.root}),/链接|联接/);else await assert.rejects(createInstructionContext({workspaceRoot:path.join(f.root,'linked')}),/链接|联接/);
 });

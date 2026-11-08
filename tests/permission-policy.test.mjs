@@ -8,6 +8,7 @@ const {
   evaluatePermission,
   networkAllowed,
   normalizePermissionSettings,
+  isFullAccessSettings,
   permissionInstruction,
   toolPolicyAllowed,
 } = require('../electron/permission-policy.cjs');
@@ -77,4 +78,10 @@ test('desktop control is allowed under every normalized policy setting', () => {
   }
   const instruction = permissionInstruction({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' });
   assert.match(instruction, /完整访问/);
+});
+
+test('full access is the single runtime mode that bypasses approval prompts', () => {
+  assert.equal(isFullAccessSettings({ sandboxMode: 'danger-full-access', approvalPolicy: 'never' }), true);
+  assert.equal(isFullAccessSettings({ sandboxMode: 'danger-full-access', approvalPolicy: 'on-request' }), false);
+  assert.equal(isFullAccessSettings({ sandboxMode: 'workspace-write', approvalPolicy: 'never' }), false);
 });

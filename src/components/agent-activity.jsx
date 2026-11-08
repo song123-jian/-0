@@ -10,9 +10,14 @@ function Status({ status, name }) {
   return <X size={14} />;
 }
 
+function operationPreview(operation) {
+  if (operation.name?.startsWith('model_debate_') && ['running', 'succeeded'].includes(operation.status)) return '';
+  return operation.detail?.split('\n')[0] || operation.path || '';
+}
+
 function Operation({ operation, index, onOpenFile, onBrowser, onServices }) {
   const caption = operationCaption(operation);
-  const preview = operation.detail?.split('\n')[0] || operation.path || '';
+  const preview = operationPreview(operation);
   const bodyId = `agent-operation-body-${operation.id || index}`;
   return <details className={'agent-operation ' + operation.status} data-operation-name={operation.name}>
     <summary aria-label={caption + (preview ? ' ' + preview : '')} aria-controls={bodyId}>
@@ -62,7 +67,8 @@ export function AgentActivity({ operations = [], approval, onApproval, onOpenFil
   };
   if (!operations.length && !approval) return null;
   const latest = operations.at(-1);
-  const summaryLabel = latest ? operationCaption(latest) + (latest.detail ? ' ' + latest.detail.split('\n')[0] : '') : '等待审批';
+  const latestPreview = latest ? operationPreview(latest) : '';
+  const summaryLabel = latest ? operationCaption(latest) + (latestPreview ? ' ' + latestPreview : '') : '等待审批';
   const failureCount = operations.filter(item => item.status === 'failed').length;
   const summaryStatus = approval || operations.some((item) => item.status === 'running') ? 'running' : operations.some((item) => item.status === 'failed') ? 'failed' : operations.some((item) => ['cancelled', 'interrupted'].includes(item.status)) ? 'cancelled' : 'succeeded';
   const summaryIcon = summaryStatus === 'running' ? <LoaderCircle size={16} className="spin" /> : summaryStatus === 'failed' ? <CircleAlert size={16} /> : summaryStatus === 'cancelled' ? <X size={16} /> : <ListChecks size={16} />;

@@ -65,18 +65,54 @@ async function model(req, res) {
   let raw = ''; for await (const part of req) raw += part;
   const body = JSON.parse(raw); assert.equal(body.model, role + '-fixture');
   const prompt = body.messages.findLast(item => item.role === 'user' && typeof item.content === 'string' && /^(?:TEAM-|EXPLORE-|STEER-)/.test(item.content))?.content;
-  report.requests.push({ role, task: prompt || '', tokens: body.max_tokens || null });
+  const lastUser = body.messages.at(-1)?.content || '';
+  const systemPrompt = body.messages.find(item => item.role === 'system')?.content || '';
+  const debateStage = systemPrompt.includes('你是独立方案提出者') ? 'debate-proposal' : systemPrompt.includes('你是独立方案评审者') ? 'debate-review' : '';
+  const supervisionStage = systemPrompt.includes('只读执行监督者') ? 'execution-supervision' : '';
+  let taskData = lastUser.match(/<task-data>\n([\s\S]*?)\n<\/task-data>/)?.[1] || '';
+  if (!taskData) {
+    const supervisionData = lastUser.match(/<supervision-data>\n([\s\S]*?)\n<\/supervision-data>/)?.[1];
+    if (supervisionData) {
+      try { taskData = JSON.parse(supervisionData).task || ''; } catch { /* the product reports the request as failed below */ }
+    }
+  }
+  report.requests.push({ role, task: taskData || prompt || '', tokens: body.max_tokens || null });
+  if (debateStage) {
+    report.requests.at(-1).stage = debateStage;
+    report.requests.at(-1).reasoningEffort = body.reasoning_effort || '';
+    assert.equal(body.tools, undefined); assert.equal(body.max_tokens, undefined);
+    assert.ok(lastUser.length < 20000);
+    for (const key of Object.values(keys)) assert.ok(!lastUser.includes(key));
+    if (report.requests.at(-1).task === 'TEAM-CANCEL' && role === 'advisor') {
+      cancelledAdvisor = true; res.on('close', () => { if (!res.writableEnded) cancelledClosed = true; }); return;
+    }
+    if (report.requests.at(-1).task === 'TEAM-FAIL' && role === 'advisor' && debateStage === 'debate-proposal') { res.writeHead(503); res.end('{}'); return; }
+    if (role === 'advisor' && body.reasoning_effort === 'ultra') { res.writeHead(400, { 'content-type': 'application/json' }); res.end(json({ error: { message: 'advisor-fixture does not support reasoning effort "ultra"; use low, medium, high, xhigh or max' } })); return; }
+    assert.ok(role !== 'advisor' || !body.reasoning_effort || body.reasoning_effort === 'max');
+    if (debateStage === 'debate-proposal') return reply(res, { content: json({ title: role + ' independent plan', summary: '基于同一任务文本的独立方案', steps: ['核对目标', '实施并验证'], evidenceBasis: ['仅依据用户任务文本'], validation: ['检查实际结果'], risks: ['外部条件可能变化'] }) });
+    const proposals = JSON.parse(lastUser.match(/<proposal-data>\n([\s\S]*)\n<\/proposal-data>/)?.[1] || '[]');
+    assert.equal(proposals.length, 3);
+    return reply(res, { content: json({ evaluations: proposals.map(item => ({ proposalId: item.id, scores: { correctness: 8, evidence: 8, taskFit: 8, constraints: 8, verifiability: 8, risk: 8 }, critique: role + ' 建议逐项复核实际证据和验收结果' })) }) });
+  }
+  if (supervisionStage) {
+    report.requests.at(-1).stage = supervisionStage;
+    report.requests.at(-1).reasoningEffort = body.reasoning_effort || '';
+    assert.equal(body.tools, undefined); assert.equal(body.max_tokens, undefined);
+    assert.ok(lastUser.includes('<supervision-data>'));
+    for (const key of Object.values(keys)) assert.ok(!lastUser.includes(key));
+    return reply(res, { content: json({ verdict: 'ready', summary: role + '监督证据一致', corrections: [], takeover: false }) });
+  }
   if (role === 'advisor') {
-    assert.equal(body.tools, undefined); assert.equal(body.max_tokens, 1200);
-    const input = JSON.parse(body.messages.at(-1).content); report.requests.at(-1).stage = input.stage; report.requests.at(-1).task = input.task;
+    assert.equal(body.tools, undefined); assert.equal(body.max_tokens, undefined);
+    const content = body.messages.at(-1).content;
+    const input = JSON.parse(content.match(/<review-data>\n([\s\S]*)\n<\/review-data>$/)?.[1] || content); report.requests.at(-1).stage = input.stage; report.requests.at(-1).task = input.task;
     report.requests.at(-1).reasoningEffort = body.reasoning_effort || '';
     assert.ok(body.messages.at(-1).content.length < 12000);
     for (const key of Object.values(keys)) assert.ok(!body.messages.at(-1).content.includes(key));
-    if (input.task === 'TEAM-FAIL') { res.writeHead(503); res.end('{}'); return; }
     if (input.task === 'TEAM-CANCEL') { cancelledAdvisor = true; res.on('close', () => { if (!res.writableEnded) cancelledClosed = true; }); return; }
     if (body.reasoning_effort === 'ultra') { res.writeHead(400, { 'content-type': 'application/json' }); res.end(json({ error: { message: 'advisor-fixture does not support reasoning effort "ultra"; use low, medium, high, xhigh or max' } })); return; }
     assert.ok(!body.reasoning_effort || body.reasoning_effort === 'max');
-    return reply(res, { content: json({ verdict: 'revise', summary: '顾问核对 ' + input.stage, checks: ['主模型核对实际文件和验证证据'] }) });
+     return reply(res, { content: json({ verdict: 'revise', summary: '顾问核对 ' + input.stage, checks: ['主模型核对实际文件和验证证据'] }) });
   }
   const steeringTask = /^STEER-/.test(prompt || '') ? prompt : '';
   if (steeringTask) {
@@ -89,7 +125,7 @@ async function model(req, res) {
   }
   const done = results(body);
   if (role === 'child') {
-    assert.ok(body.max_tokens <= 1600);
+    if (body.max_tokens !== undefined) assert.ok(body.max_tokens <= 1600);
     assert.ok(!body.tools.some(item => ['write_file', 'edit_file', 'run_command', 'subagent_start'].includes(item.function.name)));
     const file = prompt === 'EXPLORE-A' ? 'docs/a.txt' : 'docs/b.txt';
     const read = done.find(item => item.name === 'read_file' && item.ok && item.hash);
@@ -98,7 +134,7 @@ async function model(req, res) {
     return;
   }
   const startDef = body.tools.find(item => item.function.name === 'subagent_start');
-  assert.deepEqual(startDef.function.parameters.properties.mode.enum, ['analysis']);
+  assert.deepEqual(startDef.function.parameters.properties.mode.enum, ['analysis', 'edit']);
   if (prompt === 'TEAM-SIMPLE') return reply(res, { content: '普通问题直接答复。' });
   if (prompt === 'TEAM-FAIL' || prompt === 'TEAM-CANCEL') {
     const file = prompt === 'TEAM-FAIL' ? proofFiles.fallback : proofFiles.cancel;
@@ -113,7 +149,12 @@ async function model(req, res) {
   if (!b) return tool(res, 'subagent_start', { title: '探索 B', task: 'EXPLORE-B', mode: 'analysis', paths: ['docs/b.txt'] });
   if (!taskState.get('early')) { taskState.set('early', true); return reply(res, { content: '子任务仍运行时的候选答复，不能作为完成。' }); }
   if (!done.some(item => item.name === 'write_file' && item.ok)) {
-    assert.match(json(body.messages), /还有子任务未结束/);
+    const context = json(body.messages);
+    for (const child of [a, b]) {
+      assert.equal(child.status, 'running');
+      assert.ok(context.includes(child.id), 'Live task state must be identified by task ID, not localized response text');
+    }
+    report.liveTaskIdsBlockedPrematureCompletion = [a.id, b.id];
     return tool(res, 'write_file', { path: proofFiles.main, expected_hash: 'new', content: 'main owns code\n' });
   }
   if (!taskState.get('released')) {
@@ -151,12 +192,12 @@ async function setup() {
 async function main() {
   await setup();
   await check('settings-default-roles-independent-advisor-save-and-reload', async () => {
-    const original = await page.evaluate('window.scodex.getModelConnection()'); assert.equal(original.advisorEnabled, false); assert.equal(original.subagentAllowEdits, false); assert.equal(original.subagentMaxConcurrent, 2);
+    const original = await page.evaluate('window.scodex.getModelConnection()'); assert.equal(original.advisorEnabled, false); assert.equal(original.subagentAllowEdits, true); assert.equal(original.subagentMaxConcurrent, 2);
     await settings();
     await insert('#model-advisor-base-url', base + '/advisor/v1'); await insert('#model-advisor-api-key', keys.advisor);
-    await click('button', '获取顾问模型列表'); await wait(() => page.evaluate('[...document.querySelector("#model-advisor").options].some(o=>o.value==="advisor-fixture")'), 'Advisor list');
+    await click('button', '获取模型三列表'); await wait(() => page.evaluate('[...document.querySelector("#model-advisor").options].some(o=>o.value==="advisor-fixture")'), 'Advisor list');
     await insert('#model-advisor', 'advisor-fixture');
-    await click('[aria-label="顾问推理强度"]'); await click('[role="option"]', 'ultra');
+    await click('[aria-label="模型三推理强度"]'); await click('[role="option"]', 'ultra');
     await click('#model-advisor-enabled'); await click('.model-save-button');
     await wait(() => page.evaluate('document.querySelector(".model-message")?.textContent.includes("已保存")'), 'Save roles');
     await reload(); const saved = await page.evaluate('window.scodex.getModelConnection()');
@@ -171,13 +212,18 @@ async function main() {
     assert.match(workAnswer.content.slice(workAnswer.finalContentOffset), /主模型已整合两项探索/);
     const advisorRequests = report.requests.filter(r => r.role === 'advisor' && r.task === 'TEAM-WORK');
     const stages = [...new Set(advisorRequests.map(r => r.stage))];
-    assert.deepEqual(stages, ['plan', 'repeated-error', 'completion']);
-    assert.equal(advisorRequests.filter(r => r.reasoningEffort === 'ultra').length, 3);
-    assert.equal(advisorRequests.filter(r => r.reasoningEffort === 'max').length, 3);
+    assert.deepEqual(stages, ['debate-proposal', 'debate-review', 'execution-supervision', 'repeated-error', 'completion']);
+    assert.ok(advisorRequests.filter(r => r.reasoningEffort === 'ultra').length >= 4);
+    assert.equal(advisorRequests.filter(r => r.reasoningEffort === 'max').length, 4);
     assert.equal(report.mainWroteWhileExplorersActive, true);
-    assert.equal(workAnswer.operations.filter(op => op.name === 'advisor_consult' && op.status === 'succeeded').length, 3);
-    const adapters = workAnswer.operations.filter(op => op.name === 'advisor_compat' && op.status === 'succeeded');
-    assert.equal(adapters.length, 3);
+    assert.equal(workAnswer.operations.filter(op => op.name === 'advisor_consult' && op.status === 'succeeded').length, 2);
+    const debate = workAnswer.operations.find(op => op.name === 'model_debate_result' && op.status === 'succeeded');
+    assert.ok(debate); const debateData = JSON.parse(debate.output);
+    assert.equal(debateData.proposals.length, 3); assert.equal(debateData.reviews.length, 3);
+    assert.deepEqual(debateData.allocation.plans.map(item => item.share), [34, 33, 33]);
+    assert.equal(debateData.allocation.plans.reduce((sum, item) => sum + item.share, 0), 100);
+    const adapters = workAnswer.operations.filter(op => op.name === 'advisor_reasoning_compat' && op.status === 'succeeded');
+    assert.equal(adapters.length, 4);
     assert.ok(adapters.every(op => /ultra.*max.*设置未变/.test(op.detail)));
     assert.equal(workAnswer.operations.filter(op => op.name === 'write_file' && op.status === 'succeeded').length, 1);
     const css = selector(workAnswer.id);
@@ -185,7 +231,9 @@ async function main() {
     assert.ok(await page.evaluate('Boolean(document.querySelector(' + json(css + ' .task-file-changes') + '))'));
     await click(css + ' .message-execution-summary');
     await click(css + ' .agent-operation-group > summary');
-    assert.ok(await page.evaluate('document.querySelector(' + json(css) + ').innerText.includes("等待主模型核验")'));
+    assert.ok(await page.evaluate('document.querySelector(' + json(css) + ').innerText.includes("重复错误诊断")'));
+    const modelThreeProposalCaption = await page.evaluate('(() => { const row = [...document.querySelectorAll(' + json(css + ' .agent-operation[data-operation-name="model_debate_proposal"]') + ')].find(item => item.textContent.includes("模型三 · 独立提案")); return row?.querySelector(".agent-operation-title")?.textContent.trim() || ""; })()');
+    assert.equal(modelThreeProposalCaption, '模型三 · 独立提案已返回结构化结果');
     return { stages, advisorEffortAdaptation: 'ultra -> max', savedEffortUnchanged: (await page.evaluate('window.scodex.getModelConnection()')).advisorReasoningEffort, writes: 1, parallelExplorers: 2, prematureCompletionPrevented: true, answerAndRealFileCardVisible: true };
   });
   const sendSteering = async (tag, targetPage, sendSelector, text) => {
@@ -223,14 +271,21 @@ async function main() {
   });
   await check('ordinary-answer-does-not-consult-advisor', async () => {
     const count = await send('TEAM-SIMPLE'); const message = await finished(count); assert.match(message.content, /普通问题/);
-    assert.equal(report.requests.filter(r => r.role === 'advisor' && r.task === 'TEAM-SIMPLE').length, 0); return { advisorRequests: 0 };
+    const discussion = message.operations.find(op => op.name === 'model_debate_result' && op.status === 'succeeded');
+    assert.ok(discussion); assert.equal(message.operations.filter(op => op.name === 'write_file').length, 0);
+    assert.ok(report.requests.filter(r => r.task === 'TEAM-SIMPLE').some(r => r.stage === 'debate-proposal'));
+    return { discussionComplete: true, writes: 0 };
   });
-  await check('advisor-service-failure-is-not-retried-main-continues-once', async () => {
-    const count = await send('TEAM-FAIL'); const message = await finished(count);
-    assert.equal(report.requests.filter(r => r.role === 'advisor' && r.task === 'TEAM-FAIL').length, 1);
-    assert.equal(message.operations.filter(op => op.name === 'advisor_consult' && op.status === 'failed').length, 1);
+  await check('debate-service-failure-leaves-shares-empty-and-main-continues', async () => {
+    const count = await send('TEAM-FAIL'); let message = await finished(count);
+    const failedTaskAdvisorRequests = report.requests.filter(r => r.role === 'advisor' && r.task === 'TEAM-FAIL');
+    assert.ok(failedTaskAdvisorRequests.some(r => r.stage === 'debate-proposal'));
+    const failedDiscussion = await wait(async () => (await chat()).messages.at(-1)?.operations?.find(op => op.name === 'model_debate_result' && op.status === 'failed') || false, 'Failed debate operation');
+    message = (await chat()).messages.at(-1);
+    assert.ok(failedDiscussion); assert.equal(JSON.parse(failedDiscussion.output).allocation, null);
+    assert.ok(message.operations.filter(op => op.name === 'advisor_consult' && op.status === 'succeeded').length >= 1);
     assert.equal(await fs.readFile(path.join(workspace, proofFiles.fallback), 'utf8'), 'main effect\n');
-    return { advisorRequests: 1, effectCount: message.operations.filter(op => op.name === 'write_file' && op.status === 'succeeded').length, downgraded: true };
+    return { advisorRequests: failedTaskAdvisorRequests.length, noAutomaticShares: true, effectCount: message.operations.filter(op => op.name === 'write_file' && op.status === 'succeeded').length, downgraded: true };
   });
   await check('stop-during-advice-aborts-request-and-does-not-write', async () => {
     const count = await send('TEAM-CANCEL'); await wait(() => cancelledAdvisor, 'Advisor waiting'); await click('[aria-label="停止生成"]'); await finished(count, true);
@@ -240,19 +295,25 @@ async function main() {
   await check('role-usage-history-narrow-layout-and-final-settings-visual', async () => {
     const usage = await page.evaluate('window.scodex.getModelUsage()');
     const roles = [...new Set(usage.records.map(r => r.role))]; for (const role of ['main', 'explorer', 'advisor']) assert.ok(roles.includes(role));
-    assert.ok(usage.records.filter(r => r.role === 'advisor').every(r => ['plan', 'repeated-error', 'completion'].includes(r.stage)));
-    await reload(); const restored = (await chat()).messages.find(m => m.id === workAnswer.id); assert.equal(restored.operations.filter(op => op.name === 'advisor_consult').length, 3);
+    await settings();
+    assert.equal(await page.evaluate('document.querySelector(".model-team-roles input[type=checkbox]")?.disabled'), true);
+    const roleLabels = await page.evaluate('[...document.querySelectorAll(".model-team-roles dt")].map(item => item.textContent.trim())');
+    assert.deepEqual(roleLabels, ['模型一', '模型二', '模型三']);
+    const serviceLabels = await page.evaluate('[...document.querySelectorAll(".model-subagent-heading h2")].map(item => item.textContent.trim())');
+    assert.deepEqual(serviceLabels, ['模型二服务', '模型三服务']);
+    assert.ok(usage.records.filter(r => r.role === 'advisor').every(r => ['debate-proposal', 'debate-review', 'execution-supervision', 'plan', 'repeated-error', 'completion'].includes(r.stage)));
+    await reload(); const restored = (await chat()).messages.find(m => m.id === workAnswer.id); assert.equal(restored.operations.filter(op => op.name === 'advisor_consult').length, 2);
     assert.equal((await chat()).messages.filter(message => message.steering?.status === 'accepted').length, 2);
     assert.equal((await chat()).messages.filter(message => ['主窗口运行中补充正文', '独立窗口运行中补充正文'].includes(message.content)).length, 2);
     await settings();
     await page.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
     await page.evaluate('document.querySelector(".model-team-roles").scrollIntoView({block:"start"})');
-    const narrow = await page.evaluate('({width:innerWidth,scroll:document.documentElement.scrollWidth,controls:[...document.querySelectorAll(".model-team-roles input,.model-team-roles select,[aria-label=顾问模型服务配置] input,[aria-label=顾问模型服务配置] select")].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right}})})');
+    const narrow = await page.evaluate('({width:innerWidth,scroll:document.documentElement.scrollWidth,controls:[...document.querySelectorAll(".model-team-roles input,.model-team-roles select,[aria-label=模型三服务配置] input,[aria-label=模型三服务配置] select")].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right}})})');
     assert.ok(narrow.scroll <= narrow.width); assert.ok(narrow.controls.every(r => r.left >= 0 && r.right <= narrow.width));
     await page.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
     await page.evaluate('document.querySelector(".model-team-roles").scrollIntoView({block:"start"})');
     const shot = await page.command('Page.captureScreenshot', { format: 'png' }); await fs.writeFile(path.join(output, 'model-team-settings.png'), Buffer.from(shot.data, 'base64'));
-    return { roles, persistedAdvisorOperations: 3, narrow, screenshot: 'model-team-settings.png' };
+    return { roles, persistedAdvisorOperations: 2, narrow, screenshot: 'model-team-settings.png' };
   });
   assert.ok(!report.serverError, report.serverError); report.status = 'passed';
 }

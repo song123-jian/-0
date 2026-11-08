@@ -1,211 +1,192 @@
-# Project Handoff
+# 项目交接
 
-## Active Increment — 1.3.42, 2026-11-07
+<!-- formal-hello-1.3.54:start -->
+## 当前增量：正式入口真实 `你好` 连通性与上限审计（已完成）
 
-- Goal: remove automatic model/task ceilings that stopped work at 120 seconds, 15 minutes, fixed rounds, operation counts, repeated failures, subtask counts or concurrency; accept complete responses over 4 MiB; expose real pause/resume; allow full local/network access without workbench approval prompts; make answer and command output records independently collapsible; reduce answer/code/table/output text by 1px.
-- Baseline/version: 1.3.41 source state in this checkout; target `1.3.42` in `package.json` and `package-lock.json`. No second version increment was made after failed checks or rebuilds.
-- Status: implementation, targeted logic verification, renderer build, unpacked candidate build, NSIS installer build, isolated candidate UI acceptance, source publication and Latest Release publication all passed. A final review fixed pause-gate cancellation for independently stopped child/advisor requests.
-- Scope: `electron/agent-runtime.cjs`, `agent-tools.cjs`, `agents.cjs`, `chat-runs.cjs`, `conversations.cjs`, `main.cjs`, `permission-policy.cjs`, `preload.cjs`, `subagent-coordinator.cjs`, `subagent-tools.cjs`; `src/workbench.jsx`, `src/components/agent-activity.jsx`, `composer-tools.jsx`, `message-content.jsx`, `model-team-settings.jsx`, `storage-panel.jsx`, `styles.css`; `package.json`, `package-lock.json`; the directly affected tests including `tests/permission-policy.test.mjs`. No new dependency.
-- Key decisions: request pause gates finish the current network/tool boundary and hold the next model/final completion until resume; stop still aborts the request. Child and advisor gates use their own abort signals so cancellation remains effective while the parent is paused. Runtime constants are unbounded, but malformed/incomplete streams, invalid tool JSON and explicit user cancellation remain errors. Permission evaluation intentionally returns allow for the current full-access product requirement; domain normalization and matching helpers remain covered.
-- Verification: the affected Node test set is 79/79 after the final review fix; `node --check electron/main.cjs`, `npm exec vite build`, unpacked Electron packaging and NSIS packaging exited 0. Rebuilt candidate `release/win-unpacked/Scodex工作台.exe` is file version `1.3.42` (SHA-256 `317a924eb2a279cbe6d4501090a3a661c46b742a922e83077e32d1c8dfd8eccc`) and its `app.asar` SHA-256 is `24dd7be3e20cc0ee06a34175419f979c6572716875884f180d2debfcc8317a05`. Candidate core UI report `release/delivery-1.3.42/candidate-core-ui.json` passed pause/resume, answer folding, output folding and 13px/15px computed fonts; screenshots are `answer-collapsed.png` and `operation-output-expanded.png` in the same evidence directory.
-- Delivery artifact: rebuilt `release/Scodex-Workbench-Setup-1.3.42-x64.exe`, 181,114,245 bytes, SHA-256 `7adcf6e067747afe073c4a70443625cc3745f7cd0ed38508e065d594f811847b`; NSIS exited 0. The build reused the verified installed Electron 45.0.0 runtime because the checkout's Electron distribution was absent and the network download failed; this does not change the app source or user profile.
-- Recovery/failure evidence: the existing `tests/model-team-ui.cjs` fixture stopped on an obsolete assertion for the removed “还有子任务未结束” prompt; `release/delivery-1.3.42/candidate-ui/model-team-ui.json` records the HTTP 500 and is not counted as a pass. A temporary CDP script had two harness-only failures (syntax/DOM assertion), was corrected, passed, and was removed; only its reports/screenshots remain.
-- Cleanup: six task-owned isolated fixture directories were moved to `release/手动删除/1.3.42-fixtures`; the temporary verifier source was removed. No user profile, installed 1.3.41 program or unrelated files were deleted or replaced.
-- Publication: tag `v1.3.42` points to `9f89276c3fbedb2ff86a56b983338ba107395ac1`; its tree `7a8e6be6252f1d2aed21238bb3a712737bf93a6e` matches local 1.3.42 code commit `e093fa912aaaf73d16a955aa4dc7b92e47f66705` byte-for-byte across 27 changed files. Remote `main` includes the documentation-only handoff sync and its tree matches the current local HEAD. Release is published as Latest at [v1.3.42](https://github.com/song123-jian/-0/releases/tag/v1.3.42); uploaded `Scodex-Workbench-Setup-1.3.42-x64.exe` is 181,114,245 bytes with SHA-256 `7adcf6e067747afe073c4a70443625cc3745f7cd0ed38508e065d594f811847b`, matching the server digest. Readback: `release/delivery-1.3.42/source-publication-final.json` and `release-publication-final.json`.
+- 目标：使用正式 `1.3.54` 入口和已保存连接配置发送一次精确 `你好`，并核对模型上下文/输出是否仍被应用层固定上限截断。
+- 实际结果：`E:/GDP/Scodex/App/Scodex工作台.exe` 返回完成事件，模型 `gpt-6.1-sol`、HTTP 200、输出 14 tokens、应用退出码 0；配置文件哈希保持不变，隔离副本中的加密凭据已清理。
+- 非敏感证据：`release/formal-build-1.3.54-20261108/formal-hello/external-latency.json`，只含状态、模型名、HTTP 状态、耗时和用量，不含 API Key、Authorization 或响应正文。
+- 上限审计：模型请求路径使用动态上下文容量和服务默认输出；`MAX_TOOL_CALLS`、`MAX_ROUNDS`、`MAX_OPERATIONS` 为无限值，讨论三路并行保留。文件大小、模型列表数量、地址数量、密钥格式、技能枚举和日志保留边界属于输入/资源防护，继续保留；讨论等待超时继续用于缩小上下文重试和真实降级，不伪造评议结果。
+- 清理：递归删除本轮临时 profile 被策略拒绝且未重试；已将其移至项目根目录 `手动删除/formal-hello-1.3.54-fixture-a3a406cb-2633-4fbd-bb40-101c03d48a48`，原路径已不存在，详见报告清理字段。
+- 源码辅助变更：`tests/latency-external-smoke.cjs` 增加精确提示词和输出目录环境变量，保留密钥隔离与非敏感记录规则；不改变正式 EXE 代码。
 
-## Active Increment — 1.3.41, 2026-11-05
+<!-- formal-hello-1.3.54:end -->
 
-- Goal: repair advisor consultation service errors and show/persist text submitted while a model task runs. Previous formal release 1.3.40; this delivery is 1.3.41. Source baseline 783a9b95f73e04e5dcd84bacb7bc046380c1e14e.
-- Status: implementation, focused verification, candidate and installed UI 8/8 each, actual configured-provider consultation, installation, real-profile startup/history/normal exit and 15-file incremental review passed. Source and Latest Release publication remain pending; do not mark remote delivery complete.
-- Skills reused: requirement-understanding 95, systematic-debugging 95 and code-write-review 94 for distinct requirement, diagnosis and review duties. No Codex subagent delegated.
+<!-- formal-build-1.3.54:start -->
+## 当前增量：1.3.54 三模型完成态文案、正式构建与 EXE 替换（已完成）
 
-| Requirement | Result and evidence under release/delivery-1.3.41 |
-| --- | --- |
-| Advisor compatibility | Omit unsupported non-default temperature only for advisor. On explicit HTTP 400 listing lower supported efforts, adapt one tool-free request from saved ultra to advertised max inside the same 30-second gate. Saved model, effort and encrypted key stay unchanged; unrelated failures are not replayed. advisor-provider-acceptance.json and installed-ui-final/model-team-ui.json. |
-| Honest error | Redacted, bounded service details identify the cause; failed consultation remains unverified while the main model continues. focused-final.log and installed UI. |
-| Running supplements | One linked user bubble appears before the continuing answer in main and detached chat, with submitting/queued/accepted/unused/failed state and durable text. Accepted text enters the next model request once; unused text stays out of later history. Detached initial send returns a started acknowledgement. candidate-ui-final-r4 and installed-ui-final reports. |
+- 目标：三模型独立提案运行中显示“正在模型三 · 独立提案”，结构化响应完成后显示“模型三 · 独立提案已返回结构化结果”，并把包含本次修正的 `1.3.54` 构建替换到正式入口。
+- 源码变更：`src/lib/message-presentation.js` 为模型讨论操作提供运行/成功/失败状态文案；`src/components/agent-activity.jsx` 避免成功详情重复显示；`tests/message-presentation.test.mjs` 与 `tests/model-team-ui.cjs` 增加精确断言。`package.json`、`package-lock.json` 同步为 `1.3.54`。
+- 验证：`node --test tests/message-presentation.test.mjs tests/model-team.test.mjs` 43/43；相关 `node --check` 通过；候选模型团队 UI 8/8，候选和正式入口 `restart-only` 各 2/2。候选模型三完成态断言实际通过。
+- 产物身份：候选/正式 EXE SHA-256 `f77326e9b380482b4c126df5d1481921600f41e122c7788b1057e5e775767e4c`；候选/正式 ASAR SHA-256 `00b39e491f3413e054c42416fc3456d9824cf1e8b5bb52a72a054cf80a553563`；详细报告 `release/formal-build-1.3.54-20261108/formal-replacement.json`。
+- 正式替换：旧 `1.3.53` EXE/ASAR 已备份到 `release/formal-build-1.3.54-20261108/rollback-1.3.53`；只替换正式应用文件，用户数据、配置和凭据未作为替换对象。
+- 限制：三模型完整流程使用 loopback fixture，未据此推断公网模型质量；本轮未读取、打印或落盘模型凭据，也未新增公网模型请求。
 
-- Scope: electron/agent-runtime.cjs, conversations.cjs, main.cjs, model-connection.cjs, model-team.cjs; src/workbench.jsx, src/components/model-team-settings.jsx, new src/lib/conversation-steering.js; five targeted test files and package versions. No new dependency. The pre-existing electron/third-party-licenses.json difference was preserved and excluded from this commit.
-- Constraints: preserve user data/settings, no forced user-process exit, tool/content replay, generic HTTP retry, guessed model capability, automatic saved-effort change, unrelated license edit or secret output. Invalid provider JSON or later service failure still shows unverified status.
-- Verification: affected logic 28/28, focused 44/44, direct regression 50/50; actual candidate and installed Electron/React/IPC UI 8/8 each using loopback model replies. One harmless real configured-provider consultation returned HTTP 200 and valid revise JSON after explicit ultra-to-max adaptation. UTF-8/no BOM, source diff and installed ASAR checked in incremental-review.json.
-- Delivery: release/Scodex-Workbench-Setup-1.3.41-x64.exe, 181113683 bytes, SHA-256 9b32684b8b425295651d67ca72509740a0dd0689856dd35597e7d0aa7890ebad. Installed C:/Program Files/scodex-workbench/Scodex工作台.exe SHA-256 a5f72daac65f50a85067d40d20a31bc76a255ac4325b5117a6ca2e65e2f169fd; installed ASAR f9692b5408f81ebf236cfd4b86e40fb6b72a8f735e2e23e9b211e92758108ebf. Vite, electron-builder unpacked and NSIS finished, installer exit 0, 27/27 candidate files match final path, registry and fresh-process metadata identify 1.3.41. final-installation.json.
-- Real profile: installed program retained the existing compressed library (2 conversations/2 messages), saved enabled advisor setting and four unchanged critical profile files, then exited normally. Encrypted memory remained valid; no real-profile model request. installed-profile-final.json.
-- Rollback: release/delivery-1.3.41/rollback-1.3.40 contains verified old application files. Quit normally, restore application files or reinstall retained 1.3.40, preserving APPDATA. rollback-manifest.json.
-- Recovery: actual provider first rejected temperature, then ultra; one invalid-format response remains failed evidence. Candidate r3 exposed detached initial-send blocking; r4 and installed app passed after repair. Inherited real-profile helper assumed plain JSON and advisor disabled; both failed reports remain, final helper matches actual compressed and enabled profile. No app defect inferred from verifier failures.
-- Cleanup: policy rejected deletion; no repeat. Ten exact task-owned diagnostic/provider/UI fixtures moved into release/手动删除 after ownership/path checks; original paths absent. cleanup.json lists original/current paths for manual removal. Evidence, screenshot, installer and rollback retained.
-- Pending: publish reviewed source to remote main, publish/read back v1.3.41 as Latest, then synchronize both handoffs. No finite build/test is running. No evidence-supported extra refactor. [Test Handoff](TEST_HANDOFF.md).
+<!-- formal-build-1.3.54:end -->
 
-## Active Increment — 1.3.40, 2026-11-05
+<!-- formal-build-1.3.53:start -->
+## 当前增量：1.3.53 三模型提案状态修正、正式构建与 EXE 替换（已完成）
 
-- Goal: compact operation records like the supplied reference; fold multiple records, show one directly; clearly name Skill loading/use/reuse; remove the fixed three-Skill cap and reuse duplicate responsibilities.
-- Baseline/version: installed/published 1.3.39, source baf15c5de4215089df04d4ef4337ed6db43c7f47. Target 1.3.40 uses the established compatible SemVer patch mapping; all rebuilds kept this target.
-- Status: implementation, scoped review, builds, normal installation, installed actual-UI acceptance, unchanged real-profile acceptance and authorized source/Latest Release publication passed and verified.
-- Constraints: preserve user data, credentials, configured main/explorer models, reasoning/retry/advisor settings and the unrelated electron/third-party-licenses.json modification. No new dependency or Codex subagent. Existing permissions, task budgets and live Skill package path/hash/availability checks remain.
-- Checkpoint: release/delivery-1.3.38/checkpoint.json; evidence root release/delivery-1.3.40. Prior unchanged results are reused, not rerun.
-- Skills reused: requirement-understanding 95, code-write-review 94. User's no-count/avoid-duplicates requirement supersedes the product's previous fixed-three policy.
+- 目标：将三模型讨论的提案状态在真实结构化响应后显示为已完成，并把包含当前源码的 `1.3.53` 构建替换到正式入口。
+- 状态证据：候选三模型 UI 8/8 通过；保存的实际操作记录中，模型一、模型二、模型三的独立提案均为 `succeeded`，详情均为“独立提案已返回结构化结果”。报告为 `release/formal-build-1.3.53-20261108/candidate-ui-r7/model-team-ui.json`，对应隔离 profile 记录位于其 `fixture-*/profile/conversations.json`。
+- 版本与构建：源码 `package.json`、`package-lock.json` 为 `1.3.53`；候选目录为 `release/formal-build-1.3.53-20261108/candidate/win-unpacked`。前置 `npm run build` 与 Electron Builder 候选构建均成功。
+- 产物身份：候选与正式 EXE SHA-256 均为 `4ef974adec0feaa30543fa0defafdb0216d6411d385adf2c58f941810f04cddf`；候选与正式 ASAR SHA-256 均为 `946b13e32740401bf29d1d065a815af6acdf74a3d2ad71bff7ecb6f6e80c4c63`。完整记录见 `release/formal-build-1.3.53-20261108/formal-replacement.json`。
+- 正式替换：替换前 `1.3.52` 的 EXE/ASAR 已备份到 `release/formal-build-1.3.53-20261108/rollback-1.3.52`；只替换正式应用文件，用户数据、配置和凭据未作为替换对象。
+- 正式验证：候选与正式入口的 `SCODEX_CDP_SCOPE=restart-only` 各 2/2 通过，报告分别为 `release/formal-build-1.3.53-20261108/candidate-restart/cdp-ui-verification.json` 与 `release/formal-build-1.3.53-20261108/formal-restart/cdp-ui-verification.json`；两份报告均确认版本 `1.3.53`，临时 profile 已清理，最终无 Scodex 进程。
+- 最终增量审查：本轮没有新增业务源代码；定向核对候选 UI 状态证据、版本元数据、候选/正式哈希、回滚范围和重启报告，未发现高置信度问题。
 
-- Presentation: 12px operation text, 26px rows and 14px status icons; multiple operations default to a folded latest-action/count/failure summary; one operation has no redundant operation group. A lone command without commentary also has no outer execution disclosure. Each command output remains independently expandable. Approvals stay outside the group and are visible while it is folded; completed execution keeps Skill names in its summary and persists them through history reload.
-- Skill selection: default prerequisites emit real skill_use records. Loading, use, reuse and failures display the actual name or unknown requested ID. Any number of distinct complementary Skills can be selected within the existing overall task budgets. Identical bodies, normalized same-name/description aliases, initial manual/default aliases and repeated pages reuse current-task guidance after live validation. Different-name semantic overlap still depends on the model comparing responsibilities; this is not claimed as universal semantic duplicate detection.
-- Validation: current catalog 8/8 plus 21 unaffected context/presentation cases; candidate activity UI 6/6, direct Skill/AGENTS UI 7/7, model-team UI 6/6, installed activity UI 6/6 and real-profile acceptance passed. 12-file incremental review has no open finding; reviewed Electron source matches packaged ASAR. Details: [Test Handoff](TEST_HANDOFF.md).
-- Build: npm exec vite build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist. Final logs renderer-build.log, package-dir-r2.log and installer-build-r2.log passed. Do not use the license-regenerating npm run build for this increment. Run candidate UI and NSIS sequentially to avoid a locked debug.log.
-- Delivery identity: release/Scodex-Workbench-Setup-1.3.40-x64.exe, 181112866 bytes, SHA-256 892aae36d05a5e3a62c9eec4c3983e4a73c33f30c066c6e4bd2f61c9eb036fc5. Accepted candidate and installed EXE SHA-256 4a568be3e28e8ca08e8d0a7c2514525e21a6838c7bdecf9cce3d309402bc222a; installed ASAR 11af8ded54820d73be45f73816437e1fac4c878d4c206151ec97dd169a331259. Final entry C:/Program Files/scodex-workbench/Scodex工作台.exe is 1.3.40; installer exit 0, all 26 candidate files match, HKLM and fresh-process ASAR version agree. Five critical profile files were unchanged at replacement.
-- Normal exit/profile: restored the old tray instance and checked no active generation or composer draft; Settings/General/Exit normally ended PIDs 2952/3100/3688/4476. No forced termination. Installed real-profile launch retained 1 conversation/4 messages, four critical file bytes, model/reasoning/retry and encrypted credentials; learning memory remains valid after normal exit; zero model requests submitted.
-- Rollback: release/delivery-1.3.40/rollback-1.3.39 contains 29 verified application files with rollback-manifest.json. Normally quit before restoring application files only or using the retained 1.3.39 installer; preserve APPDATA. final-installation.json binds replacement identities.
-- Resolved failures: initial catalog 27/28 exposed disabled-canonical alias metadata loss; current-task loaded metadata plus live canonical checks repaired it, final catalog 8/8. First UI harness read persisted state too early; settled final text/operations wait with a new fixture passed. First NSIS attempt collided with the candidate's generated debug.log; apps exited normally, exact log retained outside candidate, unchanged artifact packaged successfully. Initial PowerShell quoting failed before Node/source mutation. Reports retain failed outcomes.
-- Cleanup: automatic approval rejected recursive deletion as blocked by policy; no deletion retry. Five exact owned fixture directories were moved once to release/手动删除/1.3.40-fixture-* after path/ownership checks; originals are absent. cleanup.json gives original/current paths and manual removal instructions; retained test reports, screenshots, installer and rollback are unaffected. Earlier leftovers were untouched.
-- Limits: actual Electron/React/IPC/Windows encryption/commands/files and installed UI were exercised; model replies were loopback fixtures. No claim about public supplier quality, speed or cost. Screenshot at installed-ui/compact-skill-activity.png was inspected at 1440x1000; current page/viewport/data has no visible layout error, and 390px no-overflow checks passed. The missing Skill in it is an intentional error case.
-- Delivery: program source and Latest Release are verified. Publication handoffs are synchronized separately from the code tag; this does not change the accepted installer. No evidence-supported additional refactor is proposed.
-- Publication: source 97ce1f2e9a9a2bf3571257ad96c392713172b6d7 matches the published source tree/commit; [Release v1.3.40](https://github.com/song123-jian/-0/releases/tag/v1.3.40) is published as Latest. Tag commit, installer 181112866 bytes and server SHA-256 892aae36d05a5e3a62c9eec4c3983e4a73c33f30c066c6e4bd2f61c9eb036fc5 match accepted delivery. source-publication-final.json and release-publication-final.json contain readback; credentials were neither printed nor saved. Final handoff synchronization uses a separate documentation-only commit.
-- Auxiliary guard recovery: the source commit succeeded, then a post-commit helper misread an empty normalized git diff as lost user content. source-commit-failure.json and source-commit.json verify the original license raw SHA-256, exact 14-file commit scope and normalized equality; the user file was never staged or altered. No repeated code commit.
+<!-- formal-build-1.3.53:end -->
 
-## Active Increment — 1.3.39, 2026-11-05
+<!-- formal-build-1.3.52:start -->
+## 当前增量：1.3.52 正式构建、EXE 替换、重启验收与真实连通性验证（已完成）
 
-- Goal: main model owns planning, implementation, commands, verification and final answer; explorers perform bounded read-only investigation by default; optional independent advisor reviews plan, repeated tool error and completion. Named models in the example are not assumed available or hardcoded.
-- Baseline: delivered/installed/published 1.3.38; source 1556890ddb7087a6fc31a15a2c0a0a4bd1998586. Fixed target 1.3.39 uses the established SemVer patch mapping.
-- Current status: implementation, scoped review, builds, installation, installed functional acceptance 6/6, unchanged real-profile startup/history/normal exit and source/Latest Release publication complete and verified.
-- Delivery: no program implementation or acceptance remains. Publication handoffs are synchronized separately from the code tag; this does not change the accepted installer. No evidence-supported additional refactor is proposed.
-- Roles/budgets: default two concurrent explorers (configurable 1–3), maximum four subtasks per main task, six rounds and 1,600 output tokens per child round; active duplicate work is merged only within the same parent. Read-only investigation does not block main-model writes. Optional write delegation requires explicit configuration and retains path/hash/permission locks.
-- Advisor: disabled until user selects/enables an available model; independent endpoint/encrypted key/model/reasoning. At most three consultations, one per gate; each is tool-free, 30 seconds, 1,200 output tokens and no HTTP retry. Original operations and subsequent same-batch calls are deferred; main integrates advice. Failure records unverified status and main continues; cancellation prevents the original write. Running child work prevents premature completion even without advisor.
-- Constraints: preserve credentials, current models/reasoning, user data and unrelated electron/third-party-licenses.json; no automatic paid-model choice, guessed prices or recursive delegation. Usage is recorded by main/explorer/advisor and advisor stage. Advisor context is redacted and bounded after JSON escaping.
-- Acceptance: focused logic 67/67; affected review-repair checks 17/17; actual candidate UI 6/6 and exit 0. Incremental review covers 17 code/test/version files with no open finding; packaged Electron sources match reviewed bytes. Details: [Test Handoff](TEST_HANDOFF.md).
-- Build: npm exec vite build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist. All finished successfully; do not use license-regenerating npm run build for this increment.
-- Candidate: release/win-unpacked/Scodex工作台.exe, SHA-256 c65b818bc36eae4c3bbe6ea063718c622e5439827787e6e7e817dd0340200a78. Installer release/Scodex-Workbench-Setup-1.3.39-x64.exe, 181111687 bytes, SHA-256 614f19ec62bbbdfc6ed48366ba94f1a9e6a5ee144c7b7aa5c49b133e8e333171. Final path C:/Program Files/scodex-workbench/Scodex工作台.exe is installed/verified 1.3.39; installer exit 0, 27/27 candidate files match, five critical profile files unchanged at replacement.
-- Normal exit: old installed PID 11136 exited via its own Settings/General/Exit control; its known child PIDs are absent. No forced termination. Computer-use native pipe was unavailable; Windows UI Automation supplied the normal-exit control instead.
-- Installation/rollback: installed EXE c65b818bc36eae4c3bbe6ea063718c622e5439827787e6e7e817dd0340200a78; ASAR 890f95472ce5033913f0e03a0c7bc15390909b257ef548f552380a835488ce9c. HKLM entry and fresh-process ASAR version verified. Backup release/delivery-1.3.39/rollback-1.3.38 contains 29 verified old application files; normal exit then restore application files only or use retained 1.3.38 installer, preserving APPDATA. Details: final-installation.json and rollback-manifest.json.
-- Real profile: installed-profile-final.json passed; existing 1 conversation/2 messages, main/explorer models, reasoning, retry and four critical profile files unchanged; encrypted learning memory valid after normal exit. No model request submitted; advisor remains disabled.
-- Cleanup: automatic approval rejected deletion as blocked by policy; no repeated deletion. Two exact owned fixture directories moved into release/手动删除/1.3.39-fixture-* after ownership/path checks; originals absent. cleanup.json lists original/current paths and manual deletion remains optional, without acceptance impact. Reports/screenshots/installer/rollback and earlier leftovers retained.
-- Resolved failure: first UI harness omitted an earlier-operations disclosure; product gates had run. Test corrected, two scoped review guards repaired (parent ownership and escaped context limit), candidate rebuilt; r2 is the accepted final candidate. Initial failed report remains retained.
-- Checkpoint: release/delivery-1.3.38/checkpoint.json. Evidence: release/delivery-1.3.39. Still-valid unchanged 1.3.38/1.3.37 checks are reused.
-- Limits: actual Electron/React/IPC/Windows encryption and disk were tested; model responses were controlled loopback fixtures. Public supplier capability, quality, latency and monetary savings are not measured. Existing user connections remain unchanged and advisor is not automatically enabled.
-- Skills reused: requirement-understanding 95, code-write-review 94, systematic-debugging 95; no Codex subagent delegation.
-- Publication: source 837a035642bfbc1521256d756a9caa353affff65 matches remote main byte-for-byte; [Release v1.3.39](https://github.com/song123-jian/-0/releases/tag/v1.3.39) is published as Latest. Tag commit, installer size 181111687 and server SHA-256 614f19ec62bbbdfc6ed48366ba94f1a9e6a5ee144c7b7aa5c49b133e8e333171 match accepted delivery. Evidence: source-publication-final.json and release-publication-final.json. No credential was printed or stored by publication helpers.
+- 目标：将当前 `workbench` 源码构建为正式 EXE，替换 `E:/GDP/Scodex/App/Scodex工作台.exe` 与 `resources/app.asar`，保留用户数据、配置和凭据。
+- 版本与构建：`package.json`、`package-lock.json` 为 `1.3.52`；`npm run build` 与 Electron Builder 本地 Electron 45 `--win dir --x64` 均退出 0。候选目录为 `release/formal-build-1.3.52-20261108/candidate/win-unpacked`。
+- 产物身份：候选和正式 EXE SHA-256 均为 `361b5fb...1b009bce`；候选和正式 ASAR SHA-256 均为 `a16c3aa...98042473`；包内版本 `1.3.52`。完整哈希见 `release/formal-build-1.3.52-20261108/formal-replacement.json`。
+- 正式替换：替换前 `1.3.51` 的 EXE/ASAR 已备份到 `release/formal-build-1.3.52-20261108/rollback-1.3.51`；只替换应用文件，正式入口与候选哈希一致。
+- 正式验证：候选和正式入口的 `SCODEX_CDP_SCOPE=restart-only` 均 2/2 通过，报告分别为 `release/formal-build-1.3.52-20261108/candidate-ui/cdp-ui-verification.json` 与 `release/formal-build-1.3.52-20261108/formal-restart/cdp-ui-verification.json`；临时 profile 已清理，最终无 Scodex 进程。
+- 附件路径验证：消息路径隐藏、预览、原生 Explorer 选择三个相关场景通过；同一重跑随后在与本轮无关的旧快捷键文案断言处停止，未将该部分写为通过。
+- 真实连通性：正式默认配置只发送一条 `你好`；模型 `gpt-6.1-sol` 返回 HTTP 200，非空回复已持久化。记录见 `release/formal-build-1.3.52-20261108/formal-hello/hello-verification.json`，未记录凭据或 Authorization。
+- 交付报告：`release/formal-build-1.3.52-20261108/formal-replacement.json`。
+- 最终增量审查：正式构建阶段未新增源代码；本轮定向核对 `package.json`/`package-lock.json` 的 `1.3.52` 版本元数据、候选/正式产物身份、回滚范围和交付报告，未发现高置信度问题。源代码改动沿用前置定向审查与测试记录；`src/workbench.jsx` 的两处既有尾随空白提示未纳入本轮清理。
 
-## Active Increment — 1.3.38, 2026-11-05
+<!-- formal-build-1.3.52:end -->
 
-- Goal: support up to six safe temporary-service retries and automatically fold completed execution into an elapsed-time summary with an arrow; retain final answer and actual file-change card.
-- Baseline: 1.3.37 / e947c35c0ab750cf62f8db00b629fbf58633aae6. Target 1.3.38 follows the established SemVer patch mapping.
-- Current checkpoint: implementation, focused tests 55/55, direct regression 33/33, renderer/unpacked builds and candidate UI acceptance complete. NSIS, replacement, installed acceptance 10/10 and real-profile startup/normal exit complete; source and Release publication complete; v1.3.38 verified as Latest. Scoped review passed 15 code/test/version files, no open finding.
-- Implementation: settings, config and runtime allow 0–6 retries. New configs default to six; existing explicit lower/off values remain supported. Retrying requires HTTP 429/502/503/504 before returned text or any tool operation; auth errors, broken streams, network failures and cancelled waits never replay.
-- Presentation: one native elapsed-time disclosure contains commentary and operations. Completion collapses it even if an earlier operation failed; failed/cancelled requests remain readable. A bounded finalContentOffset survives history normalization; old histories keep their entire original text.
-- Actual target: Scodex工作台.exe 1.3.38, Windows x64/Electron 45. Candidate release/win-unpacked/Scodex工作台.exe; final C:/Program Files/scodex-workbench/Scodex工作台.exe. Actual-app tests use owned isolated profiles, real renderer/IPC/Windows encryption/disk and loopback-only model responses.
-- Constraints: preserve user data, credentials, current model/reasoning, unrelated electron/third-party-licenses.json and earlier rejected cleanup paths. Apply only the user-requested current retry preference to six after installation.
+<!-- formal-build-1.3.51:start -->
+## 当前增量：1.3.51 正式构建、EXE 替换与重启验收（已完成）
 
-| Verification range | Actual result and evidence under release/delivery-1.3.38 |
-| --- | --- |
-| Focused behavior and config | 55/55, focused-tests.log; sixth retry success, exhaustion, cancel, nonreplay, persisted boundary |
-| Direct dependencies | 33/33, direct-regression.log; goal runtime, presentation and revision behavior |
-| Candidate actual UI | 10 accepted cases: r4 first six retry/settings/history cases, r5 tool/no-replay and folding cases, r8 keyboard/detached/persistence/layout. candidate-ui-r8/retry-completion-ui.json explicitly references reused evidence; all apps exited 0 except the rejected r2 harness cleanup |
-| Installed actual UI | 10/10, installed-ui/retry-completion-ui.json; normal exit 0; completion fold, safe retry, detached keyboard, persistence and narrow layout |
-| Real user profile | installed-profile-final.json passed: history/startup/normal exit, retryLimit 2 -> 6 only, encrypted credentials unchanged; no real model request |
-| Visual | r8 completed-fold.png, 1440x1000: current completed message summary is collapsed, final answer/card/actions visible; earlier fixture HTTP 503 is intentional. 390px bounds passed |
-| Builds | renderer-build.log and package-dir.log exit 0; actual packaged source matches tested implementation |
+- 目标：将当前 `workbench` 源码构建为正式 EXE，并替换 `E:/GDP/Scodex/App/Scodex工作台.exe` 与 `resources/app.asar`；本轮只递增版本元数据和替换应用文件，保留用户数据、配置和凭据。
+- 版本与构建：`package.json`、`package-lock.json` 已同步为 `1.3.51`；`npm run build` 与 Electron Builder 本地 Electron 45 `--win dir --x64` 构建均退出 0。候选目录为 `release/formal-build-1.3.51-20261108/candidate/win-unpacked`。
+- 产物身份：候选和正式 EXE SHA-256 均为 `1067e12eabcdc93ce3068db79e01443119c41192451393d8ae2274aa71b559c0`；ASAR SHA-256 均为 `4683aa2607333ba40cd1ea212869b1169f168efb721acc6438177aee4ffb93b9`；包内版本 `1.3.51`，关键主进程、运行时、上下文压缩、模型团队和协调器模块与源码逐字节一致。
+- 正式替换：替换前 `1.3.50` 已备份到 `release/formal-build-1.3.51-20261108/rollback-1.3.50`，回滚只恢复 EXE 和 ASAR；正式入口与候选哈希完全一致。
+- 正式验证：候选和正式入口均运行 `SCODEX_CDP_SCOPE=restart-only node tests/browser-cdp-ui.cjs`，各 2/2 通过；报告分别为 `release/formal-build-1.3.51-20261108/candidate-ui/cdp-ui-verification.json` 和 `release/formal-build-1.3.51-20261108/formal-restart/cdp-ui-verification.json`，临时 profile 已清理，最终无 Scodex 进程。
+- 交付报告：`release/formal-build-1.3.51-20261108/formal-replacement.json`。本轮未读取、打印或写入凭据，也未发送公网模型请求；构建沿用本地未签名路径。
 
-- Resolved harness/preparation failures: initial CRLF insertion rejected without changing LF docs; r1 innerText newline; r2/r3 normalized-history completion race (corrected using actual rendered terminal state), r4 wrong seeded workspace path, r6 missing output cwd, r5/r7 native Enter missing character (focus proof retained). Only harness/preconditions changed; failures remain in their named reports/logs. r2 task-owned root PID 25228 was ownership-checked then stopped after timeout; no user process ended. r4/r5/r8 supersede only their affected scopes.
-- Evidence and single structured checkpoint: release/delivery-1.3.38/checkpoint.json. Unchanged 1.3.37 results below remain valid; no new public-provider speed/reliability claim.
-- Delivery identity: installer 181106391 bytes / SHA-256 0f823c74f293f9c01b9417dd92f03b68874cf697f12d9ec88d638ef0928386e2; installed EXE f6916183c338b7d7e2bb5fdbde94e3d9d5198cb3a1996bf47e7c0f81a27fd202; ASAR 9c10447dae742ce480a1a165ed6a3119e0297fa176af0c15f2e6d18eb6298e39. Installer exit 0, 27/27 candidate files match, five critical profile files unchanged at replacement. Backup: release/delivery-1.3.38/rollback-1.3.37, 29 verified application files; normal exit before restoring only app files, preserve APPDATA. final-installation.json and rollback-manifest.json provide details.
-- Verification-only corrections: electron-builder intentionally strips development metadata from packaged package.json; effective name/version/main/dependencies match. Initial same-path ASAR read retained a pre-install header cache; fresh-process read confirms 1.3.38, no reinstall. Initial verifier failure preserved; HKLM uninstall entry matches final path/version.
-- Cleanup: automatic approval rejected deletion as blocked by policy. Six ownership/path-checked fixtures moved into release/手动删除 with unique 1.3.38 names; original paths absent. Pending manual removal has no acceptance impact; cleanup.json lists original/current paths. Reports, screenshots, installer, rollback and earlier denied leftovers retained.
-- Next authorized increment: optimize main model, read-only exploration submodels and bounded advisor calls before plan lock, on repeated error and before completion. Not implemented in 1.3.38; preserve configured models and credentials. Continue after this publication and dual-handoff gate.
-- Publication: source 2b442b15f50b26c87eabf248b30851e95540c5b1 is byte-identical on remote main. [Release v1.3.38](https://github.com/song123-jian/-0/releases/tag/v1.3.38) is Latest; tag/source, installer size 181106391 and server SHA-256 match the accepted installer. source-publication-final.json and release-publication-final.json contain readback. This increment is complete; the newly authorized model-role optimization remains to implement.
-- Skills reused: requirement-understanding 95 (30/20/16/15/9/5), systematic-debugging 95 (30/20/16/15/9/5), code-write-review 94 (30/20/15/15/9/5). Relevant requirements, fault-isolation and encoding/review procedures were directly verifiable; no subagents.
-- Test detail: [Test Handoff](TEST_HANDOFF.md).
+<!-- formal-build-1.3.51:end -->
 
-## Active Repair — 1.3.37, 2026-11-05
+<!-- formal-build-1.3.50:start -->
+## 当前增量：1.3.50 正式构建、EXE 替换与重启验收（已完成）
 
-- Current status: Stage 1 automatic Skill discovery, scoped AGENTS.md, timeout repair and truthful rule display; Stage 2 inline user-message edit and adjacent retry are implemented and accepted in the installed 1.3.37. Source commit bdfcf546359d40fbac5446e8ff60d27d3bf4475b is remotely verified; GitHub v1.3.37 is published as Latest.
-- Baseline/identity: source HEAD 98e75188d1529312fefa1f73c584d964726e9157; prior formal version 1.3.36; same-round target 1.3.37. Final installer SHA-256 0d3a2c8e2298aec8ecba22bc956f7a45e8db770e054fb0bc12fc6168406b88de, 181107707 bytes; installed EXE 4c883b3233b034be2e310e63bd6af490f8269c51d3c1bb2ecac41ae3e882033f; ASAR be37ad05d7158ec7a5072a0b75c98fb3d5309cb0f50c7e7e9f9af57da84fd682. Previous formal installation rollback: 29 files in release/delivery-1.3.37/rollback-1.3.36.
-- Existing constraints: preserve model, reasoning, credentials, user data, unrelated license marker, current file-change/undo behavior and earlier rejected cleanup directories. No automatic source self-modification.
-- Prior failure evidence retained: context r1 31/32, fixed inherited-rule whitelist and retested scoped 19/19; early candidate harness r1/r2 and public assertion failures were test-only; corrected local candidate/UI and saved public terminal/proof evidence passed. Startup helper import path corrected before actual app launch. No prior failure reclassified as passing.
-- Stage 2: editing occurs inside the original user bubble, with Escape/cancel and Ctrl+Enter/send; the nearby retry resends the stored message without opening a dialog or creating a retry version, replacing the old answer. Earlier-turn retry confirms removal of following turns; completed file effects require confirmation because their original undo entry disappears without rolling back disk. Both main and detached windows use the same guarded revision path; editing retains the established version history.
-- Skills used in this task: requirement-understanding 95, systematic-debugging 95, code-write-review 94; no subagents.
+- 目标：将当前 `workbench` 源码构建为正式 EXE，并替换 `E:/GDP/Scodex/App/Scodex工作台.exe` 与 `resources/app.asar`；只替换应用文件，保留用户数据、配置和凭据。
+- 版本与构建：`package.json`、`package-lock.json` 已同步为 `1.3.50`；`npm run build` 退出 0；候选使用本机 Electron 45、`npmRebuild=false`、`signAndEditExecutable=false` 的已验证打包路径，Electron Builder 退出 0。
+- 候选产物：`release/formal-build-1.3.50-20261108/candidate-r2/win-unpacked/Scodex工作台.exe`；EXE SHA-256 `f2a665a8206981f1bcc276f39ba32b55875311c865ebf8e8d07e33cade2f2b5a`，ASAR SHA-256 `7ece575c96621e827eff01771f8f5049e3da609177698ce651b2f5cda2b6aaea`；包内版本 `1.3.50`，关键主进程、运行时、上下文压缩、模型团队和协调器模块与源码逐字节一致。
+- 正式替换：正式入口 EXE/ASAR 与候选哈希完全一致；替换前 `1.3.49` 已备份到 `release/formal-build-1.3.50-20261108/rollback-1.3.49`，回滚只恢复 EXE 和 ASAR。
+- 正式验证：候选和正式入口均运行 `SCODEX_CDP_SCOPE=restart-only node tests/browser-cdp-ui.cjs`，各 2/2 通过；覆盖启动、版本、设置保存、退出重启和状态恢复。报告分别为 `release/formal-build-1.3.50-20261108/candidate-ui/cdp-ui-verification.json` 和 `release/formal-build-1.3.50-20261108/formal-restart/cdp-ui-verification.json`，临时 profile 已清理，最终无 Scodex 进程。
+- 定向回归：`node --test tests/context-compression.test.mjs tests/model-adapter.test.mjs tests/model-connection.test.mjs tests/model-team.test.mjs` 共 67/67 通过；相关 Electron 文件语法检查和 `git diff --check` 通过。本轮没有新增产品逻辑代码，增量审查仅覆盖版本元数据和产物身份，未发现高置信度问题。
+- 限制：公网模型请求、真实凭据发送和完整团队 UI 不在本轮正式 EXE 重启验收范围；构建跳过外部资源编辑与签名，沿用项目已有未签名候选路径。
+- 交付报告：`release/formal-build-1.3.50-20261108/formal-replacement.json`。
 
-| Stage 1 requirement | Actual evidence under release/delivery-1.3.37 |
-| --- | --- |
-| Skills and AGENTS | Automatic search/open/read, fixed task prerequisite, personal/ancestor/project scopes, 90,037-byte root rule tail and nested rule gate; candidate-status-ui 7/7 and installed-status-ui 7/7 |
-| Timeout and continuation | runtime-focused.log 23/23; actual packaged stream 125,002 ms followed by exactly one tool effect; no heartbeat extension or reasoning disclosure |
-| Accurate rule display | deferred-focused.log 44/44; installed-status-ui screenshot shows “已加载目录规则 · 原操作未执行”, normal folding and no false failure |
-| Real provider | external/validated-result.json: actual glm-5.3 searched/read selected Skill, wrote and reread synthetic proof, obeyed three rule markers; source connection unchanged |
-| Stage 1 provisional build/install | Initial renderer, unpacked and NSIS exited 0; 27 candidate files matched that installation and 2,946 profile files were unchanged at replacement; initial real-profile startup/history/normal exit passed |
+<!-- formal-build-1.3.50:end -->
 
-| Stage 2 requirement | Actual evidence under release/delivery-1.3.37 |
-| --- | --- |
-| Inline edit and retry | conversation-revisions tests 21/21; candidate and final installed inline UI each 5/5, including Escape, Ctrl+Enter, older-turn confirmation, detached sync, answer replacement and persisted history |
-| Error retry and prior behavior | Candidate and installed model-diagnostics UI each 4/4; no retry editor, failed answer replaced without new retry version; short Skill/rule UI regression 7/7 on final candidate |
-| Final installation | renderer, unpacked, NSIS, installer exit 0; 27/27 candidate files match installed; five profile files unchanged at replacement. Final installed EXE/ASAR hashes and rollback in final-installation.json |
-| Real profile and review | Actual installed startup/history/normal exit passed; four critical profile hashes unchanged; encrypted learning memory is valid and updated on exit. Stage 2 scoped review and UTF-8 checks in stage2-review.json |
+<!-- formal-build-1.3.49:start -->
+## 当前增量：1.3.49 模型二命令通道正式构建、替换与验收（已完成）
 
-- Review: incremental-review.json covers 16 scoped code/test/version files; source files UTF-8 without BOM, no open high-confidence finding. Prior timeout/provider modules compared with accepted ASAR, with only intentional deferred status change.
-- Cleanup: nine Stage 2 fixtures were ownership/path checked and deleted; absence verified in stage2-cleanup.json. Earlier automatic approval rejected deleting seven Stage 1 fixtures as “blocked by policy”; all seven were moved into release/手动删除, pending manual removal, as recorded in cleanup.json. Earlier denied fixtures were untouched. Evidence, public-proof.txt, final screenshots, installer and rollback remain.
-- Installation recovery: first silent installer invocation lost backslashes in its path argument and returned 0 without leaving the EXE at the agreed location; this was detected before acceptance. The raw-path invocation reinstalled successfully, registry uninstall path is correct, and candidate/installed hashes match. The first real-profile check incorrectly treated expected encrypted memory save on exit as a failure; evidence is retained in installed-profile-initial-failure.json, then the corrected four-file integrity check passed.
-- Publication: Git transport to github.com timed out; API transport uploaded byte-identical blobs/tree/commit and advanced main only after checking its parent. Source tree 489d89e5270cc852d3e84408b144e574e7df8cec matches local Git. [Release v1.3.37](https://github.com/song123-jian/-0/releases/tag/v1.3.37) is Latest; tag points to bdfcf546359d40fbac5446e8ff60d27d3bf4475b; asset size 181107707 and server digest match the accepted installer. Evidence: source-publication-final.json, release-publication-final.json. A docs-only synchronization follows the code tag.
-- Final checkpoint: implementation, candidate/installed acceptance, build/replacement, incremental review, publication and fixture cleanup are complete. All finite operations and test applications have ended. No unresolved in-scope defect or evidence-supported additional refactor was found; reuse Stage 1 long-stream/provider evidence for unchanged paths. No further feature or refactor is authorized by this evaluation.
-- Test details: [Test Handoff](TEST_HANDOFF.md).
+- 目标：将当前 `workbench` 源码构建为正式 EXE，并替换 `E:/GDP/Scodex/App/Scodex工作台.exe` 及其 `resources/app.asar`；只替换应用文件，保留用户数据、配置和凭据。
+- 构建：`package.json`、`package-lock.json` 为 `1.3.49`；`npm run build` 与 `npx electron-builder --win dir --x64 --config.directories.output=release/formal-build-1.3.49-20261108/candidate-local` 均退出 0，候选包内版本为 `1.3.49`。
+- 候选产物：`release/formal-build-1.3.49-20261108/candidate-local/win-unpacked/Scodex工作台.exe`；EXE SHA-256 `9a8f469de0869fc563a1e99dadf51d4179a47c61818a9ad2f750940f99bf4ed2`，ASAR SHA-256 `4ae6b35c38b53dd2e6376186d2dec7d23e75b74acec49dfb91165436180ce83d`。`electron/main.cjs`、`electron/agent-runtime.cjs`、`electron/model-team.cjs`、`electron/subagent-coordinator.cjs` 与候选包内文件逐字节一致。
+- 正式替换：正式入口 EXE/ASAR 与候选哈希完全一致，包内版本 `1.3.49`；替换前 `1.3.48` 已备份到 `release/formal-build-1.3.49-20261108/rollback-1.3.48`，回滚只恢复 EXE 和 ASAR。
+- 正式验证：候选和正式入口均运行 `SCODEX_CDP_SCOPE=restart-only node tests/browser-cdp-ui.cjs`，各 2/2 通过；报告分别为 `release/formal-build-1.3.49-20261108/candidate-local-ui/cdp-ui-verification.json` 和 `release/formal-build-1.3.49-20261108/formal-restart/cdp-ui-verification.json`，临时 profile 已清理。
+- 增量审查：本轮重点核对模型二编辑型子任务的 `run_command`、协调器当前任务排除/其他编辑任务互斥、规划型只读边界及对应测试；未发现高置信度问题。公网模型请求、真实凭据发送和完整团队 UI 不在本轮正式 EXE 重启验收范围。
+- 交付报告：`release/formal-build-1.3.49-20261108/formal-replacement.json`。
 
-## Active Increment — 1.3.36, 2026-11-04
+<!-- formal-build-1.3.49:end -->
 
-- Goal: improve bounded command capture and the reported ~47-second delay before model work. Delivery 1.3.36 replaces installed 1.3.35 using the established patch mapping; this round does not increment again.
-- Checkpoint: implementation, candidate/installed acceptance, build, replacement, incremental review and documentation checks completed. Publication completed; no finite operation pending.
-- Source/entry: this checkout on main; C:/Program Files/scodex-workbench/Scodex工作台.exe. Model, credential and chosen reasoning level were unchanged. Preserve user data, unrelated electron/third-party-licenses.json stat change and previous evidence.
+<!-- formal-build-20261108:start -->
+## 当前增量：动态上下文压缩版本 1.3.48 正式构建与替换（已完成）
 
-| Requirement | Actual result | Evidence under release/delivery-1.3.36 |
+- 目标：将当前 `workbench` 源码构建为正式 EXE，并替换 `E:/GDP/Scodex/App/Scodex工作台.exe` 及其 `resources/app.asar`，保留用户数据和配置。
+- 版本与构建：`package.json`、`package-lock.json` 已同步为 `1.3.48`；`npm run build` 退出 0；`npx electron-builder --win dir --x64 --config.directories.output=release/formal-build-1.3.48-20261108/candidate` 退出 0。
+- 候选产物：`release/formal-build-1.3.48-20261108/candidate/win-unpacked/Scodex工作台.exe`；EXE SHA-256 `36272dad0f5ca6a702776c97e45c53cfd4624b500ff70a6eb5c82b6b4ff4b2d9`，ASAR SHA-256 `fb2c7d0be870fd56330c1dc81611d3e8abf01842b89b7d91daa5abf58897d464`。包内版本 `1.3.48`，`electron/main.cjs`、`electron/context-compression.cjs`、`electron/model-team.cjs` 与源码哈希一致。
+- 正式替换：正式入口与候选 EXE/ASAR 哈希完全一致，包内版本 `1.3.48`；替换前 `1.3.47` 文件已备份到 `release/formal-build-1.3.48-20261108/rollback-1.3.47`。仅替换 EXE/ASAR，未写入用户数据或凭据。
+- 正式验证：`SCODEX_CDP_SCOPE=restart-only node tests/browser-cdp-ui.cjs` 在正式入口上 2/2 通过，覆盖启动、设置保存、退出重启和状态恢复；报告 `release/formal-build-1.3.48-20261108/formal-restart/cdp-ui-verification.json`，临时 profile 已清理。候选同范围 2/2 通过，报告位于 `release/formal-build-1.3.48-20261108/candidate-ui/cdp-ui-verification.json`。
+- 基线核对：替换前正式 ASAR 磁盘哈希为 `88866a041347b04b4e76f73f788e75c19970ea4cfc30dbd74be367544e7f460f`，包内版本确认是 `1.3.47`；交接中旧哈希记录存在一处差异，已以磁盘实测值建立回滚基线。
+- 限制：公网模型请求、真实凭据发送和完整团队 UI 不在本轮正式 EXE 重启验收范围；相关隔离链路测试结果继续沿用前一增量记录。
+
+<!-- formal-build-20261108:end -->
+
+<!-- context-compression-20261108:start -->
+## 当前增量：发送前动态上下文压缩与活动证据保留（源码/测试已完成）
+
+- 目标：模型请求发送前按实际上下文容量和内容重要性压缩历史消息、工具结果、附件及任务资料；系统指令、当前需求、工具调用与结果配对、最近消息、路径和错误证据优先保留，无法安全保留时阻止发送。
+- 主要变更：`electron/context-compression.cjs` 提供动态 token 估算、分组预算和关键证据保护；`electron/agent-runtime.cjs` 在每次请求前压缩并在服务报告上下文过长时自适应重试；`electron/main.cjs` 将学习记忆和三模型讨论作为任务资料消息；`electron/chat-attachments.cjs`、`electron/skill-context.cjs`、`electron/skill-catalog.cjs`、`electron/mcp-context.cjs` 移除会先于请求发生的固定正文裁剪。
+- 历史证据：`electron/browser-tools.cjs`、`electron/mcp-context.cjs`、`electron/mcp-runtime.cjs`、`electron/service-tools.cjs`、`electron/spreadsheet-tools.cjs`、`electron/task-collaboration.cjs`、`electron/agent-tools.cjs`、`electron/artifact-tools.cjs` 的活动输出不再额外按固定字符数裁剪，发送前统一交给上下文压缩；CDP、MCP 结果、文件/命令、服务日志、表格大小/范围和审批预览等资源与安全边界保留。
+- 验证：核心压缩、Agent 运行时、MCP 资料/活动记录和办公成品 `node --test tests/context-compression.test.mjs tests/mcp-context.test.mjs tests/agent-runtime.test.mjs tests/artifact-tools.test.mjs`，37/37；浏览器 11/11、MCP 运行时 6/6、服务/表格 14/14、任务协作 22/22；相关文件 `node --check` 通过，`git diff --check` 通过。
+- 已知限制：整组混合回归 119 项中 114 项通过、5 项失败，均为本轮前已存在的旧权限断言；`electron/permission-policy.cjs` 已按此前用户要求在完整访问下直接放行，旧测试仍期待 `never` 隐藏或拒绝工具。未将这些旧断言失败归因于上下文压缩。
+- 源码阶段记录：该增量记录形成时只完成源码、测试和交接文档；正式构建与替换在上方 `formal-build-20261108` 增量中完成。公网模型请求未纳入本轮验证。
+
+<!-- context-compression-20261108:end -->
+
+## 当前状态
+
+- 当前源码基线：`1.3.54`，位于 `E:/GDP/Scodex/workbench`。
+- 当前正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本 `1.3.54`；候选、正式入口和回滚证据见上方 `formal-build-1.3.54` 增量。
+- 已完成基线：`.codex` 浏览器、电脑操控、SKILL 配置、键盘快捷键和三模型协作能力已在 1.3.46 正式入口完成定向验收。
+- 当前目标：交付包含当前工作区实现的 `1.3.52` 正式 EXE，完成候选/正式身份核对、回滚备份、重启验收和真实连通性验证。
+- 当前阶段：`1.3.54` 候选构建、模型团队 UI 8/8、候选与正式 `restart-only` 各 2/2、正式 EXE/ASAR 替换和哈希核对已完成；正式入口与候选哈希一致，报告 `release/formal-build-1.3.54-20261108/formal-replacement.json`。
+
+## 已完成需求记录
+
+| 需求 | 状态 | 证据 |
 | --- | --- | --- |
-| Faster bounded capture | Reuse unchanged metadata; 16 MiB memory plus 128 MiB encrypted spill; 2 MiB/file, 6,000 entries, cooperative 2-second guard; snapshot after command approval | 45 focused cases; candidate and installed real encrypted capture |
-| Honest file summary | Incomplete coverage lists reasons, does not invent zero changes and disables batch undo; actual diffs load on demand | Installed UI 5/5; independent-window boundary UI 3/3 |
-| Faster response/tool channel | Complete SSE finishes without gateway tail; first reasoning/tool/text timing; immediate first text then 32-ms batches; no reasoning body persisted | Controlled tail first tool 534 -> 2 ms; actual installed tool continuation 1,110 ms despite 5-second tail |
-| Measured limits | Four command snapshots 2,581 -> 474 ms under identical 20 MiB fixture; public short request preparation 9 ms, first activity 8,669 ms, first text 11,771 ms | performance-benchmark.json; external/external-latency.json |
-| Program delivery | Renderer/unpacked/NSIS all exit 0; installer exit 0; 26/26 candidate files match; 2,946 user-profile files unchanged immediately after installation | installation.json and build logs |
-| Installed acceptance | Five actual UI checks and existing-profile startup/history/normal-exit checks passed; four critical profile files unchanged; all test apps exited 0 | installed-ui/latency-capture-ui.json; installed-startup.json |
+| 消息中的本地文件/目录链接与第三工作区访问 | 已完成并保留 | `docs/WORK_CHECKPOINT.md` 顶部检查点及相关 `release` 报告 |
+| 1.3.44 完整访问程序替换 | 已完成并保留 | `docs/WORK_CHECKPOINT.md` 的 2026-11-07 正式入口章节 |
+| `.codex` 设置参照合并 | 已完成并替换正式入口 | 已验证参照源码位于 `E:/GDP/Scodex/repo-source-current`；候选与正式报告见测试交接 |
+| 不同模型自动选择工具通道和推理参数 | 已完成（隔离链路） | `node --test tests/model-adapter.test.mjs tests/model-compatibility.test.mjs tests/model-team.test.mjs tests/model-connection.test.mjs`，68/68 |
+| 模型角色显示名称调整 | 已完成候选验收 | 工作区模型 UI 5/5；团队 UI 8/8，报告 `release/model-role-labels-20261108/team-ui-retest-2/model-team-ui.json` |
+| 三模型独立讨论、评分与自动份额 | 已实施并完成候选验收 | `tests/model-observability.test.mjs`、`tests/model-team.test.mjs` 合计31/31；隔离候选实际UI 8/8，最终记录包含 `debate-proposal` 与 `debate-review`；报告 `release/model-debate-20261108-r2/team-ui/model-team-ui.json` |
+| 三模型协作正式入口替换 | 已完成 | 正式入口1.3.46；包身份、正式profile最小回归和用户数据哈希核验见 `release/model-debate-20261108-r3/formal-replacement.json` |
+| 动态上下文压缩正式构建与 EXE 替换 | 已完成 | 版本 `1.3.47` 候选/正式哈希、回滚和 `restart-only` 2/2 验收见 `release/context-compression-20261108-r1/` |
+| 1.3.48 正式 EXE 重建与替换 | 已完成 | 候选/正式哈希、回滚和候选/正式 `restart-only` 2/2 验收见 `release/formal-build-1.3.48-20261108/` |
+| 1.3.49 模型二命令通道正式 EXE 重建与替换 | 已完成 | 候选/正式哈希、回滚、2/2 重启验收和替换报告见 `release/formal-build-1.3.49-20261108/` |
+| 1.3.50 正式 EXE 重建与替换 | 已完成 | 候选/正式哈希、回滚、2/2 重启验收和替换报告见 `release/formal-build-1.3.50-20261108/` |
+| 1.3.51 正式 EXE 重建与替换 | 已完成 | 候选/正式哈希、回滚、2/2 重启验收和替换报告见 `release/formal-build-1.3.51-20261108/` |
+| 1.3.52 动态上下文/模型团队/附件路径正式 EXE 重建与替换 | 已完成 | 候选/正式哈希、回滚、候选/正式 `restart-only` 2/2、附件相关三场景和真实 `你好` HTTP 200 见 `release/formal-build-1.3.52-20261108/` |
+| 1.3.54 三模型提案完成态文案正式 EXE 重建与替换 | 已完成 | 候选模型团队 UI 8/8、候选/正式 `restart-only` 各 2/2、候选/正式哈希、回滚和交付报告见 `release/formal-build-1.3.54-20261108/` |
 
-- Installer: release/Scodex-Workbench-Setup-1.3.36-x64.exe, 181102112 bytes, SHA-256 177daacfbedad180aa9b5981594a10600c4a17d9a85eea4e10fad6646f3b622e. Installed EXE 8af5c8027b8e25cf9dbf173f35a11d607d40cb4b1593141290f21bfd3b5e0527; ASAR d329963fb8b9137968a23d083c06362e9427789f2f37e0644c41dfc93e2fba57.
-- Build: npm run build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist.
-- Rollback: delivery-1.3.36/rollback-1.3.35 contains 29 verified old application files. Quit normally before restoring application files or reinstalling the retained 1.3.35 installer; preserve APPDATA. Full identity/backup list: installation.json.
-- Published source 6587faa6dd207638e1ea0a7b29c1d893925547dd; GitHub v1.3.36 is Latest. Release/tag/asset size and SHA-256 readback passed; local evidence: release-publication.json and source-publication.json.
-- Limits: controlled benchmarks use an encryption stub; actual-app UI substitutes loopback model responses. One public glm-5.3/ultra short request is not the same input as the original 47-second task, so no 47-to-12-second speedup is claimed. Excluded/protected/external paths and capture guards remain intentional boundaries; remote inference waiting remains measurable.
-- Cleanup: automatic approval rejected deletion as “blocked by policy”; no delete/move executed or retried. Six task-owned fixtures remain in their original paths, enumerated in cleanup.json; reports, screenshots, baselines, installer and rollback are retained. Prior denied cleanup is untouched.
-- Incremental review: 21 code/test/version files passed; fingerprints in incremental-review.json. Unchanged results reused: 45/45 focused and 21/21 direct regression. No further high-confidence in-scope refactor is justified.
-- Skills: requirement-understanding 95 (30/20/16/15/9/5), code-write-review 94 (30/20/15/15/9/5), reused; no subagents. Test detail: [Test Handoff](TEST_HANDOFF.md).
+## 主要变更和影响范围
 
-## Previous Delivery — 1.3.35, 2026-11-04
+- 直接范围：`electron` 设置/IPC/本地能力/电脑操控文件，`src` 设置页面、快捷键和工作台状态，版本文件及本轮验证资料。
+- 现有 `workbench` 未提交的消息路径、第三工作区、模型适配和其他用户改动必须保留。
+- `E:/GDP/.codex` 仅作为读取参照；不得复制凭据、会话或运行数据。
+- 构建继续使用现有 `build/icon.ico` 与 `build/icon.png`，沿用用户确认的 Scodex 图标，不替换图标资源。
 
-- Goal: show actual task file changes below that task's completion answer, replacing the incorrect conversation-version cards. Local implementation, review, builds, installation and actual installed-app acceptance are complete. Source commit 7c2b1b3a9b2abf20938d176f51add537643f2f5b is pushed and remotely verified. GitHub v1.3.35 is published and marked Latest; tag target, asset size and server-side SHA-256 match the accepted installer.
-- Source: this checkout, branch main; pre-delivery HEAD f598df9a14a104cb87afaef040e34f04d00f5242. Existing authorized learning-memory changes are retained; the task baseline separates them from this file-card increment.
-- Actual entry: C:/Program Files/scodex-workbench/Scodex工作台.exe, version 1.3.35. User data: %APPDATA%/scodex-workbench. All verification applications exited normally; no build or test is pending.
-- Plan/checkpoint: implementation completed; candidate acceptance completed; installer/replacement completed; installed acceptance completed; source/Release publication completed; final dual-handoff records updated and validated. No additional product refactor is justified by the reviewed scope.
-- Skills: requirement-understanding 95/100 (30/20/16/15/9/5); code-write-review 94/100 (30/20/15/15/9/5). No subagent delegation.
+## 关键决策与约束
 
-## Completed Requirements
+- 参考设置只允许导入已核实的公开字段；密钥、令牌和聊天记录不进入渲染器或交接文档。
+- 快捷键使用统一归一化格式并持久化，非法输入回退到默认值。
+- `.codex` 配置写入采用原子替换并保留电脑操控配置中的未知字段。
+- 同一 `.codex` 配置目录的读-改-写操作必须串行执行，避免并发保存不同浏览器键时覆盖彼此更新。
+- 三模型各自独立提出方案并评议全部方案；按正确性25%、证据20%、任务适配20%、约束15%、可验证性10%、风险10%计算三方中位分。低于60分或约束低于5/10的方案淘汰；领先至少10分且得分不低于70的方案获100%，否则按合格方案得分归一并以最大余数法分配100%。模型二、三的讨论请求无工具，模型一独占实际修改与执行。
+- 不执行 `git reset --hard`、`git checkout --` 或覆盖用户未提交改动的整文件替换。
 
-| Requirement | Result and scope | Evidence |
-| --- | --- | --- |
-| Per-answer file summary | Below completed answer and activity, above message actions; total files and green additions/red deletions, per-file counts | Core actual UI: 4 files, +5/-2; final installed 1440x1000 visual check passed |
-| Real changes | Actual tool before/after bytes, bounded command snapshots, repeated edits aggregated from task baseline | 46 focused logical checks; actual file tools and PowerShell |
-| View and undo | Real text diff; encrypted persistent snapshots; workspace/conversation/permission binding; preflight rejects later edits; deleted parent directories restored | Candidate 3/3 and installed-path 3/3 boundary UI checks |
-| Correct display object | Removed old ConversationVersions cards in main and detached chat windows; retained message edit/regenerate behavior and history | Installed regression 4/4; old/current history retained |
-| Copy and new-chat branch | Existing answer copy and “在新对话中分支” below the card; branch cannot inherit source undo capability | Core UI copy/branch checks passed; final installed geometry/actions passed |
-| Existing authorized functionality | Optional projects, ordinary chat, steering, progress/command disclosure, retry and encrypted learning memory retained | Historical valid scoped results reused; current installed retry/gateway regression passed |
+## 验证方式和结果
 
-## Architecture and Constraints
+- 已有有效结果：1.3.44 消息路径/第三工作区相关定向验证和候选构建，详见 `docs/WORK_CHECKPOINT.md`。
+- 本轮首轮定向测试：`node --test tests/shortcuts.test.mjs tests/codex-integration-config.test.mjs tests/tray-capabilities.test.mjs` 共 9 项，8 项通过、1 项失败；电脑操控配置写回丢失 `strings.extra`。
+- 本轮修复后定向测试：`node --test tests/shortcuts.test.mjs tests/codex-integration-config.test.mjs tests/tray-capabilities.test.mjs` 共 10/10 通过，包含同目录并发更新两键均保留。
+- 1.3.45 候选构建：`npm run build` 和 `npx electron-builder --win portable --x64` 均退出 0；候选 package.json 版本为 `1.3.45`。
+- 1.3.45 候选实际 UI：6/6 通过，报告 `release/workbench-settings-20261108-r3/integration-settings-ui-verification.json`；覆盖浏览器 TOML、电脑操控 JSON 未知字段、插件开关、参考目录重启恢复、SKILL 列表刷新和快捷键触发/恢复。候选 EXE SHA-256 `3A8B8E88B55DEEF3AB6CB633688852E56B3F99BF7A1CEDDC63E3A09DC38AC096`，ASAR SHA-256 `16511D44521536E9FCEBA8384EE6942E76853E06BC7BD2F40527FDA796FA9393`。
+- 增量代码审查：覆盖本轮配置队列、并发回归和 UI 验收驱动，未发现高置信度问题；队列按规范化配置目录串行化并保留原子写入。
+- 正式替换与重开：报告 `release/settings-reference-20261108/formal-replacement.json`；正式 ASAR 版本 `1.3.45`，EXE/ASAR 哈希与候选一致，主进程 PID `29240` 正在运行，标题和输入框 UI 核验通过。
+- 用户数据保留：`C:/Users/Administrator/AppData/Roaming/scodex-workbench` 中已记录的 5 个持久文件 SHA-256 全部保持不变，聊天数量为 2；回滚备份位于 `release/settings-reference-20261108/rollback-1.3.44`。
+- 模型适配复测：隔离响应覆盖原生工具通道拒绝后切换兼容 JSON、推理强度回退、顾问模型单次适配、手动通道保持、取消和错误边界，68/68通过；未使用聊天中的真实密钥。
+- 三模型最终定向验证：`node --test tests/model-observability.test.mjs tests/model-team.test.mjs` 31/31通过，`node --check electron/model-usage.cjs`通过；隔离源码快照 Vite 1836 modules构建、305项许可清单生成及 Electron `--win --dir --x64`候选构建通过。候选实际UI 8/8通过，报告 `release/model-debate-20261108-r2/team-ui/model-team-ui.json`，截图 `release/model-debate-20261108-r2/team-ui/model-team-settings.png`；报告中的EXE哈希与候选一致，阶段历史含 `debate-proposal`、`debate-review`、`repeated-error`、`completion`。
+- 本轮增量代码审查：按当前Git基线审查 `electron/model-usage.cjs` 与 `tests/model-observability.test.mjs` 两个实际差异文件；白名单仍只接受已知阶段，持久化回读断言覆盖新阶段，`git diff --check`通过，未发现当前范围问题。
+- 版本递增与候选：项目 `package.json`、`package-lock.json` 已同步为1.3.46；隔离快照候选 `release/model-debate-20261108-r3/candidate/win-unpacked/Scodex工作台.exe` 构建和包内版本核验通过，EXE/ASAR哈希分别为 `3a8d995b98a21ecdf41950cec47ace1266c0669d2bf678c5688afc9075afa6d9` / `e0d6ae586c54af920b731ca5317e80d5fa2b5f3a9a5daadd9140f1690e20db10`。
+- 正式替换与回归：旧1.3.45 EXE/ASAR已备份至 `release/model-debate-20261108-r3/rollback-1.3.45` 并核对；正式入口包内版本1.3.46，正式profile启动读取标题、2条会话和模型一/二/三标签，进程正常退出；`conversations.json`、`model-connection.json`、`settings.json` 前后哈希不变。正式工作区模型UI 5/5通过，报告 `release/model-debate-20261108-r3/formal-workspace-ui/workspace-model-ui.json`。
 
-- electron/task-file-changes.cjs owns per-request aggregation, encrypted records, real diff and guarded undo. electron/file-commit.cjs observes writes inside the existing commit lock. main/preload persist only a record ID in each answer. The shared React card and existing detached-window action bridge render it.
-- Source baseline/review: release/delivery-1.3.35/source-baseline.json and incremental-review.json. Review covers 15 directly changed code/test files; unrelated inherited differences are not attributed to this increment. Two hook/bridge baselines were captured after initial edits, so their known patches and source were reviewed without claiming an original byte baseline.
-- Limits: 2 MiB per file, 16 MiB snapshot budget, 100 changed files, 6,000 command scan entries. Excluded dependency/build/Git/sensitive/protected paths and project-external shell effects are not universally captured. Incomplete records display a warning and disable undo. Binary/non-UTF8 or over-budget text comparisons show no invented line counts.
-- External applications do not share the internal lock. Hash preflight and write/readback detect conflicts; arbitrary OS activity cannot be made transactional. Old answers without saved snapshots cannot acquire retroactive real diffs.
-- Model responses in acceptance were loopback fixtures; actual Electron, React, IPC, Windows encryption, disk files and PowerShell were used. External generation and real learning-memory synchronization were not accepted by these fixtures.
+## 已知限制、风险和待办
 
-## Version, Build and Replacement
+- 固定交接文件此前被删除，本文件为依据最新检查点补建的本轮真实草稿。
+- 当前 `workbench` 存在大量用户未提交改动；每次写入前需核对直接基线。
+- 模型角色文案阶段与三模型讨论流程均已完成候选验收。用量账本已将 `debate-proposal`、`debate-review` 纳入阶段白名单，并通过持久化回读及8项候选UI验收；没有待完成的本轮功能验证。
+- 已确认并修复的本轮问题：序列化归一化配置时覆盖原始 `strings` 对象；同目录并发读-改-写丢失浏览器键。配置目录写队列修复后定向 10/10、候选 UI 6/6 通过。
+- 正式入口当前为1.3.49；本轮回滚目录为 `release/formal-build-1.3.49-20261108/rollback-1.3.48`。模型公网请求未纳入本轮正式 EXE 重启验收，公网供应商兼容性仍需单独授权和测试条件。
+- 候选UI专用 fixture 的删除操作被自动审批策略拒绝，未重试删除；已从测试输出目录移动到 `手动删除/model-debate-20261108-r2-fixture-02c7e326-1426-4c50-b319-54de5246c9c8`，原路径已核实不存在，待手动删除。验收报告与截图保留在 `release/model-debate-20261108-r2/team-ui/`。
+- 1.3.46正式入口完整团队UI复跑在第5项附近遇到CDP `Runtime.evaluate`超时，报告 `release/model-debate-20261108-r3/formal-ui/model-team-ui.json` 保留为失败证据；同一正式入口的工作区模型UI 5/5和正式profile最小回归通过，未将该失败报告标为通过。1.3.47正式入口采用不依赖审批的 `restart-only` 2/2复验通过。
 
-- Established project version mapping: 1.3.34 to 1.3.35, one patch increment for this delivery. package.json and both root lock versions agree; failed builds and tests did not increment again.
-- Build: npm run build; npm exec electron-builder -- --win --dir --x64 --config.electronDist=node_modules/electron/dist; npm exec electron-builder -- --win nsis --x64 --prepackaged release/win-unpacked --config.electronDist=node_modules/electron/dist. All exited 0; existing bundle-size/dependency-metadata warnings remain.
-- Installer: release/Scodex-Workbench-Setup-1.3.35-x64.exe, 181099770 bytes; SHA-256 489685A4C02B8AACD95904F7013F55E5B3F2F044DF00BA7AC9D318995F3D1C94.
-- EXE SHA-256 2FB70D59D954B899FE439BEA80FF186F7A57FA08C2518EBA278174EDAA2AE71C; app.asar SHA-256 A8BD869DBF1D8405647E61958613910DB324E8E10433A53E0A90A5102FE9FD14.
-- Installer exited 0 over the confirmed 1.3.34 target. All 27 candidate files match the installed files. All 2,945 profile files were byte-identical immediately after installation; conversations/settings/model-connection/device-profile remain unchanged after real-profile startup and normal exit.
-- Recoverable exact old installation: release/delivery-1.3.35/rollback-1.3.34 (30 files, verified). Old installer retained: release/Scodex-Workbench-Setup-1.3.34-x64.exe, SHA-256 848D705FDD76D299F09AADC83AD276C08314CE2045E9EA3F7756B42425A01E0B. Rollback: quit normally and reinstall 1.3.34 or restore the verified application backup; preserve APPDATA. Do not restore profile caches over live user data.
-- Detailed local identity/profile manifest: release/delivery-1.3.35/installation.json. User-specific profiles, rollback copies, fixture data, credentials and build outputs stay out of Git.
+## 运行、迁移和回滚
 
-## Publication and Cleanup
-
-- Published source commit 7c2b1b3a9b2abf20938d176f51add537643f2f5b; remote main matched at source publication. Release [v1.3.35](https://github.com/song123-jian/-0/releases/tag/v1.3.35) is published and Latest. Tag points to that source commit; asset Scodex-Workbench-Setup-1.3.35-x64.exe is uploaded, 181099770 bytes, server digest sha256:489685a4c02b8aacd95904f7013f55e5b3f2f044df00ba7ac9d318995f3d1c94. Actual API readback: release-publication.json. Public release-page readback also displays v1.3.35 and Latest. A docs-only handoff synchronization follows the code commit; global Git settings are unchanged.
-- Automatic approval review rejected cleanup with “blocked by policy”. Six task-owned fixture directories remain in their original locations; no delete or move ran and none was retried. Reports, final screenshots, baseline and rollback remain deliberately retained. See [Test Handoff](TEST_HANDOFF.md) and local cleanup.json for exact manual paths.
-- No remaining high-confidence in-scope defect or justified extra refactor was identified. Outstanding manual cleanup does not affect the accepted executable.
-
-See [Test Handoff](TEST_HANDOFF.md) and [Workflow](WORKFLOW.md).
+- 目标正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`。
+- 本轮候选输出到 `release/formal-build-1.3.51-20261108/candidate/win-unpacked`；正式入口已替换为1.3.51候选 EXE/ASAR。回滚目录 `release/formal-build-1.3.51-20261108/rollback-1.3.50` 保存替换前应用文件，回滚只恢复应用文件，不改用户数据和配置。
+- 回滚仅恢复 `Scodex工作台.exe` 与 `resources/app.asar` 到1.3.50备份，保留用户数据和配置；构建与替换证据为 `release/formal-build-1.3.51-20261108/` 下的候选、回滚和正式验收报告。

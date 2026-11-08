@@ -3,9 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { sensitive } = require('./agent-tools.cjs');
 
-const MAX_BYTES = 128 * 1024;
 const MAX_ENTRIES = 100;
-const MAX_OUTPUT = 24000;
 const changed = () => new Error('所选技能已停用、卸载或更改，请重新选择技能。');
 const hash = (data) => crypto.createHash('sha256').update(data).digest('hex');
 const key = (value) => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
@@ -17,9 +15,8 @@ const DEFINITIONS = [
   tool('skill_list', '列出本轮已选技能包内的直接文件和目录，每页最多100项。路径相对SKILL.md所在目录；不扫描其他技能或执行脚本。', {
     path: field('相对技能包的目录，默认 .'), offset: { type: 'integer', minimum: 0, maximum: 10000 },
   }),
-  tool('skill_read', '读取本轮已选技能包内128KB以内的UTF-8资料，返回SHA256和有界分页。路径相对SKILL.md；不能越界、读取链接或凭据，不执行文件。', {
-    path: field('相对技能包的文件路径'), offset: { type: 'integer', minimum: 0, maximum: MAX_BYTES },
-    max_chars: { type: 'integer', minimum: 1, maximum: MAX_OUTPUT },
+  tool('skill_read', '完整读取本轮已选技能包内的UTF-8资料，发送前由上下文容量动态压缩。路径相对SKILL.md；不能越界、读取链接或凭据，不执行文件。', {
+    path: field('相对技能包的文件路径'),
   }, ['path']),
 ];
 
@@ -51,27 +48,20 @@ async function readText(target) {
   const handle = await fs.open(target, 'r');
   try {
     const before = await handle.stat();
-    if (!before.isFile() || before.size > MAX_BYTES) throw new Error('技能资料只读取128KB以内的普通文本文件。');
-    const buffer = Buffer.alloc(MAX_BYTES + 1);
-    let length = 0;
-    while (length < buffer.length) {
-      const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
-      if (!bytesRead) break;
-      length += bytesRead;
-    }
+    if (!before.isFile()) throw new Error('技能资料必须是普通文本文件。');
+    const buffer = await handle.readFile();
     const after = await handle.stat();
     const current = await fs.stat(await safePath(target));
-    if (length > MAX_BYTES) throw new Error('技能资料超过128KB限制。');
     if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs
         || current.dev !== after.dev || current.ino !== after.ino || current.size !== after.size || current.mtimeMs !== after.mtimeMs) {
       throw new Error('技能资料在读取期间已变化，请重新读取。');
     }
-    const data = buffer.subarray(0, length);
+    const data = buffer;
     let content;
     try { content = new TextDecoder('utf-8', { fatal: true }).decode(data); }
     catch { throw new Error('技能资料不是有效UTF-8文本。'); }
     if (content.includes('\0')) throw new Error('技能资料不能读取二进制文件。');
-    return { content, hash: hash(data), bytes: length };
+    return { content, hash: hash(data), bytes: data.length };
   } finally { await handle.close(); }
 }
 
@@ -144,19 +134,16 @@ async function createSkillContext({ skillId = '', suppliedContent = '', getSkill
           path: path.join(relative, entry.name).replaceAll(path.sep, '/'), type: entry.isDirectory() ? 'directory' : 'file',
         })), total: entries.length, next_offset: offset + MAX_ENTRIES < entries.length ? offset + MAX_ENTRIES : null };
       } else {
-        const text = await readText(target);
-        const offset = args.offset || 0, count = args.max_chars || MAX_OUTPUT;
-        const next = offset + count < text.content.length ? offset + count : null;
-        result = { ...text, content: text.content.slice(offset, offset + count), offset, total_chars: text.content.length,
-          truncated: next !== null, next_offset: next };
+        result = await readText(target);
       }
       await safePath(target);
       await check(context.signal);
       return { ok: true, skill_id: skillId, path: relative.replaceAll(path.sep, '/') || '.', ...result,
+        ...(name === 'skill_read' ? { truncated: false, next_offset: null, total_chars: result.content.length } : {}),
         activity: { title: name === 'skill_list' ? '查看技能资料目录' : '读取技能资料', detail: selected.name,
-          path: relative.replaceAll(path.sep, '/') || '.', output: JSON.stringify(result).slice(0, MAX_OUTPUT) } };
+          path: relative.replaceAll(path.sep, '/') || '.', output: JSON.stringify(result) } };
     },
   };
 }
 
-module.exports = { createSkillContext, MAX_BYTES, DEFINITIONS };
+module.exports = { createSkillContext, DEFINITIONS };

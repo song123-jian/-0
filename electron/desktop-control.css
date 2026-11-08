@@ -2,7 +2,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: #171b23; color: #f6f7fb; }
 main { height: 66px; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border: 1px solid #566173; border-radius: 10px; }
-.indicator { width: 10px; height: 10px; flex: none; border-radius: 50%; background: #a7c7ff; }
+.indicator { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--accent, #a7c7ff); }
 .message { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; -webkit-app-region: drag; }
 strong { font-size: 14px; line-height: 20px; font-weight: 600; }
 #hint { color: #c4cddd; font-size: 12px; line-height: 16px; }

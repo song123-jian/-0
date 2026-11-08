@@ -190,7 +190,7 @@ function createSpreadsheetTools({ projectFiles, readOnly = false, guard = async 
         return { ok: true, path: item.relative, hash: original.hash, sheet: sheet.name, range: args.range || 'A1:J20',
           worksheets: original.workbook.worksheets.map((s) => ({ name: s.name, rows: s.rowCount, columns: s.columnCount })),
           cells, truncated, writable: !original.blocked, warning: original.blocked || '公式返回已有缓存，工具不计算公式。', instructions: await projectFiles.instructions(item.target),
-          activity: { title: '读取表格', detail: item.relative + ' · ' + sheet.name, path: item.target, output: JSON.stringify({ cells, truncated, warning: original.blocked || '公式不在本机计算。' }, null, 2).slice(0, 24000) } };
+          activity: { title: '读取表格', detail: item.relative + ' · ' + sheet.name, path: item.target, output: JSON.stringify({ cells, truncated, warning: original.blocked || '公式不在本机计算。' }, null, 2) } };
       }
       if (original ? observed.get(item.target) !== args.expected_hash || original.hash !== args.expected_hash : args.expected_hash !== 'new') throw new Error('表格版本已变化或尚未读取，请重新 spreadsheet_read。');
       if (original?.blocked) throw new Error('未覆盖原工作簿：' + original.blocked);
@@ -260,7 +260,7 @@ function createSpreadsheetTools({ projectFiles, readOnly = false, guard = async 
         if (savedHash !== hash(data)) throw new Error('保存后表格发生变化，请重新读取。');
         observed.set(item.target, savedHash); onFileChanged(item.target);
         return { ok: true, path: item.relative, hash: savedHash, changes: preview.length, bytes: saved.length, formula_calculated: false,
-          activity: { title: '保存表格', detail: item.relative + ' · ' + preview.length + ' 项修改', path: item.target, output: '已保存并回读校验。公式未在本机计算。\n' + summary.slice(0, 23000) } };
+          activity: { title: '保存表格', detail: item.relative + ' · ' + preview.length + ' 项修改', path: item.target, output: '已保存并回读校验。公式未在本机计算。\n' + summary } };
       } finally { await fs.rm(temporary, { force: true }).catch(() => {}); }
       });
     },

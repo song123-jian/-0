@@ -19,9 +19,9 @@ test('revision and collaboration use only authorization from the current request
     assert.equal(requestToolsEnabled({ requestKind, executionEnabled: true }), true);
   }
 });
-test('goals stay bounded and never promise autonomous background execution', () => {
+test('goals remain complete and never promise autonomous background execution', () => {
   assert.equal(goalInstruction('  '), '');
   assert.match(goalInstruction('完成计算程序'), /完成计算程序/);
   assert.match(goalInstruction('完成计算程序'), /不宣称在后台持续执行/);
-  assert.ok(goalInstruction('文'.repeat(3000)).length < 2200);
+  assert.ok(goalInstruction('文'.repeat(3000)).includes('文'.repeat(3000)));
 });

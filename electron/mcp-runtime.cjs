@@ -199,7 +199,7 @@ function createMcpRuntime({ store, getWorkspaceRoot, environment = async () => p
           if (controller.signal.aborted) throw new Error('MCP 调用已停止；已发生的外部操作不会自动撤销。');
           const clean = safeResult(result, entry.redact); const output = clean.content.map((v) => v.text).join('\n');
           return { ok: !result.isError, ...clean, ...(result.isError ? { error: 'MCP 服务报告工具执行失败。' } : {}),
-            activity: { title: 'MCP · ' + entry.config.name, detail: tool.name, output: output.slice(0, 24_000), truncated: Boolean(clean.truncated) } };
+            activity: { title: 'MCP · ' + entry.config.name, detail: tool.name, output, truncated: Boolean(clean.truncated) } };
         } catch (error) { throw new Error(entry.redact(error.message || 'MCP 调用失败').slice(0, 1600)); }
         finally { context.signal?.removeEventListener('abort', abort); entry.calls.delete(controller); }
       },

@@ -2,14 +2,25 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronRight, Clipboard, FileCode2, LoaderCircle } from 'lucide-react';
 import { formatDuration, messageElapsedMs, messageProgressState, parseInline, parseMessageBlocks, usedSkillNames } from '../lib/message-presentation.js';
 import { AgentActivity } from './agent-activity.jsx';
+import { messagePathName, parseLocalPaths } from '../lib/message-paths.js';
 
-function Inline({ text, tokens = parseInline(text) }) {
+function PathButton({ token, onPath }) {
+  const name = messagePathName(token.path);
+  return <button type="button" className="message-path-link" title={'打开附件：' + name} onClick={() => onPath?.(token.path)}>{token.code ? <code>{name}</code> : name}</button>;
+}
+
+export function MessagePaths({ text, onPath }) {
+  return parseLocalPaths(text).map((token, index) => token.type === 'path' ? <PathButton key={index} token={token} onPath={onPath} /> : <React.Fragment key={index}>{token.text}</React.Fragment>);
+}
+
+function Inline({ text, tokens = parseInline(text), onPath }) {
   return tokens.map((token, index) => {
     if (token.type === 'text') return <React.Fragment key={index}>{token.text}</React.Fragment>;
     if (token.type === 'code') return <code key={index}>{token.text}</code>;
+    if (token.type === 'path') return <PathButton key={index} token={token} onPath={onPath} />;
     if (token.type === 'link') return <a key={index} href={token.href} target="_blank" rel="noreferrer"><Inline tokens={token.children} /></a>;
     const Tag = token.type;
-    return <Tag key={index}><Inline tokens={token.children} /></Tag>;
+    return <Tag key={index}><Inline tokens={token.children} onPath={onPath} /></Tag>;
   });
 }
 
@@ -31,30 +42,30 @@ function CodeBlock({ block, onApplyCode }) {
   </div>;
 }
 
-function Blocks({ blocks, onApplyCode }) {
+function Blocks({ blocks, onApplyCode, onPath }) {
   return blocks.map((block, index) => {
     if (block.type === 'code') return <CodeBlock key={index} block={block} onApplyCode={onApplyCode} />;
-    if (block.type === 'heading') { const Tag = 'h' + Math.min(6, block.level + 1); return <Tag key={index}><Inline text={block.text} /></Tag>; }
+    if (block.type === 'heading') { const Tag = 'h' + Math.min(6, block.level + 1); return <Tag key={index}><Inline text={block.text} onPath={onPath} /></Tag>; }
     if (block.type === 'rule') return <hr key={index} />;
-    if (block.type === 'quote') return <blockquote key={index}><Blocks blocks={block.children} onApplyCode={onApplyCode} /></blockquote>;
+    if (block.type === 'quote') return <blockquote key={index}><Blocks blocks={block.children} onApplyCode={onApplyCode} onPath={onPath} /></blockquote>;
     if (block.type === 'list') {
       const Tag = block.ordered ? 'ol' : 'ul';
-      return <Tag key={index} start={block.start}>{block.items.map((item, itemIndex) => <li key={itemIndex}><Blocks blocks={item} onApplyCode={onApplyCode} /></li>)}</Tag>;
+      return <Tag key={index} start={block.start}>{block.items.map((item, itemIndex) => <li key={itemIndex}><Blocks blocks={item} onApplyCode={onApplyCode} onPath={onPath} /></li>)}</Tag>;
     }
-    if (block.type === 'table') return <div key={index} className="message-table-scroll" tabIndex={0} role="region" aria-label="回复表格"><table><thead><tr>{block.header.map((cell, i) => <th key={i} scope="col" style={{ textAlign: block.alignment[i] }}><Inline text={cell} /></th>)}</tr></thead><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{block.header.map((_, i) => <td key={i} style={{ textAlign: block.alignment[i] }}><Inline text={row[i] || ''} /></td>)}</tr>)}</tbody></table></div>;
-    return <p key={index}><Inline text={block.text} /></p>;
+    if (block.type === 'table') return <div key={index} className="message-table-scroll" tabIndex={0} role="region" aria-label="回复表格"><table><thead><tr>{block.header.map((cell, i) => <th key={i} scope="col" style={{ textAlign: block.alignment[i] }}><Inline text={cell} onPath={onPath} /></th>)}</tr></thead><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{block.header.map((_, i) => <td key={i} style={{ textAlign: block.alignment[i] }}><Inline text={row[i] || ''} onPath={onPath} /></td>)}</tr>)}</tbody></table></div>;
+    return <p key={index}><Inline text={block.text} onPath={onPath} /></p>;
   });
 }
 
-export function MessageContent({ content, onApplyCode, collapsible = false }) {
+export function MessageContent({ content, onApplyCode, onPath, collapsible = false }) {
   const blocks = useMemo(() => parseMessageBlocks(content), [content]);
   const [expanded, setExpanded] = useState(true);
-  if (!collapsible) return <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} /></div>;
+  if (!collapsible) return <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} onPath={onPath} /></div>;
   return <details className="assistant-message-disclosure" open={expanded} onToggle={(event) => {
     if (event.target === event.currentTarget) setExpanded(event.currentTarget.open);
   }}>
     <summary aria-label="答复内容"><span>答复内容</span><ChevronRight size={15} className="agent-chevron" aria-hidden="true" /></summary>
-    <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} /></div>
+    <div className="assistant-message-content"><Blocks blocks={blocks} onApplyCode={onApplyCode} onPath={onPath} /></div>
   </details>;
 }
 
@@ -95,7 +106,7 @@ export function MessageExecution({ message, activity, ...actions }) {
       <ChevronRight size={15} className="agent-chevron" aria-hidden="true" />
     </summary>
     <div className="message-execution-body">
-      {activity && <MessageContent content={activity} />}
+      {activity && <MessageContent content={activity} onPath={actions.onMessagePath} />}
       <AgentActivity operations={message.operations} approval={message.approval} collapsed={complete} embedded {...actions} />
       {!message.pending && !activity && !message.operations?.length && <p className="message-execution-empty">本次未执行工具操作。</p>}
     </div>

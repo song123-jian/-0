@@ -20,12 +20,13 @@ import {
 } from 'lucide-react';
 import { parseCsv, stringifyCsv } from './lib/csv.js';
 import { WORK_MODES, workMode } from './lib/modes.js';
-import { truncateUtf8 } from './lib/text.js';
 import { MAX_CHAT_IMAGES, prepareChatImages } from './lib/chat-images.js';
 import { sameLocation, recordLocation, findLocation } from './lib/navigation.js';
 import { Dashboard, ModeIcon, RecentPanel } from './components/workbench-panels.jsx';
 import { PluginCenterPanel, ScheduledTasksPanel } from './components/task-panels.jsx';
 import { SettingsPanel } from './components/settings-panel.jsx';
+import { ModelConnectionDialog } from './components/model-connection-dialog.jsx';
+import { MessageTimeline } from './components/message-timeline.jsx';
 import { ComposerTools } from './components/composer-tools.jsx';
 import { ToolsPanel, CommandPalette } from './components/tools-panel.jsx';
 import { ChatRuns } from './components/chat-runs.jsx';
@@ -35,10 +36,11 @@ import { TaskFileChanges } from './components/task-file-changes.jsx';
 import { TaskCollaborationDialog } from './components/task-collaboration.jsx';
 import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboration.js';
 import { prepareRevision, selectRevision, revisionStamp, revisionSource } from './lib/conversation-revisions.js';
-import { MessageContent, MessageExecution } from './components/message-content.jsx';
+import { MessageContent, MessageExecution, MessagePaths } from './components/message-content.jsx';
 import { messageContentParts, settledTiming } from './lib/message-presentation.js';
 import { insertSteeringMessage, updateSteeringStatus, settleSteeringMessages, steeringLabel, includesModelHistory } from './lib/conversation-steering.js';
 import { applyConversationAction, conversationText, forkChatAtMessage, newChatRecord } from './lib/conversation-actions.js';
+import { DEFAULT_SHORTCUTS, formatShortcut, matchesShortcut, normalizeShortcuts } from './lib/shortcuts.js';
 import { WorkspaceContextMenu, WorkspaceActionDialog } from './components/workspace-context-menu.jsx';
 import { ActivityRail, BrowserPanel } from './components/shell-panels.jsx';
 import workbenchLogo from '../build/icon.svg';
@@ -164,9 +166,11 @@ function App() {
   const actionFocusRef = useRef(null);
   const [storageBusy, setStorageBusy] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const storageBusyRef = useRef(false);
   const storageOperationRef = useRef(null);
-  const [preferences, setPreferences] = useState({ defaultMode: 'answer', railCollapsed: false, browserPanelOpen: true, browserPanelExpanded: false, fontSize: 16, themeMode: 'system', themeStyle: 'standard', accentColor: '#176C5B', backgroundColor: null, foregroundColor: null, fontFamily: 'Microsoft YaHei', defaultFileOpen: 'vscode', terminalShell: 'powershell', closeConfirmation: 'busy', sendShortcut: 'ctrl-enter', showEditorStatusBar: true, defaultFullView: false, skillsEnabled: true, notifyOnComplete: true, notifyOnIssues: true, notifyOnPermissions: true, notificationSound: 'default', conversationDirectory: null, compressHistory: false, autoArchiveDays: 0 });
+  const [preferences, setPreferences] = useState({ defaultMode: 'answer', railCollapsed: false, browserPanelOpen: true, browserPanelExpanded: false, fontSize: 16, themeMode: 'system', themeStyle: 'standard', accentColor: '#176C5B', backgroundColor: null, foregroundColor: null, fontFamily: 'Microsoft YaHei', defaultFileOpen: 'vscode', terminalShell: 'powershell', closeConfirmation: 'busy', sendShortcut: 'ctrl-enter', shortcuts: DEFAULT_SHORTCUTS, showEditorStatusBar: true, defaultFullView: false, skillsEnabled: true, notifyOnComplete: true, notifyOnIssues: true, notifyOnPermissions: true, notificationSound: 'default', conversationDirectory: null, compressHistory: false, autoArchiveDays: 0 });
+  const shortcutBindings = useMemo(() => normalizeShortcuts(preferences.shortcuts), [preferences.shortcuts]);
   const [agentSettings, setAgentSettings] = useState(DEFAULT_AGENT_SETTINGS);
   const [skills, setSkills] = useState([]);
   const [plugins, setPlugins] = useState([]);
@@ -253,7 +257,6 @@ function App() {
     if (libraryRef.current?.activeId !== request.conversationId) updateChat(() => ({ unreadResult: true }), request.conversationId);
   }, [updateChat]);
   const [copiedId, setCopiedId] = useState('');
-  const messagesEndRef = useRef(null);
 
   const composerBuffersRef = useRef(new Map());
   const composerSnapshotRef = useRef(null);
@@ -459,10 +462,6 @@ function App() {
   }), [setMessages, finishRequest, updateChat]);
 
   useEffect(() => {
-    if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ block: 'end', behavior: 'instant' });
-  }, [messages]);
-
-  useEffect(() => {
     if (!library || !appState || appState.historyError || storageBusy) return;
     let current = true;
     setHistoryStatus('saving');
@@ -543,6 +542,24 @@ function App() {
       return saved;
     }
     catch (error) { showNotice(readableError(error)); return null; }
+  };
+
+  const saveIntegrationConfig = async (update) => {
+    try {
+      const saved = await window.scodex.saveIntegrationConfig(update);
+      setPreferences(saved.preferences);
+      setAppState((current) => current ? { ...current, integrationConfig: saved.integrationConfig, preferences: saved.preferences } : current);
+      return saved.integrationConfig;
+    } catch (error) { showNotice(readableError(error)); return null; }
+  };
+
+  const setCodexPluginEnabled = async (id, enabled) => {
+    try {
+      const updatedPlugins = await window.scodex.setCodexPluginEnabled(id, enabled);
+      setInventory((current) => current ? { ...current, plugins: updatedPlugins } : current);
+      setPlugins(updatedPlugins);
+      return true;
+    } catch (error) { showNotice(readableError(error)); return false; }
   };
 
   const modelConnectionSaved = (connection) => {
@@ -763,8 +780,9 @@ function App() {
   useEffect(() => {
     const shortcut = (event) => {
       if (document.querySelector('.task-collaboration-dialog[open]')) return;
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['ArrowLeft', 'ArrowRight'].includes(event.key) || event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
-      event.preventDefault(); goHistory(event.key === 'ArrowLeft' ? -1 : 1);
+      if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      if (matchesShortcut(event, shortcutBindings.historyBack)) { event.preventDefault(); goHistory(-1); }
+      else if (matchesShortcut(event, shortcutBindings.historyForward)) { event.preventDefault(); goHistory(1); }
     };
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
@@ -874,7 +892,7 @@ function App() {
     if (action === 'attach:conversation') {
       if (!chat) throw Error('请选择一条聊天记录。');
       const content = conversationText(chat, project);
-      setFileContext({ path: `聊天记录/${chat.title || '未命名聊天'}.md`, kind: 'conversation', content: truncateUtf8(content, 128 * 1024) });
+      setFileContext({ path: `聊天记录/${chat.title || '未命名聊天'}.md`, kind: 'conversation', content });
       showNotice('聊天记录已附加，发送时才提交给当前模型');
     } else if (action === 'attach:folder') {
       if (!project?.path) throw Error('此聊天没有所属项目文件夹。');
@@ -890,7 +908,7 @@ function App() {
         `表格：${sameWorkspace ? tablePath || '无已保存表格' : '无已保存表格'}${sameWorkspace && currentSheet ? `；${currentSheet.name}，${currentSheet.rowCount} 行 × ${currentSheet.columnCount} 列` : ''}`,
         `图片：${sameWorkspace ? imagePath || '无' : '无'}`,
       ].join('\n');
-      setFileContext({ path: 'Scodex 工作台', kind: 'workbench', content: truncateUtf8(content, 128 * 1024) });
+      setFileContext({ path: 'Scodex 工作台', kind: 'workbench', content });
       showNotice('工作台状态已附加，发送时才提交给当前模型');
     } else if (action === 'attach:file') {
       await attachSelectedFile(CHAT_ATTACHMENT_FILTERS);
@@ -970,8 +988,8 @@ function App() {
     ];
     const skillRows = enabledSkills.map(skill=>row('attach-skill:'+skill.id,skill.name,'skill',{disabled:attachDisabled,reason:attachReason}));
     const projectChoices = (prefix,selected) => (appState?.projects||[]).filter(p=>!p.archivedAt).map(p=>row(prefix+p.id,p.name,'project',{checked:p.id===selected}));
-    const entries = [row('rename','重命名','rename',{shortcut:'Alt+Ctrl+R'}),row('pin',record.pinned?'取消置顶':'置顶',record.pinned?'unpin':'pin',{shortcut:'Alt+Ctrl+P'}),
-      row('unread',(kind==='chat'?record.unreadResult:record.unread)?'标记为已读':'标记为未读','unread',{shortcut:'Ctrl+Shift+U'})];
+    const entries = [row('rename','重命名','rename',{shortcut:formatShortcut(shortcutBindings.rename)}),row('pin',record.pinned?'取消置顶':'置顶',record.pinned?'unpin':'pin',{shortcut:formatShortcut(shortcutBindings.pin)}),
+      row('unread',(kind==='chat'?record.unreadResult:record.unread)?'标记为已读':'标记为未读','unread',{shortcut:formatShortcut(shortcutBindings.unread)})];
     if (kind === 'chat') entries.push(row('project','项目','project',{disabled:unavailable||Boolean(structuralReason),reason:structuralReason,children:[row('move:','未分组','project',{checked:!record.projectId}),...projectChoices('move:',record.projectId)]}),
       sep('s1'),row('fork','分叉','fork',{children:[row('fork:'+(record.projectId||''),'在当前项目中分叉','fork'),...projectChoices('fork:',null).filter(p=>p.id!=='fork:'+(record.projectId||''))]}));
     else entries.push(row('new-chat','新建聊天','new',{disabled:unavailable||Boolean(record.archivedAt)}));
@@ -979,7 +997,7 @@ function App() {
       ...(skillRows.length ? [row('skills','附加技能','skill',{disabled:attachDisabled,reason:attachReason,children:skillRows})] : []),
       sep('s2'),row('copy','复制','copy',{children:kind==='chat'?[row('copy:title','复制标题','copy'),row('copy:markdown','复制 Markdown','copy'),row('copy:text','复制纯文本','copy'),row('copy:id','复制聊天标识','copy')]:[row('copy:title','复制项目名称','copy'),row('copy:path','复制项目路径','copy'),row('copy:id','复制项目标识','copy')]}),
       sep('s3'),row('window','在新窗口中打开','window'),row('open','打开方式','open',{children:kind==='chat'?[row('focus','在主工作台中打开','open',{disabled:unavailable||Boolean(record.archivedAt)}),row('open-default','使用默认应用打开文本副本','open'),row('export','导出为 Markdown / TXT…','open'),row('export-reveal','导出并在文件夹中显示','project')]:[row('focus','在主工作台中打开','open',{disabled:unavailable||Boolean(record.archivedAt)}),row('directory','在资源管理器中打开','project')]}),
-      sep('s4'),row(record.archivedAt?'restore':'archive',record.archivedAt?'取消归档':'归档',record.archivedAt?'restore':'archive',{shortcut:'Ctrl+Shift+A',disabled:unavailable||Boolean(structuralReason),reason:structuralReason}),
+      sep('s4'),row(record.archivedAt?'restore':'archive',record.archivedAt?'取消归档':'归档',record.archivedAt?'restore':'archive',{shortcut:formatShortcut(shortcutBindings.archive),disabled:unavailable||Boolean(structuralReason),reason:structuralReason}),
       row('delete','永久删除','delete',{danger:true,disabled:unavailable||Boolean(structuralReason),reason:structuralReason}));
     return entries;
   })();
@@ -1028,6 +1046,11 @@ function App() {
       return;
     }
     await openCodeFile(filePath);
+  };
+
+  const openMessagePath = (path) => {
+    setPanelRequest({ kind: 'files', path, id: window.crypto.randomUUID() });
+    savePreferences({ browserPanelOpen: true, browserPanelExpanded: false });
   };
 
   const openFileFromDialog = async () => {
@@ -1329,7 +1352,7 @@ function App() {
     if (/\.(png|jpe?g|webp|bmp|gif|ico|pdf|docx?|xlsx?|pptx?|zip|7z|rar|exe|dll)$/i.test(filePath)) throw new Error('此处附加文本或代码文件；图片和表格请使用对应工具，PDF 等二进制文件暂不支持作为文本附件。');
     const file = activeFile === filePath ? { path: activeFile, content: editorValue } : await window.scodex.readTextFile(filePath);
     if (file.content.includes('\u0000')) throw new Error('该文件不是可直接附加的 UTF-8 文本。');
-    setFileContext({ path: file.path, content: truncateUtf8(file.content, 128 * 1024) });
+    setFileContext({ path: file.path, content: file.content });
     setActiveView('assistant');
     showNotice('文件内容仅在发送时提交给当前模型');
     return true;
@@ -1346,7 +1369,7 @@ function App() {
     if (!currentSheet) return;
     const rows = currentSheet.rows.slice(0, 200).map((row) => row.slice(0, 50));
     const content = `工作表：${currentSheet.name}；原表 ${currentSheet.rowCount} 行 × ${currentSheet.columnCount} 列。\n以下为当前编辑状态的快照（最多 200 行 × 50 列，超出部分未附加）：\n${stringifyCsv(rows)}`;
-    setFileContext({ path: tablePath || '未保存表格.csv', content: truncateUtf8(content, 128 * 1024), kind: 'table' });
+    setFileContext({ path: tablePath || '未保存表格.csv', content, kind: 'table' });
     setActiveView('assistant');
     setSendMode('office');
     showNotice('表格快照已附加，发送消息时才提交给模型');
@@ -1357,7 +1380,7 @@ function App() {
     const current = await window.scodex.listDirectory(folder.directory);
     const items = current.items.slice(0, 300);
     const content = `文件夹：${current.directory}\n仅附加当前层级的目录清单，不包含文件正文；最多 300 项。\n${items.map((item) => `${item.directory ? '[文件夹]' : '[文件]'} ${item.name}`).join('\n')}`;
-    setFileContext({ path: current.directory, kind: 'folder', content: truncateUtf8(content, 128 * 1024) });
+    setFileContext({ path: current.directory, kind: 'folder', content });
     setActiveView('assistant');
     showNotice('文件夹目录清单已附加，未读取文件正文');
     return true;
@@ -1372,7 +1395,7 @@ function App() {
       `表格：${tablePath || '无已保存表格'}${currentSheet ? `；${currentSheet.name}，${currentSheet.rowCount} 行 × ${currentSheet.columnCount} 列` : ''}`,
       `图片：${imagePath || '无'}`,
     ].join('\n');
-    setFileContext({ path: 'Scodex 工作台', kind: 'workbench', content: truncateUtf8(content, 128 * 1024) });
+    setFileContext({ path: 'Scodex 工作台', kind: 'workbench', content });
     setActiveView('assistant');
     showNotice('工作台状态已附加，发送消息时才提交给模型');
     return true;
@@ -1458,7 +1481,7 @@ function App() {
       setAttachments((current) => [...current, ...preparedFiles]);
       const unparsed = preparedFiles.filter((item) => !item.parsed);
       if (unparsed.length) showNotice(`${unparsed.length} 个附件未能提取正文：${unparsed[0].parseMessage || '请查看附件提示'}`);
-      else if (preparedFiles.some((item) => item.truncated)) showNotice('正文已提取；超出 128 KiB 的部分将在发送时截断');
+      else if (preparedFiles.some((item) => item.truncated)) showNotice('正文未完整提取；请重新添加文件后再发送');
     } catch (error) { if (generation === attachmentGeneration.current) showNotice(readableError(error)); }
     finally { attachmentReading.current = false; setAttachmentLoading(false); }
   };
@@ -1549,8 +1572,8 @@ function App() {
     setLiveRequests([...activeRequestsRef.current.values()]);
     const dispatch = async () => { try {
       const retryIndex = revisionPlan ? targetMessages.length : retryContent ? targetMessages.findIndex((item) => item.id === retryContent.userId) : targetMessages.length;
-      const history = targetMessages.slice(0, retryIndex).filter((item) => includesModelHistory(item) && (item.role === 'user' || item.role === 'assistant') && (item.content || item.images?.length || item.attachments?.length || item.operations?.length) && ((!item.error && !item.cancelled) || item.operations?.length))
-        .slice(-20).map((item) => ({ role: item.role, content: item.content + (executionEnabled && item.operations?.length ? '\n\n[本机实际操作记录]\n' + item.operations.map((operation) => [operation.name, operation.status, operation.detail || '', operation.output?.slice(-1000) || ''].join(' · ')).join('\n').slice(-6000) : ''), ...(canShareContext ? { images: item.images, attachments: item.attachments } : {}) }));
+      const history = targetMessages.slice(0, retryIndex).filter((item) => includesModelHistory(item) && (item.role === 'user' || item.role === 'assistant') && (item.content || item.error || item.images?.length || item.attachments?.length || item.operations?.length) && ((!item.error && !item.cancelled) || item.operations?.length || item.error))
+        .map((item) => ({ role: item.role, content: [item.content, item.error ? '[实际错误证据]\n' + item.error : '', executionEnabled && item.operations?.length ? '[本机实际操作记录]\n' + item.operations.map((operation) => [operation.name, operation.status, operation.detail || '', operation.path || '', operation.output || '', operation.diff || ''].join(' · ')).join('\n') : ''].filter(Boolean).join('\n\n'), ...(canShareContext ? { images: item.images, attachments: item.attachments } : {}) }));
       await window.scodex.updateDirtyPaths([...(fileDirty && activeFile ? [activeFile] : []), ...(tableDirty && tablePath ? [tablePath] : []), ...(imageDirty && imagePath ? [imagePath] : [])]);
       await window.scodex.sendMessage({
         requestId,
@@ -1567,7 +1590,7 @@ function App() {
         messages: history,
         skill: outgoingSkill?.content || '',
         skillId: outgoingSkill?.id || '',
-        fileContext: context ? `文件：${context.path}\n（最多附加 128 KB UTF-8 内容）\n${context.content}` : '',
+        fileContext: context ? `文件：${context.path}\n${context.content}` : '',
         images: outgoingImages,
         attachments: outgoingAttachments,
       });
@@ -1722,8 +1745,12 @@ function App() {
   useEffect(() => {
     const shortcut = event => {
       if (document.querySelector('.task-collaboration-dialog[open]')) return;
-      if (!(event.ctrlKey||event.metaKey)||event.isComposing||storageBusyRef.current||actionDialog||settingsDialogOpen||projectDialogOpen||commandOpen||event.target?.closest?.('input,textarea,select,[contenteditable="true"]')) return;
-      const key=event.key.toLowerCase(), action=event.altKey&&!event.shiftKey&&key==='r'?'rename':event.altKey&&!event.shiftKey&&key==='p'?'pin':!event.altKey&&event.shiftKey&&key==='u'?'unread':!event.altKey&&event.shiftKey&&key==='a'?'archive':null;
+      if(event.isComposing||storageBusyRef.current||actionDialog||settingsDialogOpen||projectDialogOpen||commandOpen) return;
+      const editable = event.target?.closest?.('input,textarea,select,[contenteditable="true"]');
+      const action = [
+        ['rename', shortcutBindings.rename], ['pin', shortcutBindings.pin],
+        ['unread', shortcutBindings.unread], ['archive', shortcutBindings.archive],
+      ].find(([, binding]) => matchesShortcut(event, binding) && (!editable || /^(Ctrl|Alt|Shift)\+/.test(binding)))?.[0];
       if(!action)return;event.preventDefault();
       const focused=event.target?.closest?.('[data-project-id],[data-chat-id]');
       const target=contextTarget||(focused?.dataset.projectId?{kind:'project',id:focused.dataset.projectId}:{kind:'chat',id:focused?.dataset.chatId||libraryRef.current?.activeId});
@@ -1792,16 +1819,17 @@ function App() {
     const onKey = (event) => {
       if (document.querySelector('.task-collaboration-dialog[open]')) return;
       if (storageBusyRef.current) { if (event.ctrlKey || event.metaKey) event.preventDefault(); return; }
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       if (event.isComposing || projectDialogOpen || settingsDialogOpen || actionDialog || contextTarget) return;
-      if (event.shiftKey && event.key.toLowerCase() === 'p') { event.preventDefault(); setCommandOpen((value) => !value); return; }
+      const editable = event.target?.closest?.('input,textarea,select,[contenteditable="true"]');
+      const matches = (binding) => matchesShortcut(event, binding) && (!editable || /^(Ctrl|Alt|Shift)\+/.test(binding));
+      if (matches(shortcutBindings.commandPalette)) { event.preventDefault(); setCommandOpen((value) => !value); return; }
       if (commandOpen) return;
-      if (event.key === ',') { event.preventDefault(); setSettingsSection({ id: 'general' }); navigateView('settings'); return; }
-      if (event.key.toLowerCase() === 'p' && !event.shiftKey) { event.preventDefault(); navigateView('files'); return; }
-      if (event.key.toLowerCase() === 'j' && !event.shiftKey) { event.preventDefault(); runToolAction('terminal'); return; }
-      if (event.key.toLowerCase() === 'k') { event.preventDefault(); newConversation(); }
-      if (event.shiftKey && event.key.toLowerCase() === 'b') { event.preventDefault(); toggleBrowser(); }
-      if (event.key.toLowerCase() === 's') {
+      if (matches(shortcutBindings.settings)) { event.preventDefault(); setSettingsSection({ id: 'general' }); navigateView('settings'); return; }
+      if (matches(shortcutBindings.files)) { event.preventDefault(); navigateView('files'); return; }
+      if (matches(shortcutBindings.terminal)) { event.preventDefault(); runToolAction('terminal'); return; }
+      if (matches(shortcutBindings.newChat)) { event.preventDefault(); newConversation(); return; }
+      if (matches(shortcutBindings.browser)) { event.preventDefault(); toggleBrowser(); return; }
+      if (matches(shortcutBindings.save)) {
         event.preventDefault();
         if (activeView === 'files') saveCodeFile();
         if (activeView === 'tables') saveTable();
@@ -1866,7 +1894,7 @@ function App() {
           </button>
         </div>
 
-        <button className="rail-command-search shell-secondary-entry" title="搜索工具与操作（Ctrl Shift P）" aria-label="搜索工具与操作" onClick={() => setCommandOpen(true)}><Search size={17} /><span>搜索工具与操作</span><kbd>⇧ P</kbd></button>
+        <button className="rail-command-search shell-secondary-entry" title={`搜索工具与操作（${formatShortcut(shortcutBindings.commandPalette)}）`} aria-label="搜索工具与操作" onClick={() => setCommandOpen(true)}><Search size={17} /><span>搜索工具与操作</span><kbd>{formatShortcut(shortcutBindings.commandPalette)}</kbd></button>
         <nav className="workbench-primary-nav shell-secondary-entry" aria-label="工作台功能">{NAVIGATION.filter((item) => ['tasks', 'plugins', 'skills', 'tools'].includes(item.id)).map(({ id, label, icon: Icon }) => <button key={id} className={'nav-item ' + (activeView === id ? 'active' : '')} title={label} aria-label={label} aria-current={activeView === id ? 'page' : undefined} onClick={() => navigateView(id)}><Icon size={18} /><span>{label}</span></button>)}</nav>
         <div className="rail-section-head project-section-heading"><span>项目</span><button className="icon-button small" aria-label="创建项目" title="创建项目" onClick={() => { setProjectNameDraft(''); setProjectPathDraft(''); setProjectDialogOpen(true); }}><Plus size={15} /></button></div>
         <div className="recent-list project-list" aria-label="项目列表">
@@ -1894,7 +1922,7 @@ function App() {
           <div className="topbar-actions">
             <span className={`top-status ${apiState === 'connected' ? 'is-online' : apiState === 'unavailable' ? 'is-warning' : ''}`}><span className="status-dot" />{apiStateLabel(apiState, appState?.hasCredential)}</span>
             <span className={`history-save-state ${historyStatus === 'error' ? 'error' : ''}`} role="status">{historyStatus === 'saved' ? '已保存到本机' : historyStatus === 'error' ? '对话保存异常' : historyStatus === 'saving' ? '正在保存…' : '正在读取…'}</span>
-            {activeView === 'assistant' && <><details className="task-more-menu"><summary className="icon-button" aria-label="聊天选项" title="聊天选项"><Ellipsis size={18} /></summary><div><button type="button" onClick={() => navigateView('recent')}><MessageSquare size={15} />最近聊天</button><button type="button" onClick={e => { e.currentTarget.closest('details').open = false; setCollaborationSource(currentChat.id); }} disabled={storageBusy || !currentChat}>任务协作</button><button type="button" onClick={() => navigator.clipboard.writeText(currentChat?.title || '').then(() => showNotice('聊天标题已复制')).catch(() => showNotice('复制失败'))}><Clipboard size={15} />复制聊天标题</button></div></details><button type="button" className="icon-button" aria-label="聊天设置" title="模型与工作台设置" onClick={() => navigateView('settings')}><SlidersHorizontal size={17} /></button><button type="button" className="icon-button" aria-label="新聊天" title="新聊天" disabled={attachmentLoading || storageBusy || !library} onClick={newConversation}><SquarePlus size={17} /></button></>}
+            {activeView === 'assistant' && <><details className="task-more-menu"><summary className="icon-button" aria-label="聊天选项" title="聊天选项"><Ellipsis size={18} /></summary><div><button type="button" onClick={() => navigateView('recent')}><MessageSquare size={15} />最近聊天</button><button type="button" onClick={e => { e.currentTarget.closest('details').open = false; setCollaborationSource(currentChat.id); }} disabled={storageBusy || !currentChat}>任务协作</button><button type="button" onClick={() => navigator.clipboard.writeText(currentChat?.title || '').then(() => showNotice('聊天标题已复制')).catch(() => showNotice('复制失败'))}><Clipboard size={15} />复制聊天标题</button></div></details><button type="button" className="icon-button" aria-label="模型与连接" title="编辑模型与连接" onClick={() => setModelDialogOpen(true)}><SlidersHorizontal size={17} /></button><button type="button" className="icon-button" aria-label="新聊天" title="新聊天" disabled={attachmentLoading || storageBusy || !library} onClick={newConversation}><SquarePlus size={17} /></button></>}
             <button className="icon-button browser-toggle" title={browserOpen ? '隐藏标签工作台' : '展开标签工作台'} aria-label={browserOpen ? '隐藏第三工作台' : '打开第三工作台'} aria-pressed={browserOpen} onClick={toggleBrowser}><PanelRightOpen size={20} /></button>
           </div>
         </header>
@@ -1903,7 +1931,7 @@ function App() {
           <section className={`assistant-view task-chat-view ${messages.length === 0 ? 'assistant-view-empty' : ''}`} onDragEnter={(event) => fileDrag(event, 'enter')} onDragOver={(event) => fileDrag(event, 'over')} onDragLeave={(event) => fileDrag(event, 'leave')} onDrop={(event) => fileDrag(event, 'drop')}>
             {fileDragActive && <div className="chat-file-drop-overlay" role="status"><div><Files size={36} /><strong>{!canShareContext ? '请先更改权限' : sending || attachmentLoading ? '请等待当前操作完成' : '松开即可添加'}</strong><span>文件将添加到当前消息</span></div></div>}
             {revisionEditor?.kind === 'regenerate' && revisionEditor.conversationId === currentChat?.id && <MessageRevisionDialog chat={currentChat} request={revisionEditor} canExecute={canShareContext} onClose={() => setRevisionEditor(null)} onSubmit={action => sendMessage('',null,currentChat.id,action)}/>}
-            <div className="conversation-scroll">
+            <MessageTimeline conversationId={currentChat?.id} messages={messages}>
               {messages.length === 0 ? (
                 <Dashboard projectName={currentProjectName} />
               ) : (
@@ -1928,14 +1956,14 @@ function App() {
                       onApplyCode={applyCodeToEditor}
                       onApproval={(id, allowed) => window.scodex.approveAgentCommand(id, allowed)}
                       onOpenFile={openWorkspaceFile}
+                      onMessagePath={openMessagePath}
                       onBrowser={() => runToolAction('browser')}
                       onServices={() => runToolAction('services')}
                     />
                   ))}
-                  <div ref={messagesEndRef} />
                 </div>
               )}
-            </div>
+            </MessageTimeline>
             <div className="composer-area">
               <div className="composer-box">
                 <input ref={attachmentInputRef} type="file" multiple className="visually-hidden" aria-label="选择聊天附件" disabled={!canShareContext || sending || attachmentLoading} onChange={(event) => { attachChatFiles(event.target.files); event.target.value = ''; }} />
@@ -1961,7 +1989,6 @@ function App() {
                   }}
                   placeholder={canShareContext ? "提问，或描述要完成的工作，Scodex 自动衔接处理…" : "和 Scodex 对话"}
                   disabled={!library}
-                  maxLength={64_000}
                   rows={2}
                   aria-label="输入工作内容"
                 />
@@ -2076,14 +2103,15 @@ function App() {
         )}
 
         {activeView === 'git' && <GitPanel workspaceRoot={workspaceRoot} blocked={anySending || storageBusy || fileDirty || tableDirty || imageDirty} branchPrefix={preferences.gitBranchPrefix} draftPullRequest={preferences.gitDraftPullRequest} mergeMethod={preferences.gitMergeMethod} onOpenFile={openWorkspaceFile} onOpenWorktree={openManagedWorktree} />}
-        {activeView === 'tools' && <ToolsPanel inventory={inventory} loading={inventoryBusy} error={inventoryError} onRefresh={refreshSkills} onAction={runToolAction} onRevealSource={(id) => window.scodex.revealCapabilitySource(id).catch((error) => showNotice(readableError(error)))} />}
+        {activeView === 'tools' && <ToolsPanel inventory={inventory} shortcuts={shortcutBindings} loading={inventoryBusy} error={inventoryError} onRefresh={refreshSkills} onAction={runToolAction} onRevealSource={(id) => window.scodex.revealCapabilitySource(id).catch((error) => showNotice(readableError(error)))} />}
         {activeView === 'tasks' && <ScheduledTasksPanel state={scheduledState} projects={appState?.projects || []} activeProjectId={appState?.activeProjectId || ''} backgroundBusy={scheduledBackgroundBusy} onBackground={setScheduledBackgroundEnabled} onRefresh={refreshScheduledTasks} onCreate={(input) => saveScheduledTask(input)} onUpdate={(id, input) => saveScheduledTask(input, id)} onRemove={removeScheduledTask} onEnable={setScheduledTaskEnabled} onRun={runScheduledTask} />}
         {(activeView === 'plugins' || activeView === 'skills') && <PluginCenterPanel section={activeView} skills={skills} plugins={plugins} preferences={preferences} selectedSkill={selectedSkill} activeSkill={activeSkill} onSelectSkill={setSelectedSkill} onToggleSkill={toggleSkill} onRefresh={refreshSkills} onInstallSkill={() => window.scodex.installSkill().then((installed) => installed && refreshSkills()).catch((error) => showNotice(readableError(error)))} onOpenConfig={() => window.scodex.openPluginConfig().catch((error) => showNotice(readableError(error)))} onUseSkill={selectSkill} onUseMcpContext={useMcpContext} />}
-        {activeView === 'settings' && <SettingsPanel onAppSync={synchronizeApp} onOpenWorktree={openManagedWorktree} initialCategory={settingsSection} onModelConnectionSaved={modelConnectionSaved} onSupabaseSyncSaved={supabaseSyncSaved} onModalChange={setSettingsDialogOpen} library={library} chatBusy={anySending || storageBusy} onManageChats={manageStoredChats} appState={appState} workspaceRoot={workspaceRoot} preferences={preferences} resolvedTheme={resolvedTheme} agentSettings={agentSettings} onPreference={savePreferences} onAgentSetting={saveAgentSettings} onConfigureConversationStorage={configureChatStorage} onOpenCodexConfig={(scope) => window.scodex.openCodexConfig(scope).catch((error) => showNotice(readableError(error)))} onDiagnoseCodex={() => window.scodex.diagnoseCodex()} onOpenCodexDiagnostic={() => window.scodex.openCodexDiagnostic().catch((error) => showNotice(readableError(error)))} onUpdateCodex={() => window.scodex.updateCodex()} onReinstallTools={() => window.scodex.reinstallWorkspaceTools()} onChooseWorkspace={handleChooseWorkspace} onReveal={revealWorkspace} onCopyPath={() => navigator.clipboard.writeText(workspaceRoot).then(() => showNotice('工作区路径已复制')).catch(() => showNotice('复制失败'))} onRefreshSkills={refreshSkills} skills={skills} connectionLabel={apiStateLabel(apiState, appState?.hasCredential)} onView={navigateView} />}
+        {activeView === 'settings' && <SettingsPanel onAppSync={synchronizeApp} onOpenWorktree={openManagedWorktree} initialCategory={settingsSection} onModelConnectionSaved={modelConnectionSaved} onSupabaseSyncSaved={supabaseSyncSaved} onModalChange={setSettingsDialogOpen} library={library} chatBusy={anySending || storageBusy} onManageChats={manageStoredChats} appState={appState} workspaceRoot={workspaceRoot} preferences={preferences} resolvedTheme={resolvedTheme} agentSettings={agentSettings} onPreference={savePreferences} onAgentSetting={saveAgentSettings} onIntegrationUpdate={saveIntegrationConfig} onPluginEnabled={setCodexPluginEnabled} onConfigureConversationStorage={configureChatStorage} onOpenCodexConfig={(scope) => window.scodex.openCodexConfig(scope).catch((error) => showNotice(readableError(error)))} onDiagnoseCodex={() => window.scodex.diagnoseCodex()} onOpenCodexDiagnostic={() => window.scodex.openCodexDiagnostic().catch((error) => showNotice(readableError(error)))} onUpdateCodex={() => window.scodex.updateCodex()} onReinstallTools={() => window.scodex.reinstallWorkspaceTools()} onChooseWorkspace={handleChooseWorkspace} onReveal={revealWorkspace} onCopyPath={() => navigator.clipboard.writeText(workspaceRoot).then(() => showNotice('工作区路径已复制')).catch(() => showNotice('复制失败'))} onRefreshSkills={refreshSkills} skills={skills} inventory={inventory} connectionLabel={apiStateLabel(apiState, appState?.hasCredential)} onView={navigateView} />}
       </main>
       {officeDocument && <DocumentPreview document={officeDocument} onClose={() => setOfficeDocument(null)} />}
-      <BrowserPanel requestedTool={panelRequest} panelWidth={panelWidth ?? preferences.browserPanelWidth ?? 400} onWidthChange={setPanelWidth} onWidthCommit={(width) => { setPanelWidth(null); savePreferences({ browserPanelWidth: width }); }} preferences={preferences} onAiOpen={() => runToolAction('browser')} suspended={Boolean(officeDocument) || storageBusy || settingsDialogOpen || commandOpen || projectDialogOpen || Boolean(collaborationSource) || Boolean(library?.conversations.some((chat) => chat.messages.some((message) => message.approval)))} open={browserOpen} expanded={browserExpanded} workspaceRoot={workspaceRoot} model={appState?.model || ''} reasoningOptions={availableReasoningEfforts.map((effort) => ({ value: effort, label: REASONING_EFFORT_LABELS[effort] || effort }))} defaultReasoningEffort={reasoningEffort} contextAccess={preferences.contextAccess} onContextPermission={changeContextPermission} onOpenFile={openWorkspaceFile} onReveal={revealWorkspace} onToggle={toggleBrowser} onExpand={() => savePreferences({ browserPanelExpanded: !browserExpanded })} onView={navigateView} onTerminal={openTerminal} onError={(error) => showNotice(readableError(error))} />
-      {commandOpen && <CommandPalette onAction={runToolAction} onClose={() => setCommandOpen(false)} />}
+      {modelDialogOpen && <ModelConnectionDialog connection={appState?.connection} onSaved={modelConnectionSaved} busy={anySending || storageBusy} onClose={() => setModelDialogOpen(false)} />}
+      <BrowserPanel requestedTool={panelRequest} panelWidth={panelWidth ?? preferences.browserPanelWidth ?? 400} onWidthChange={setPanelWidth} onWidthCommit={(width) => { setPanelWidth(null); savePreferences({ browserPanelWidth: width }); }} preferences={preferences} onAiOpen={() => runToolAction('browser')} suspended={Boolean(officeDocument) || storageBusy || settingsDialogOpen || modelDialogOpen || commandOpen || projectDialogOpen || Boolean(collaborationSource) || Boolean(library?.conversations.some((chat) => chat.messages.some((message) => message.approval)))} open={browserOpen} expanded={browserExpanded} workspaceRoot={workspaceRoot} model={appState?.model || ''} reasoningOptions={availableReasoningEfforts.map((effort) => ({ value: effort, label: REASONING_EFFORT_LABELS[effort] || effort }))} defaultReasoningEffort={reasoningEffort} contextAccess={preferences.contextAccess} onContextPermission={changeContextPermission} onOpenFile={openWorkspaceFile} onReveal={revealWorkspace} onToggle={toggleBrowser} onExpand={() => savePreferences({ browserPanelExpanded: !browserExpanded })} onView={navigateView} onTerminal={openTerminal} onError={(error) => showNotice(readableError(error))} />
+      {commandOpen && <CommandPalette shortcuts={shortcutBindings} onAction={runToolAction} onClose={() => setCommandOpen(false)} />}
       {collaborationSource && library && <TaskCollaborationDialog library={library} projects={appState?.projects || []} runningIds={liveRequests.map(r => r.conversationId)} sourceId={collaborationSource} canExecute={canShareContext} onClose={() => setCollaborationSource('')}
         onSubmit={input => collaborationActionRef.current({ action: 'send', input: { ...input, sourceId: collaborationSource } })}
         onReference={target => {
@@ -2162,7 +2190,7 @@ function columnLabel(number) {
 function ChatFileCard({ file, onRemove }) {
   const statusLabels = { empty: '无正文', invalid: '解析失败', encrypted: '需要密码', scanned: '需要 OCR', unsupported: '格式不支持', 'encoding-error': '编码不支持', timeout: '解析超时', 'resource-limit': '超出解析限制', failed: '解析失败' };
   const status = file.parsed ? file.truncated ? '正文已截断' : file.parseStatus === 'empty' ? '无正文' : '正文已解析' : statusLabels[file.parseStatus] || '正文未提取';
-  const description = file.truncated ? '正文已提取；超出本条消息 128 KiB 总量限制的部分不提交。' : file.parseMessage || (file.parsed ? '正文将在发送时提交。' : '请重新添加文件以提取正文。');
+  const description = file.truncated ? '正文未完整提取；请重新添加文件。' : file.parseMessage || (file.parsed ? '正文将在发送前按模型上下文容量动态压缩。容量不足时不会发送。' : '请重新添加文件以提取正文。');
   return <div className="chat-file-card" title={description}><div className="chat-file-icon"><Files size={20} /></div><div><strong>{file.name}</strong><small>{formatSize(file.size)} · {status}</small></div>{onRemove && <button type="button" aria-label={`移除附件 ${file.name}`} title="移除附件" onClick={onRemove}><X size={14} /></button>}</div>;
 }
 
@@ -2206,19 +2234,19 @@ function ComposerAttachmentDisclosure({ attachments = [], images = [], fileConte
   </details>;
 }
 
-export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onRetryUser, onApplyCode, onApproval, onOpenFile, onBrowser, onServices, onEdit, onRegenerate, editRequest, onEditCancel, onEditSubmit, canExecute, actionsDisabled }) {
+export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onRetryUser, onApplyCode, onApproval, onOpenFile, onMessagePath, onBrowser, onServices, onEdit, onRegenerate, editRequest, onEditCancel, onEditSubmit, canExecute, actionsDisabled }) {
   if (message.role === 'user') return <article data-message-id={message.id} className={'user-message' + (message.images?.length ? ' user-message-with-images' : '') + (editRequest ? ' user-message-editing' : '')}>
     {message.steering && <div className="user-message-meta steering-message-status" role="status" data-state={message.steering.status}>{steeringLabel(message)}</div>}
     <MessageAttachmentDisclosure attachments={message.attachments} images={message.images} />
-    {editRequest ? <InlineMessageEditor request={editRequest} canExecute={canExecute} disabled={actionsDisabled} onSubmit={onEditSubmit} onClose={onEditCancel} /> : message.content && <div className="user-message-content">{message.content}</div>}
+    {editRequest ? <InlineMessageEditor request={editRequest} canExecute={canExecute} disabled={actionsDisabled} onSubmit={onEditSubmit} onClose={onEditCancel} /> : message.content && <div className="user-message-content"><MessagePaths text={message.content} onPath={onMessagePath} /></div>}
     {(message.skillName || message.contextName) && <div className="user-message-meta">{message.skillName && <span className="message-context"><BookOpen size={12} />{message.skillName}</span>}{message.contextName && <span className="message-context"><Paperclip size={12} />{message.contextName}</span>}</div>}
     {!editRequest && <div className="user-message-actions">{onEdit && <button className="text-tool" aria-label="编辑此消息" disabled={actionsDisabled} onClick={onEdit}>编辑消息</button>}{onRetryUser && <button className="text-tool" aria-label="重试此消息" disabled={actionsDisabled} onClick={onRetryUser}><RotateCw size={14} />重试</button>}{message.content !== undefined && <button className="icon-button small" title="复制消息" aria-label="复制消息" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}</div>}
   </article>;
 
   const parts = messageContentParts(message);
   return <article data-message-id={message.id} className="assistant-message"><div className="assistant-message-mark"><Sparkles size={15} /></div><div className="assistant-message-main"><div className="assistant-message-label">{message.model || '助手'}</div>
-    <MessageExecution message={message} activity={parts.activity} onApproval={onApproval} onOpenFile={onOpenFile} onBrowser={onBrowser} onServices={onServices} />
-    {parts.answer && <MessageContent content={parts.answer} collapsible onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
+    <MessageExecution message={message} activity={parts.activity} onApproval={onApproval} onOpenFile={onOpenFile} onMessagePath={onMessagePath} onBrowser={onBrowser} onServices={onServices} />
+    {parts.answer && <MessageContent content={parts.answer} onPath={onMessagePath} collapsible onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
     {!message.pending && message.fileChanges && <TaskFileChanges record={message.fileChanges} conversationId={conversationId} disabled={actionsDisabled} />}
     {message.error && <div className="message-error"><CircleAlert size={16} /><span>{message.error}</span></div>}
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}

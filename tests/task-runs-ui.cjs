@@ -317,10 +317,10 @@ async function main() {
 
       await cdp.evaluate('document.querySelector(".task-attachment-disclosure summary").click()');
       await wait(() => cdp.evaluate('document.querySelector(".task-attachment-disclosure").open'), 'Task attachment disclosure did not expand');
-      const expanded = await cdp.evaluate(`(()=>{const row=document.querySelector('.task-attachment-disclosure');return{open:row.open,name:row.querySelector('.task-attachment-copy strong')?.textContent,path:row.querySelector('.task-attachment-path')?.textContent,remove:row.querySelector('.task-attachment-row button')?.getAttribute('aria-label')}})()`);
+       const expanded = await cdp.evaluate(`(()=>{const row=document.querySelector('.task-attachment-disclosure');return{open:row.open,name:row.querySelector('.task-attachment-copy strong')?.textContent,pathVisible:Boolean(row.querySelector('.task-attachment-path')),remove:row.querySelector('.task-attachment-row button')?.getAttribute('aria-label')}})()`);
       assert.equal(expanded.open, true);
       assert.equal(expanded.name, 'brief.txt');
-      assert.equal(expanded.path, path.join(fixture, 'brief.txt'));
+       assert.equal(expanded.pathVisible, false);
       assert.equal(expanded.remove, '移除附件 brief.txt');
       const modalLayouts = [];
       for (const [width, height] of [[1440, 900], [1064, 660]]) {

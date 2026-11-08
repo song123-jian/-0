@@ -1,7 +1,7 @@
 const path = require('node:path');
 const { startEscapeWatcher } = require('./desktop-escape.cjs');
 
-function createDesktopControl({ BrowserWindow, ipcMain, screen, watchEscape = startEscapeWatcher }) {
+function createDesktopControl({ BrowserWindow, ipcMain, screen, watchEscape = startEscapeWatcher, getComputerConfig = () => ({}) }) {
   const sessions = new Map();
   let window; let watcher; let stopping = false; let disposed = false;
   let lifecycle = Promise.resolve();
@@ -13,7 +13,7 @@ function createDesktopControl({ BrowserWindow, ipcMain, screen, watchEscape = st
   const channel = 'desktop-control:stop';
   function state() {
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send('desktop-control:state', { stopping, count: sessions.size });
+      window.webContents.send('desktop-control:state', { stopping, count: sessions.size, config: getComputerConfig() || {} });
     }
   }
   function stop() {

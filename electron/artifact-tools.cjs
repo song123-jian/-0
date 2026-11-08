@@ -27,7 +27,7 @@ function createArtifactTools({ projectFiles, readOnly = false, guard = async () 
       if (name === 'artifact_read') {
         if (!/\.(docx|pptx|pdf)$/i.test(target.target)) throw new Error('支持DOCX/PPTX/PDF。');
         const bytes = await readBytes(target.target), result = await readOffice(bytes, target.target); await check(context.signal); observed.set(target.target, hash(bytes));
-        return { ok: true, path: target.relative, hash: hash(bytes), bytes: bytes.length, ...result, activity: { title: '读取办公成品', path: target.target, output: result.text.slice(0, 2000) } };
+        return { ok: true, path: target.relative, hash: hash(bytes), bytes: bytes.length, ...result, activity: { title: '读取办公成品', path: target.target, output: result.text } };
       }
       const image = name === 'artifact_image'; const type = path.extname(target.target).slice(1).toLowerCase();
       if (image ? type !== 'png' : !['docx','pptx','pdf'].includes(type)) throw new Error('目标扩展名与成品类型不匹配。');

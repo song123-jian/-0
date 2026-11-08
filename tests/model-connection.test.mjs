@@ -10,6 +10,10 @@ const { normalizeLibrary, createConversation } = require('../electron/conversati
 const encryption = { isEncryptionAvailable: () => true, encryptString: (text) => Buffer.from('controlled:' + text), decryptString: (bytes) => bytes.toString().slice(11) };
 async function fixture(t, options = {}) { const root = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-model-unit-')); t.after(() => fs.rm(root, { recursive: true, force: true })); const file = path.join(root, 'model-connection.json'); return { file, service: createModelConnection(file, { encryption, ...options }) }; }
 
+test('model output token settings are not rejected by a fixed application ceiling', () => {
+  assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, maxOutputTokens: 200000 }).maxOutputTokens, 200000);
+});
+
 test('addresses normalize root and known suffixes and reject credential or unsafe URLs', () => {
   assert.equal(normalizeAddress('https://example.com'), 'https://example.com/v1');
   assert.equal(normalizeAddress('https://example.com/api/v2/chat/completions/'), 'https://example.com/api/v2');
@@ -150,36 +154,40 @@ test('none and minimal conversation effort survive reload without changing archi
 });
 
 
-test('tool protocol selection survives save and old Grok configurations gain compatible execution', async (t) => {
-  assert.equal(normalizeConnection().toolProtocol,'json');
+test('automatic routing persists for both roles while explicit legacy protocols survive', async (t) => {
+  assert.equal(normalizeConnection().toolProtocol,'auto');
   assert.throws(()=>normalizeConnection({...DEFAULT_CONNECTION,toolProtocol:'unknown'}),/通道/);
   const {file,service}=await fixture(t,{legacyKey:()=> 'legacy-unit-key'});
   await service.save({...DEFAULT_CONNECTION,toolProtocol:'native'});
   assert.equal((await service.request()).toolProtocol,'native');
   const reopened=createModelConnection(file,{encryption,legacyKey:()=> 'legacy-unit-key'});
   assert.equal((await reopened.get()).toolProtocol,'native');
+  await reopened.save({ ...await reopened.get(), toolProtocol: 'auto', subagentToolProtocol: 'auto' });
+  const automatic=createModelConnection(file,{encryption,legacyKey:()=> 'legacy-unit-key'});
+  assert.equal((await automatic.request()).toolProtocol,'auto');
+  assert.equal((await automatic.request('subagent')).toolProtocol,'auto');
 });
 
-test('legacy configs keep model choices, default to two read-only explorers and leave advisor off', () => {
+test('legacy configs keep model choices and normalize all model roles to full execution capability', () => {
   const result = normalizeConnection({ ...DEFAULT_CONNECTION, model: 'existing-model', subagentModel: 'existing-child' });
   assert.equal(result.model, 'existing-model'); assert.equal(result.subagentModel, 'existing-child');
-  assert.equal(result.subagentMaxConcurrent, 2); assert.equal(result.subagentAllowEdits, false);
+  assert.equal(result.subagentMaxConcurrent, 2); assert.equal(result.subagentAllowEdits, true);
   assert.equal(result.advisorEnabled, false); assert.equal(result.advisorModel, '');
   assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, subagentMaxConcurrent: 999 }).subagentMaxConcurrent, 3);
 });
 
-test('advisor uses its independently encrypted connection with no retries or tools protocol inheritance', async t => {
+test('advisor uses its independently encrypted connection and selected protocol without tools', async t => {
   const { file, service } = await fixture(t);
   const saved = await service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://main.example/v1', apiKey: 'main-secret', model: 'main-model', toolProtocol: 'json',
     subagentBaseUrl: 'https://child.example/v1', subagentApiKey: 'child-secret', subagentModel: 'child-model',
-    advisorEnabled: true, advisorBaseUrl: 'https://advisor.example/v1', advisorApiKey: 'advisor-secret', advisorModel: 'advisor-model', advisorReasoningEffort: 'high' });
+    advisorEnabled: true, advisorBaseUrl: 'https://advisor.example/v1', advisorApiKey: 'advisor-secret', advisorModel: 'advisor-model', advisorReasoningEffort: 'high', advisorToolProtocol: 'json' });
   assert.doesNotMatch(JSON.stringify(saved), /main-secret|child-secret|advisor-secret/);
   assert.doesNotMatch(await fs.readFile(file, 'utf8'), /main-secret|child-secret|advisor-secret/);
   const reopened = createModelConnection(file, { encryption });
   const advisor = await reopened.request('advisor');
   assert.equal(advisor.endpoint, 'https://advisor.example/v1/chat/completions'); assert.equal(advisor.apiKey, 'advisor-secret');
   assert.equal(advisor.model, 'advisor-model'); assert.equal(advisor.reasoning_effort, 'high');
-  assert.equal(advisor.retryLimit, 0); assert.equal(advisor.maxOutputTokens, 1200); assert.equal(advisor.toolProtocol, 'native');
+  assert.equal(advisor.retryLimit, 6); assert.equal(advisor.maxOutputTokens, 0); assert.equal(advisor.toolProtocol, 'json');
   assert.equal(advisor.temperature, null, 'Advisor must use provider-default sampling without guessing model capabilities');
   assert.equal((await reopened.request('main')).apiKey, 'main-secret'); assert.equal((await reopened.request('subagent')).apiKey, 'child-secret');
 });
@@ -205,4 +213,5 @@ test('advisor discovery routes its own address and key and validates independent
   assert.deepEqual((await service.models(input, 'advisor')).models, ['advisor']);
   assert.deepEqual(seen, { url: 'https://advisor.example/v1/models', key: 'Bearer advisor-key' });
   assert.throws(() => normalizeConnection({ ...input, advisorReasoningEffort: 'invented' }), /推理强度/);
+  assert.throws(() => normalizeConnection({ ...input, advisorToolProtocol: 'invented' }), /模型三任务执行通道/);
 });

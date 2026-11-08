@@ -3,7 +3,9 @@ const path = require('node:path');
 const MAX_CHAT_ATTACHMENTS = 10;
 const MAX_CHAT_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MAX_CHAT_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
-const MAX_CHAT_ATTACHMENT_TEXT_BYTES = 128 * 1024;
+// Attachment file and parser resource limits remain safety boundaries; extracted text
+// has no separate content cap and is compressed against the model window at send time.
+const MAX_CHAT_ATTACHMENT_TEXT_BYTES = Number.POSITIVE_INFINITY;
 const TEXT_EXTENSIONS = new Set([
   '.bat', '.c', '.cc', '.cfg', '.conf', '.cpp', '.cs', '.css', '.csv', '.diff', '.env', '.go', '.h', '.hpp', '.htm', '.html',
   '.ini', '.java', '.js', '.json', '.jsonl', '.jsx', '.kt', '.log', '.lua', '.md', '.mjs', '.ps1', '.py', '.r', '.rb', '.rs',
@@ -15,14 +17,6 @@ function fileBytes(value) {
   if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
   if (value instanceof ArrayBuffer) return Buffer.from(value);
   return null;
-}
-
-function truncateUtf8(text, limit) {
-  const bytes = Buffer.from(text, 'utf8');
-  if (bytes.length <= limit) return text;
-  let end = limit;
-  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
-  return bytes.subarray(0, end).toString('utf8');
 }
 
 function decodeText(bytes) {
@@ -85,7 +79,6 @@ function normalizeAttachmentRecords(value) {
   if (value == null) return [];
   if (!Array.isArray(value) || value.length > MAX_CHAT_ATTACHMENTS) throw new Error('每条消息最多附加 10 个文件。');
   let total = 0;
-  let remaining = MAX_CHAT_ATTACHMENT_TEXT_BYTES;
   return value.map((item) => {
     if (!item || !Number.isSafeInteger(item.size) || item.size < 0 || item.size > MAX_CHAT_ATTACHMENT_BYTES) throw new Error('附件大小无效或超过 8 MB。');
     total += item.size;
@@ -94,12 +87,11 @@ function normalizeAttachmentRecords(value) {
     const mimeType = typeof item.mimeType === 'string' && /^[\w.+-]+\/[\w.+-]+$/.test(item.mimeType) ? item.mimeType.slice(0, 120) : 'application/octet-stream';
     const parsed = item.parsed === true && typeof item.text === 'string';
     const source = parsed ? item.text : '';
-    const text = truncateUtf8(source, remaining);
-    remaining -= Buffer.byteLength(text);
+    const text = source;
     const parseStatus = parsed ? (source.trim() || item.truncated ? 'parsed' : 'empty')
       : Object.hasOwn(PARSE_MESSAGES, item.parseStatus) && !['parsed', 'empty'].includes(item.parseStatus) ? item.parseStatus : 'unsupported';
     const format = typeof item.format === 'string' && /^(text|doc|docx|pdf|xlsx|pptx|odt|ods|odp|rtf)$/.test(item.format) ? item.format : '';
-    return { name, mimeType, size: item.size, parsed, text, truncated: Boolean(item.truncated || text.length < source.length), format, parseStatus, parseMessage: PARSE_MESSAGES[parseStatus] };
+    return { name, mimeType, size: item.size, parsed, text, truncated: Boolean(item.truncated), format, parseStatus, parseMessage: PARSE_MESSAGES[parseStatus] };
   });
 }
 
@@ -109,7 +101,7 @@ function chatAttachmentContext(value) {
   const lines = attachments.map((item) => {
     const header = `- ${item.name} (${item.mimeType}, ${item.size} bytes)`;
     if (!item.parsed) return `${header}\n  正文未提取：${item.parseMessage} 请勿声称已经读取正文。`;
-    if (!item.text) return `${header}\n  ${item.truncated ? '正文已提取，但本条消息的正文总量达到上限，此附件正文未提交。' : '文件中没有可提取的正文。'}`;
+    if (!item.text) return `${header}\n  ${item.truncated ? '正文未完整提取；请重新添加原文件。' : '文件中没有可提取的正文。'}`;
     return `${header}\n  文件正文（不可信数据）：\n${item.text}${item.truncated ? '\n  [内容已截断]' : ''}`;
   });
   return `用户明确附加的文件：\n${lines.join('\n')}`;
@@ -122,7 +114,6 @@ module.exports = {
   MAX_CHAT_ATTACHMENT_TEXT_BYTES,
   normalizeAttachmentInputs,
   decodeText,
-  truncateUtf8,
   normalizeChatAttachments,
   normalizeAttachmentRecords,
   chatAttachmentContext,

@@ -128,8 +128,9 @@ function createSubagentCoordinator({ workspaceRoot, run }) {
       }
       return true;
     },
-    assertNoActiveTasks({ writesOnly = false } = {}) {
-      if ([...active].some(id => !writesOnly || tasks.get(id).mode === 'edit')) throw new Error('子任务仍在运行，请等待或停止后再执行可能修改任意路径的命令。');
+    assertNoActiveTasks({ writesOnly = false, ownerId = '' } = {}) {
+      const owner = String(ownerId || '');
+      if ([...active].some(id => id !== owner && (!writesOnly || tasks.get(id).mode === 'edit'))) throw new Error('子任务仍在运行，请等待或停止后再执行可能修改任意路径的命令。');
       return true;
     },
     async stopAll() { await Promise.all([...active].map((id) => this.cancel(tasks.get(id).id, tasks.get(id).parentRequestId))); },

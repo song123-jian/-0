@@ -109,6 +109,39 @@ test('responses larger than four megabytes are accepted when the stream is compl
   assert.equal(result.text, content);
 });
 
+test('request refuses a context that cannot fit its protected system instructions', async () => {
+  let requests = 0;
+  await assert.rejects(runModelTask({ connection: { ...connection, contextWindowTokens: 8 },
+    messages: [{ role: 'system', content: 'This required instruction is longer than the configured context window.' }, { role: 'user', content: 'Do the task.' }],
+    fetchImpl: async () => { requests++; return stream([delta({ content: 'unexpected' }), delta({}, 'stop')]); },
+  }), /上下文.*超过|context.*capacity/i);
+  assert.equal(requests, 0);
+});
+
+test('context-length retry does not replay completed tools and keeps their history paired', async () => {
+  const largeTask = ['Current task: preserve this request.', ...Array.from({ length: 1600 }, (_, index) => `background ${index} ${'x'.repeat(20)}`), 'Error evidence: E:\\repo\\failure.log'].join('\n');
+  let requests = 0, executed = 0;
+  const bodies = [];
+  const result = await runModelTask({ connection, messages: [{ role: 'user', content: largeTask }], tools,
+    executeTool: async () => { executed++; return { ok: true, output: 'actual completed tool result' }; },
+    fetchImpl: async (_url, init) => {
+      bodies.push(JSON.parse(init.body));
+      requests++;
+      if (requests === 1) return toolReply();
+      if (requests === 2) return Response.json({ error: { message: 'maximum context length exceeded' } }, { status: 400 });
+      return stream([delta({ content: '已依据真实结果完成。' }), delta({}, 'stop')]);
+    },
+  });
+  assert.equal(result.rounds, 2);
+  assert.equal(requests, 3);
+  assert.equal(executed, 1);
+  const retryMessages = bodies[2].messages;
+  const callId = 'call_file';
+  const callIndex = retryMessages.findIndex(item => item.tool_calls?.some(call => call.id === callId));
+  assert.ok(callIndex >= 0);
+  assert.equal(retryMessages[callIndex + 1].tool_call_id, callId);
+});
+
 test('cancelled task cannot execute a later tool in the same batch', async () => {
   const controller = new AbortController(); let count = 0;
   await assert.rejects(runModelTask({ connection, messages: [], tools, signal: controller.signal,
@@ -128,7 +161,7 @@ test('dialogue requests omit tools and reject unexpected calls; JSON endpoints a
 
 test('tool HTTP rejection is clear and never silently retries with tools disabled', async () => {
   let requests = 0;
-  await assert.rejects(runModelTask({ connection, messages: [], tools, fetchImpl: async () => { requests++; return new Response('', { status: 400 }); } }), /支持.*function tools/);
+  await assert.rejects(runModelTask({ connection, messages: [], tools, fetchImpl: async () => { requests++; return new Response('', { status: 400 }); } }), /HTTP 400.*参数与工具能力/);
   assert.equal(requests, 1);
 });
 

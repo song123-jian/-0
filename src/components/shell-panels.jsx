@@ -2,10 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, CircleAlert, Ellipsis, ExternalLink, FileCode2, FileSpreadsheet, FileText, FolderOpen, GitBranch, Globe, House, Image, LoaderCircle, Maximize2, MessageSquare, Minimize2, PanelRightClose, PanelRightOpen, Plus, RotateCw, Search, Send, Settings, ShieldAlert, ShieldCheck, Sparkles, StopCircle, Terminal, X } from 'lucide-react';
 import { MAX_CHAT_IMAGES, prepareChatImages } from '../lib/chat-images.js';
 import { DevServicesPanel } from './dev-services-panel.jsx';
+import { MessageFilesPanel } from './message-files-panel.jsx';
 
 const errorText = (error) => String(error?.message || error || '操作失败').replace(/^Error invoking remote method '[^']+': /, '');
-const shortSize = (bytes) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-const parentPath = (value) => value.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '');
 
 export function ActivityRail({ onCommand, activeView, onView, browserOpen, onBrowser, onReveal, canGoBack = false, canGoForward = false, onBack, onForward }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -80,7 +79,7 @@ function SideChatPanel({ model, reasoningOptions, defaultReasoningEffort, contex
     const assistantEntry = { id: requestId, role: 'assistant', content: '', pending: true, startedAt: Date.now(), model };
     const retryIndex = retry ? messages.findIndex((item) => item.id === retry.userId) : messages.length;
     const history = messages.slice(0, retryIndex).filter((item) => ['user', 'assistant'].includes(item.role) && (item.content || item.images?.length) && !item.error && !item.cancelled)
-      .slice(-20).map((item) => ({ role: item.role, content: item.content, images: item.images }));
+      .map((item) => ({ role: item.role, content: item.content, images: item.images }));
     setMessages((current) => retry ? [...current.filter((item) => item.id !== retry.userId && item.id !== retry.assistantId), userEntry, assistantEntry] : [...current, userEntry, assistantEntry]);
     setDraft(''); updateImages([]); setBusy(true); setError(''); requestRef.current = { id: requestId };
     try { await window.scodex.sendMessage({ requestId, mode: 'answer', reasoningEffort, prompt: content || (outgoingImages.length ? '请描述这些图片。' : ''), messages: history, images: outgoingImages }); }
@@ -175,44 +174,6 @@ function TerminalPanel() {
   </section>;
 }
 
-function WorkspaceFilesPanel({ workspaceRoot, onOpenFile, onReveal, onError }) {
-  const [directory, setDirectory] = useState(workspaceRoot);
-  const [listing, setListing] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => { setDirectory(workspaceRoot); setSelected(null); }, [workspaceRoot]);
-  useEffect(() => {
-    let current = true;
-    setLoading(true); setError(''); setSelected(null);
-    window.scodex.listDirectory(directory || workspaceRoot).then((result) => { if (current) setListing(result); })
-      .catch((caught) => { if (current) setError(errorText(caught)); })
-      .finally(() => { if (current) setLoading(false); });
-    return () => { current = false; };
-  }, [directory, workspaceRoot, refreshKey]);
-  const root = listing?.root || workspaceRoot;
-  const rootLabel = root.match(/^[a-z]:/i)?.[0] || '工作区';
-  const atRoot = String(listing?.directory || directory).replace(/[\\/]+$/, '').toLowerCase() === String(root).replace(/[\\/]+$/, '').toLowerCase();
-  const visibleItems = (listing?.items || []).filter((item) => item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  const openSelected = () => { if (selected && !selected.directory) Promise.resolve(onOpenFile(selected.path)).catch((caught) => { setError(errorText(caught)); onError?.(caught); }); };
-  return <section className="workspace-file-tool" aria-label="工作区文件">
-    <div className="workspace-file-toolbar"><button type="button" className="workspace-root-button" title={root} onClick={() => { setDirectory(root); setQuery(''); }}><FolderOpen size={15} />{rootLabel}</button><span className="workspace-path-label" title={directory}>{directory}</span><div className="workspace-file-menu"><button type="button" className="icon-button" aria-label="文件选项" title="文件选项" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><Ellipsis size={18} /></button>{menuOpen && <div className="workspace-file-menu-popover"><button type="button" onClick={() => { setRefreshKey((value) => value + 1); setMenuOpen(false); }}><RotateCw size={15} />刷新当前目录</button><button type="button" onClick={() => { onReveal?.(); setMenuOpen(false); }}><ExternalLink size={15} />在文件管理器中打开</button></div>}</div></div>
-    <div className="workspace-file-columns">
-      <div className="workspace-file-preview">{selected ? <><div className="workspace-file-preview-icon">{selected.directory ? <FolderOpen size={28} /> : /\.(png|jpe?g|webp|bmp)$/i.test(selected.name) ? <Image size={28} /> : <FileText size={28} />}</div><strong title={selected.name}>{selected.name}</strong><p>{selected.directory ? '文件夹' : shortSize(selected.size)}</p><button type="button" className="secondary-button" disabled={selected.directory} onClick={openSelected}><FolderOpen size={15} />打开文件</button></> : <><div className="workspace-file-preview-icon"><FolderOpen size={28} /></div><strong>打开文件</strong><p>从工作区目录树中选择文件</p></>}</div>
-      <div className="workspace-file-list-pane">
-        <label className="workspace-file-search"><Search size={15} /><input aria-label="筛选文件" placeholder="筛选文件..." value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-        <div className="workspace-file-location"><button type="button" aria-label="返回上级目录" title={atRoot ? '已在工作区根目录' : '返回上级目录'} disabled={atRoot} onClick={() => { if (!atRoot) setDirectory(parentPath(directory) || root); }}><ChevronLeft size={15} /></button><span title={directory}>{directory.replace(/[\\/]/g, ' / ')}</span></div>
-        {loading && <div className="workspace-file-status"><LoaderCircle size={16} className="spin" />正在读取目录</div>}
-        {error && <div className="workspace-file-status error" role="alert">{error}</div>}
-        {!loading && !error && <div className="workspace-file-items" role="listbox" aria-label="工作区文件列表">{visibleItems.map((item) => <button type="button" key={item.path} role="option" aria-selected={selected?.path === item.path} className={'workspace-file-entry' + (selected?.path === item.path ? ' selected' : '')} onClick={() => item.directory ? setDirectory(item.path) : setSelected(item)} onDoubleClick={() => { if (item.directory) setDirectory(item.path); else { setSelected(item); Promise.resolve(onOpenFile(item.path)).catch((caught) => { setError(errorText(caught)); onError?.(caught); }); } }}><span className="workspace-file-entry-icon">{item.directory ? <FolderOpen size={15} /> : <FileText size={15} />}</span><span>{item.name}</span>{item.directory && <ChevronRight size={14} />}</button>)}{!visibleItems.length && <div className="workspace-file-empty">{query ? '没有匹配的文件' : '此目录为空'}</div>}</div>}
-      </div>
-    </div>
-  </section>;
-}
-
 export function BrowserPanel({ requestedTool, panelWidth = 400, onWidthChange, onWidthCommit, open, expanded, suspended = false, preferences, workspaceRoot, model = 'grok-4.7', reasoningOptions = [], defaultReasoningEffort = 'max', contextAccess, onContextPermission, onOpenFile, onReveal, onToggle, onExpand, onView, onTerminal, onError, onAiOpen }) {
   const [state, setState] = useState({ tabs: [], activeId: null });
   const [address, setAddress] = useState('');
@@ -221,6 +182,7 @@ export function BrowserPanel({ requestedTool, panelWidth = 400, onWidthChange, o
   const [actionError, setActionError] = useState('');
   const [toolTabs, setToolTabs] = useState([]);
   const [activeToolId, setActiveToolId] = useState(null);
+  const [fileRequest, setFileRequest] = useState(null);
   const [browserHistory, setBrowserHistory] = useState([]);
   const contentRef = useRef(null);
   const tab = state.tabs.find((item) => item.id === state.activeId);
@@ -290,8 +252,27 @@ export function BrowserPanel({ requestedTool, panelWidth = 400, onWidthChange, o
   useEffect(() => {
     if (!requestedTool) return;
     if (requestedTool.kind === 'browser') { setActiveToolId(null); setMenuOpen(false); }
-    else switchTool(requestedTool.kind);
+    else { if (requestedTool.kind === 'files' && requestedTool.path) setFileRequest(requestedTool); switchTool(requestedTool.kind); }
   }, [requestedTool?.id]);
+  useEffect(() => window.scodex.onBrowserShortcut(({ type }) => {
+    if (type !== 'focus-address' || !open || suspended) return;
+    setActiveToolId(null); setAddressFocused(true);
+    requestAnimationFrame(() => { const field = document.querySelector('[aria-label="搜索或输入网址"]'); field?.focus(); field?.select(); });
+  }), [open, suspended]);
+  useEffect(() => {
+    const keydown = event => {
+      if (!open || suspended || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.isComposing || event.defaultPrevented) return;
+      const key = event.key.toLowerCase();
+      const inPanel = event.target?.closest?.('.browser-pane');
+      if (!inPanel && !document.body?.contains(event.target)) return;
+      if (key === 'l' && !activeTool) { event.preventDefault(); setAddressFocused(true); const field = document.querySelector('[aria-label="搜索或输入网址"]'); field?.focus(); field?.select(); }
+      else if (inPanel && key === 't') { event.preventDefault(); action('new'); }
+      else if (inPanel && key === 'w') { event.preventDefault(); if (activeTool) closeTool(activeTool.id); else if (tab) action('close', { id: tab.id }); }
+      else if (inPanel && key === 'r' && !activeTool && tab?.url) { event.preventDefault(); action('reload'); }
+    };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  });
   const resizeRef = useRef(null);
   const constrainedWidth = (value) => Math.max(320, Math.min(660, window.innerWidth - 460, Math.round(value)));
   const closeTool = (id) => {
@@ -336,7 +317,7 @@ export function BrowserPanel({ requestedTool, panelWidth = 400, onWidthChange, o
         {item.kind === 'chat' && <SideChatPanel model={model} reasoningOptions={reasoningOptions} defaultReasoningEffort={defaultReasoningEffort} contextAccess={contextAccess} onContextPermission={onContextPermission} />}
         {item.kind === 'terminal' && <TerminalPanel />}
         {item.kind === 'services' && <DevServicesPanel workspaceRoot={workspaceRoot} active={open && item.id === activeToolId} contextAccess={contextAccess} onPreview={(url) => action('new', { url })} />}
-        {item.kind === 'files' && <WorkspaceFilesPanel workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} onReveal={onReveal} onError={onError} />}
+        {item.kind === 'files' && <MessageFilesPanel workspaceRoot={workspaceRoot} request={fileRequest} onPath={path => setFileRequest({ path, id: window.crypto.randomUUID() })} />}
       </div>)}
       {!activeTool && <>
         {menuOpen ? <div className="browser-options"><h2>标签页选项</h2><button className="secondary-button" onClick={() => { action('new'); setMenuOpen(false); }} disabled={state.tabs.length >= 10}><Plus size={17} />新建标签页</button><button className="secondary-button" onClick={() => { setMenuOpen(false); onTerminal?.(); }}><ExternalLink size={17} />在独立窗口打开终端</button><button className="secondary-button" onClick={() => { setMenuOpen(false); onToggle(); }}><PanelRightOpen size={17} />隐藏工作台，保留页面</button><button className="text-tool" onClick={() => setMenuOpen(false)}>返回页面</button></div>

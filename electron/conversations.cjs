@@ -12,17 +12,17 @@ const validModel = (model) => typeof model === 'string' && model.trim() && model
 
 function normalizeOperations(value) {
   const previewIds = new Set((Array.isArray(value) ? value : []).filter((item) => item?.screenshot).slice(-4).map((item) => item.id));
-  return (Array.isArray(value) ? value : []).slice(0, 64).filter((item) => item && typeof item === 'object' && typeof item.name === 'string').map((item) => ({
+  return (Array.isArray(value) ? value : []).filter((item) => item && typeof item === 'object' && typeof item.name === 'string').map((item) => ({
     id: validId(item.id), name: item.name.slice(0, 100), title: String(item.title || '').slice(0, 160),
     status: item.status === 'running' ? 'interrupted' : ['succeeded', 'failed', 'cancelled', 'interrupted', 'deferred'].includes(item.status) ? item.status : 'interrupted',
-    detail: String(item.detail || '').slice(0, 16000), path: String(item.path || '').slice(0, 4096),
-    output: String(item.output || '').slice(-24000), diff: String(item.diff || '').slice(0, 24500),
+    detail: String(item.detail || ''), path: String(item.path || ''),
+    output: String(item.output || ''), diff: String(item.diff || ''),
     startedAt: Number.isFinite(Date.parse(item.startedAt)) ? item.startedAt : '',
     endedAt: Number.isFinite(Date.parse(item.endedAt)) ? item.endedAt : '',
     ...(Number.isInteger(item.exitCode) || item.exitCode === null ? { exitCode: item.exitCode } : {}),
     ...(item.truncated ? { truncated: true } : {}),
     ...(previewIds.has(item.id) && typeof item.screenshot?.dataUrl === 'string' && item.screenshot.dataUrl.length <= 130000 && normalizeChatImages([item.screenshot]).length ? { screenshot: normalizeChatImages([item.screenshot])[0] } : {}),
-    ...(Array.isArray(item.plan) ? { plan: item.plan.slice(0, 12).filter((step) => step && typeof step.text === 'string' && ['pending', 'in_progress', 'completed'].includes(step.status)).map((step) => ({ text: step.text.slice(0, 300), status: step.status })) } : {}),
+    ...(Array.isArray(item.plan) ? { plan: item.plan.filter((step) => step && typeof step.text === 'string' && ['pending', 'in_progress', 'completed'].includes(step.status)).map((step) => ({ text: step.text, status: step.status })) } : {}),
   }));
 }
 
@@ -38,12 +38,12 @@ function normalizeMessage(message) {
   let attachments = [];
   try { attachments = normalizeAttachmentRecords(message.attachments); } catch { /* Keep the message if an old attachment is invalid. */ }
   return {
-    id: validId(message.id), role: message.role, content: message.content.slice(0, 64_000),
+    id: validId(message.id), role: message.role, content: message.content,
     ...(message.role === 'user' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(message.steering?.id || '') && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(message.steering?.requestId || '') ? { steering: {
       id: message.steering.id, requestId: message.steering.requestId,
       status: ['accepted', 'expired', 'failed'].includes(message.steering.status) ? message.steering.status : 'expired',
     } } : {}),
-    ...(message.role === 'assistant' && Number.isInteger(message.finalContentOffset) && message.finalContentOffset > 0 && message.finalContentOffset < Math.min(message.content.length, 64_000) ? { finalContentOffset: message.finalContentOffset } : {}),
+    ...(message.role === 'assistant' && Number.isInteger(message.finalContentOffset) && message.finalContentOffset > 0 && message.finalContentOffset < message.content.length ? { finalContentOffset: message.finalContentOffset } : {}),
     ...(message.executionEnabled === true ? { executionEnabled: true } : {}),
     ...(message.role === 'assistant' && Array.isArray(message.operations) && message.operations.length ? { operations: normalizeOperations(message.operations) } : {}),
     ...(message.role === 'assistant' && /^[0-9a-f-]{36}$/i.test(message.fileChanges?.id || '') ? { fileChanges: { id: message.fileChanges.id } } : {}),
@@ -54,7 +54,7 @@ function normalizeMessage(message) {
     ...(attachments.length ? { attachments } : {}),
     ...(validModel(message.model) ? { model: validModel(message.model) } : {}),
     ...(validEffort(message.reasoningEffort) ? { reasoningEffort: message.reasoningEffort } : {}),
-    ...(message.error ? { error: String(message.error).slice(0, 600) } : {}),
+    ...(message.error ? { error: String(message.error) } : {}),
     ...(message.cancelled || message.pending ? { cancelled: true } : {}),
     ...(message.role === 'assistant' && elapsed !== null ? { elapsedMs: elapsed } : {}),
     ...(Number.isFinite(message.stoppedAfter) ? { stoppedAfter: Math.max(0, Math.min(3600, Math.floor(message.stoppedAfter))) } : {}),
@@ -98,10 +98,10 @@ function normalizeLibrary(value, now = new Date().toISOString()) {
       id, title: String(entry.title || messages.find((item) => item.role === 'user')?.content || '新对话').replace(/[\r\n]+/g, ' ').slice(0, 100),
       createdAt: Number.isFinite(Date.parse(entry.createdAt)) ? entry.createdAt : now,
       updatedAt: Number.isFinite(Date.parse(entry.updatedAt)) ? entry.updatedAt : now,
-      mode: validMode(entry.mode), draft: String(entry.draft || '').slice(0, 64_000),
+      mode: validMode(entry.mode), draft: String(entry.draft || ''),
       ...(entry.executionEnabled === true ? { executionEnabled: true } : {}),
-      goal: typeof entry.goal === 'string' ? entry.goal.slice(0, 2000) : '',
-      ...(entry.goalRun && typeof entry.goalRun === 'object' ? { goalRun: { status: ['completed','blocked','paused'].includes(entry.goalRun.status) ? entry.goalRun.status : 'paused', rounds: Math.max(0, Math.floor(Number(entry.goalRun.rounds) || 0)), summary: String(entry.goalRun.summary || '').slice(0, 4000) } } : {}),
+      goal: typeof entry.goal === 'string' ? entry.goal : '',
+      ...(entry.goalRun && typeof entry.goalRun === 'object' ? { goalRun: { status: ['completed','blocked','paused'].includes(entry.goalRun.status) ? entry.goalRun.status : 'paused', rounds: Math.max(0, Math.floor(Number(entry.goalRun.rounds) || 0)), summary: String(entry.goalRun.summary || '') } } : {}),
       ...(validEffort(entry.reasoningEffort) ? { reasoningEffort: entry.reasoningEffort } : {}),
       ...(validModel(entry.model) ? { model: validModel(entry.model) } : {}),
       ...(validProjectId(entry.projectId) ? { projectId: entry.projectId } : {}),

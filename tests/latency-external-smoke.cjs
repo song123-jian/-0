@@ -7,12 +7,14 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { connect, wait, freePort } = require('./agent-workflow-ui.cjs');
 if (process.env.SCODEX_EXTERNAL_LATENCY !== '1') { console.log('Skipped: SCODEX_EXTERNAL_LATENCY=1 is required.'); process.exit(0); }
-const root = path.resolve(__dirname, '..'), output = path.join(root, 'release/delivery-1.3.36/external');
+const root = path.resolve(__dirname, '..');
+const output = process.env.SCODEX_EXTERNAL_OUTPUT ? path.resolve(process.env.SCODEX_EXTERNAL_OUTPUT) : path.join(root, 'release/delivery-1.3.36/external');
 const fixture = path.join(output, 'fixture-' + crypto.randomUUID()), profile = path.join(fixture, 'profile'), home = path.join(fixture, 'home');
 const source = path.join(process.env.APPDATA, 'scodex-workbench/model-connection.json');
 const copied = path.join(profile, 'model-connection.json');
 const executable = process.env.SCODEX_PERF_EXE || path.join(root, 'release/win-unpacked/Scodex工作台.exe');
-const report = { status: 'running', executable, fixture, scope: 'One fixed public prompt, configured service/model/default reasoning; isolated chat-only profile; no previous chats or workspace content sent.' };
+const prompt = process.env.SCODEX_EXTERNAL_PROMPT || '这是连接速度检查。请仅回复“连接正常”，不要解释，不调用任何工具。';
+const report = { status: 'running', executable, fixture, request: prompt === '你好' ? '你好' : 'configured smoke prompt', scope: 'One short prompt, configured service/model/default reasoning; isolated chat-only profile; no previous chats or workspace content sent.' };
 let child, socket, cdp, sourceHash; const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 async function main() {
   await fs.mkdir(profile, { recursive: true }); await fs.mkdir(home, { recursive: true });
@@ -32,7 +34,7 @@ async function main() {
   const s = await cdp.evaluate('window.scodex.getAppState()'); report.version = s.version; assert.equal(s.version, require('../package.json').version);
   await cdp.evaluate('window.__externalEvents=[];window.__externalEnd=null;window.scodex.onChatEvent(e=>{if(e.type==="request-metrics")window.__externalEvents.push(e);if(["complete","error","cancelled"].includes(e.type))window.__externalEnd={type:e.type,message:e.message};});true');
   const requestId = crypto.randomUUID();
-  await cdp.evaluate('window.scodex.sendMessage(' + JSON.stringify({ requestId, conversationId: s.library.activeId, prompt: '这是连接速度检查。请仅回复“连接正常”，不要解释，不调用任何工具。', mode: 'answer', messages: [] }) + ').catch(e=>window.__externalEnd={type:"invoke-error",message:e.message});true');
+  await cdp.evaluate('window.scodex.sendMessage(' + JSON.stringify({ requestId, conversationId: s.library.activeId, prompt, mode: 'answer', messages: [] }) + ').catch(e=>window.__externalEnd={type:"invoke-error",message:e.message});true');
   await wait(() => cdp.evaluate('window.__externalEnd'), 'Configured service generation terminal event', 135000);
   report.terminal = await cdp.evaluate('window.__externalEnd'); report.requests = await cdp.evaluate('window.__externalEvents');
   report.status = report.terminal.type === 'complete' ? 'passed' : 'failed';

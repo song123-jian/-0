@@ -1,0 +1,19 @@
+.message-timeline { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; }
+.message-timeline > .conversation-scroll { min-width: 0; overscroll-behavior: contain; }
+.timeline-content { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
+.request-timeline { position: absolute; z-index: 2; top: 50%; left: 6px; width: 20px; transform: translateY(-50%); }
+.request-ticks { display: flex; flex-direction: column; max-height: min(36vh, 260px); overflow-y: auto; scrollbar-width: none; }
+.request-timeline button { display: flex; align-items: center; justify-content: flex-start; flex: 0 0 auto; width: 20px; height: 12px; padding: 3px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.request-tick { display: block; width: 6px; height: 1px; border-radius: 1px; background: currentColor; opacity: .4; }
+.request-timeline button:nth-child(3n) .request-tick { width: 9px; }
+.request-timeline button:hover, .request-timeline button[aria-current] { color: var(--ink); }
+.request-timeline button:hover .request-tick, .request-timeline button[aria-current] .request-tick { width: 14px; opacity: 1; }
+.request-timeline button:focus-visible, .jump-to-latest:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+.request-preview { position: absolute; left: 100%; box-sizing: border-box; width: min(300px, calc(100cqw - 56px)); max-height: 160px; overflow: auto; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--paper); box-shadow: 0 4px 14px #0002; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.request-preview strong { display: block; margin-bottom: 4px; font-size: 11px; }
+.request-preview > div { white-space: pre-wrap; }
+.jump-to-latest { position: absolute; z-index: 2; bottom: 12px; left: 50%; display: grid; place-items: center; width: 38px; height: 38px; transform: translateX(-50%); padding: 0; border: 1px solid var(--line); border-radius: 50%; color: var(--ink); background: var(--paper); box-shadow: 0 2px 8px #0002; cursor: pointer; }
+.jump-to-latest:hover { color: var(--accent); background: var(--surface); }
+.task-chat-view .has-requests .message-list { width: min(800px, calc(100% - 80px)); }
+@container main (max-width: 540px) { .task-chat-view .has-requests .message-list { width: calc(100% - 56px); margin-left: 44px; } .request-timeline { left: 3px; } }
+@media (pointer: coarse) { .request-timeline button { height: 28px; } }

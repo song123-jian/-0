@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppWindow, BookOpen, Bot, Brain, Check, ChevronDown, Clipboard, Code2, Folder, FolderOpen, GitBranch, Globe, Info, Keyboard, LayoutPanelLeft, Monitor, Moon, Palette, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, Sun, Terminal, X } from 'lucide-react';
 import { WORK_MODES } from '../lib/modes.js';
+import { DEFAULT_SHORTCUTS, formatShortcut, normalizeShortcuts, shortcutFromEvent } from '../lib/shortcuts.js';
 import { StoragePanel } from './storage-panel.jsx';
 import { ModelConnectionPanel } from './model-connection-panel.jsx';
 import { PluginSettings, ComputerSettings, BrowserSettings, GitSettings } from './integration-settings.jsx';
 import FONT_FAMILIES from '../../electron/font-families.json';
+import { ReferenceSettings } from './reference-settings.jsx';
 
 const CATEGORIES = [
   { id: 'general', label: '常规', icon: Settings2, group: '个人', search: '权限 工作区 聊天目录 压缩 归档 插件 技能 开源 许可 默认模式 完整视图 底部面板 默认打开终端 shell 语言 关闭窗口 通知 Dot 托盘 驻留 最小化 退出' },
@@ -79,6 +81,37 @@ function FileOpenLocationSelect({ value, onChange }) {
 
 function Switch({ label, checked, onChange, disabled = false }) {
   return <button type="button" className={'settings-switch ' + (checked ? 'checked' : '')} role="switch" aria-label={label} aria-checked={Boolean(checked)} disabled={disabled} onClick={() => onChange(!checked)}><span /></button>;
+}
+
+const SHORTCUT_LABELS = [
+  ['commandPalette', '工具命令搜索'], ['newChat', '新建对话'], ['files', '打开文件面板'], ['terminal', '集成终端'],
+  ['settings', '打开设置'], ['historyBack', '工作台后退'], ['historyForward', '工作台前进'], ['save', '保存当前文件或表格'],
+  ['browser', '显示或隐藏标签工作台'], ['rename', '重命名项目或聊天'], ['pin', '置顶项目或聊天'],
+  ['unread', '标记为未读'], ['archive', '归档项目或聊天'],
+];
+
+function ShortcutField({ label, value, onChange, disabled = false }) {
+  const [capturing, setCapturing] = useState(false);
+  const trigger = useRef(null);
+  useEffect(() => {
+    if (!capturing) return undefined;
+    const onKeyDown = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') { setCapturing(false); trigger.current?.focus(); return; }
+      const next = shortcutFromEvent(event);
+      if (!next) return;
+      onChange(next);
+      setCapturing(false);
+      trigger.current?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [capturing, onChange]);
+  return <div className="shortcut-field">
+    <kbd>{capturing ? '请按组合键' : formatShortcut(value)}</kbd>
+    <button ref={trigger} type="button" className="secondary-button" disabled={disabled} onClick={() => setCapturing(true)}>{capturing ? '取消' : '修改'}</button>
+  </div>;
 }
 
 function ColorField({ label, value, onChange }) {
@@ -274,7 +307,7 @@ function ReasoningEffortSelect({ value, onChange }) {
   </details>;
 }
 
-export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onModelConnectionSaved, onSupabaseSyncSaved, onModalChange, appState, workspaceRoot, preferences, resolvedTheme, agentSettings: effectiveAgentSettings, onPreference, onAgentSetting, onConfigureConversationStorage, onOpenCodexConfig, onDiagnoseCodex, onOpenCodexDiagnostic, onUpdateCodex, onReinstallTools, onChooseWorkspace, onReveal, onCopyPath, onRefreshSkills, skills = [], connectionLabel, onView, library, chatBusy, onManageChats }) {
+export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onModelConnectionSaved, onSupabaseSyncSaved, onModalChange, appState, workspaceRoot, preferences, resolvedTheme, agentSettings: effectiveAgentSettings, onPreference, onAgentSetting, onIntegrationUpdate, onPluginEnabled, onConfigureConversationStorage, onOpenCodexConfig, onDiagnoseCodex, onOpenCodexDiagnostic, onUpdateCodex, onReinstallTools, onChooseWorkspace, onReveal, onCopyPath, onRefreshSkills, skills = [], inventory, connectionLabel, onView, library, chatBusy, onManageChats }) {
   const [selected, setSelected] = useState(initialCategory?.id || 'general');
   const [desktopError, setDesktopError] = useState('');
   useEffect(() => { if (initialCategory?.id && CATEGORIES.some((item) => item.id === initialCategory.id)) setSelected(initialCategory.id); }, [initialCategory]);
@@ -284,9 +317,12 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
   const [savingAgent, setSavingAgent] = useState(false);
   const scopeState = appState?.agentSettingsScopes?.[scope];
   const agentSettings = scopeState?.settings || effectiveAgentSettings;
+  const runtimeFullAccess = appState?.permissionPolicy?.sandboxMode === 'danger-full-access'
+    && appState?.permissionPolicy?.approvalPolicy === 'never';
   const [licensesOpen, setLicensesOpen] = useState(false);
   useEffect(() => { onModalChange?.(licensesOpen); return () => onModalChange?.(false); }, [licensesOpen, onModalChange]);
   const [search, setSearch] = useState('');
+  const [shortcutError, setShortcutError] = useState('');
   const [codexAction, setCodexAction] = useState(null);
   const [workingCodexAction, setWorkingCodexAction] = useState('');
   const [tools, setTools] = useState(appState?.workspaceTools || { installed: false });
@@ -312,6 +348,17 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
     try { return await onAgentSetting(key === null ? null : { [key]: value }, scope); }
     finally { setSavingAgent(false); }
   };
+  const updateShortcut = (id, value) => {
+    const current = normalizeShortcuts(preferences.shortcuts);
+    const conflict = Object.entries(current).find(([otherId, shortcut]) => otherId !== id && shortcut === value);
+    if (conflict) {
+      const label = SHORTCUT_LABELS.find(([otherId]) => otherId === conflict[0])?.[1] || conflict[0];
+      setShortcutError(`此组合键已分配给“${label}”。`);
+      return;
+    }
+    setShortcutError('');
+    onPreference({ shortcuts: { ...current, [id]: value } });
+  };
   const enableFullAccess = async () => {
     setSavingAgent(true);
     setDesktopError('');
@@ -319,7 +366,7 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
       // Apply to the active workspace so an existing override cannot hide the preset.
       const saved = await onAgentSetting({ sandboxMode: 'danger-full-access', approvalPolicy: 'never', networkAccess: true, networkDomains: ['*'], allowLocalBinding: true }, 'workspace');
       if (!saved) throw new Error('权限保存失败，请重试。');
-      const enabled = await onPreference({ computerControlEnabled: true });
+      const enabled = await onPreference({ computerControlEnabled: true, browserApprovalMode: 'never_ask' });
       if (!enabled) throw new Error('权限已保存，电脑操控启用失败，请在电脑操控页开启。');
       setScope('workspace');
     } catch (error) { setDesktopError(String(error.message || error)); }
@@ -362,10 +409,11 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
     </aside>
     <div className="settings-detail" key={active}>
       {category ? <div className="settings-detail-inner"><header className="settings-detail-heading"><h1>{category.label}</h1>{active !== 'storage' && <p>{active === 'model' ? '配置模型服务，点击“保存配置”后生效。' : active === 'general' ? '管理本地权限、默认行为和通知。' : active === 'appearance' ? '选择舒适清晰的配色和字体。' : active === 'agent' ? '配置新聊天的权限、网页访问和智能体回复。' : '设置会自动保存到当前电脑。'}</p>}</header>
+        {['browser', 'computer', 'skills', 'agent'].includes(active) && <ReferenceSettings category={active} preferences={preferences} onPreference={onPreference} onAgentSetting={onAgentSetting} onRefreshSkills={onRefreshSkills} busy={chatBusy} />}
         {active === 'general' && <>
           <SettingsGroup title="权限">
             <SettingRow label="默认权限" description="完全访问允许选择本机内容随消息提交；仅对话只发送对话内容。"><select aria-label="默认权限" value={preferences.contextAccess} onChange={(event) => onPreference({ contextAccess: event.target.value })}><option value="manual">完全访问</option><option value="chat-only">仅对话</option></select></SettingRow>
-            <SettingRow label="完整访问权限" description="工作台聊天通过确认后保存文件；不会自行执行模型生成的系统命令。"><span className="settings-value">按操作确认</span></SettingRow>
+            <SettingRow label="完整访问权限" description={runtimeFullAccess ? '工作台本机工具、文件、命令、网络及已启用的浏览器和桌面操控直接执行，不显示工作台审批。仍受 Windows UAC 和当前用户权限限制。' : '当前运行时尚未启用完整访问。'}><span className="settings-value">{runtimeFullAccess ? '直接执行' : '未启用'}</span></SettingRow>
           </SettingsGroup>
           <SettingsGroup title="常规">
             <SettingRow label="本地聊天文件夹" description={appState?.conversationDirectory || appState?.userDataPath || '当前应用数据目录'} wide><button className="secondary-button" disabled={chatBusy || Boolean(appState?.historyError)} onClick={() => onConfigureConversationStorage({ chooseDirectory: true })}><FolderOpen size={16} />更改</button></SettingRow>
@@ -423,7 +471,14 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
         {active === 'storage' && <>
           <StoragePanel onOpenWorktree={onOpenWorktree} workspaceRoot={workspaceRoot} library={library} busy={chatBusy} historyError={appState?.historyError} onManageChats={onManageChats} onChooseWorkspace={onChooseWorkspace} onRevealWorkspace={onReveal} onCopyWorkspace={onCopyPath} />
         </>}
-        {active === 'shortcuts' && <SettingsGroup title="常用操作">{[['工具命令搜索', 'Ctrl Shift P'], ['新建对话', 'Ctrl K'], ['打开文件面板', 'Ctrl P'], ['集成终端', 'Ctrl J'], ['打开设置', 'Ctrl ,'], ['工作台后退／前进', 'Alt ← / →'], ['发送当前消息', preferences.sendShortcut === 'enter' ? 'Enter' : 'Ctrl Enter'], ['保存当前文件或表格', 'Ctrl S'], ['显示或隐藏标签工作台', 'Ctrl Shift B']].map(([label, key]) => <SettingRow key={key} label={label}><kbd>{key}</kbd></SettingRow>)}</SettingsGroup>}
+        {active === 'shortcuts' && <>
+          <SettingsGroup title="常用操作">
+            {SHORTCUT_LABELS.map(([id, label]) => <SettingRow key={id} label={label}><ShortcutField label={label} value={preferences.shortcuts?.[id] || DEFAULT_SHORTCUTS[id]} onChange={(value) => updateShortcut(id, value)} /></SettingRow>)}
+            <SettingRow label="发送当前消息"><kbd>{preferences.sendShortcut === 'enter' ? 'Enter' : 'Ctrl+Enter'}</kbd></SettingRow>
+          </SettingsGroup>
+          {shortcutError && <p className="integration-error" role="alert">{shortcutError}</p>}
+          <button className="settings-reset-button" type="button" onClick={() => { setShortcutError(''); onPreference({ shortcuts: DEFAULT_SHORTCUTS }); }}><RotateCcw size={16} />恢复默认快捷键</button>
+        </>}
         {active === 'model' && <ModelConnectionPanel connection={appState?.connection} onSaved={onModelConnectionSaved} busy={chatBusy} />}
         {active === 'sync' && <SupabaseSyncSettings onSync={onAppSync} appState={appState} chatBusy={chatBusy} onSaved={onSupabaseSyncSaved} />}
         {active === 'agent' && <>
@@ -474,9 +529,9 @@ export function SettingsPanel({ onAppSync, onOpenWorktree, initialCategory, onMo
           {codexAction && <section className="settings-diagnostic" aria-live="polite"><div className="settings-diagnostic-heading"><strong>{codexAction.kind === 'diagnose' ? '诊断结果' : codexAction.kind === 'reinstall' ? '工作空间安装结果' : '更新结果'}</strong><span>{codexAction.status === 'running' ? '处理中' : codexAction.status === 'complete' ? '执行完成' : codexAction.status === 'cancelled' ? '已取消' : '未完成'}</span></div>{codexAction.status === 'running' && toolProgress && <p role="status">{toolProgress}</p>}{codexAction.health && <p>报告状态：{codexAction.health === 'ok' ? '正常' : ['warning', 'warn'].includes(codexAction.health) ? '有警告，请查看报告' : ['error', 'fail'].includes(codexAction.health) ? '发现问题，请查看报告' : codexAction.health}</p>}{codexAction.truncated && <p>下方显示报告末尾，完整内容可打开本机报告查看。</p>}{codexAction.output && <pre tabIndex={0} aria-label="Scodex 操作报告">{codexAction.output}</pre>}{codexAction.logPath && <p><button className="secondary-button" onClick={onOpenCodexDiagnostic}><FolderOpen size={16} />打开完整报告</button></p>}{codexAction.status === 'complete' && codexAction.kind === 'update' && <p>请重新启动 Codex CLI 会话以加载更新后的工具。</p>}{codexAction.status === 'failed' && codexAction.exitCode !== undefined && <p>退出代码：{codexAction.exitCode}</p>}</section>}
           <p className="settings-footnote">审批、沙盒、网络和依赖设置会随两个 Scodex CLI 启动器生效，并约束工作台本机入口。完整访问仍受 Windows UAC 和当前用户文件权限限制，不会自动获得管理员令牌。</p>
         </>}
-        {active === 'skills' && <PluginSettings preferences={preferences} skills={skills} onPreference={onPreference} onRefreshSkills={onRefreshSkills} />}
-        {active === 'computer' && <ComputerSettings preferences={preferences} desktopApps={appState?.desktopApps} onPreference={onPreference} />}
-        {active === 'browser' && <BrowserSettings preferences={preferences} onPreference={onPreference} />}
+        {active === 'skills' && <PluginSettings preferences={preferences} skills={skills} inventory={inventory} onPreference={onPreference} onPluginEnabled={onPluginEnabled} onRefreshSkills={onRefreshSkills} />}
+        {active === 'computer' && <ComputerSettings preferences={preferences} integrationConfig={appState?.integrationConfig} desktopApps={appState?.desktopApps} onPreference={onPreference} onIntegrationUpdate={onIntegrationUpdate} />}
+        {active === 'browser' && <BrowserSettings preferences={preferences} integrationConfig={appState?.integrationConfig} onPreference={onPreference} onIntegrationUpdate={onIntegrationUpdate} />}
         {active === 'git' && <GitSettings preferences={preferences} onPreference={onPreference} />}
         {active === 'about' && <><SettingsGroup title="Scodex 工作台"><SettingRow label="当前版本"><span className="settings-value">{appState?.version || '—'}</span></SettingRow><SettingRow label="运行方式" description="Windows 本地桌面 EXE；模型通过已配置的中转站提供输出。"><span className="settings-value">本地运行</span></SettingRow><SettingRow label="上下文用量"><span className="settings-value">请求用量与响应诊断见“模型与连接”</span></SettingRow></SettingsGroup><p className="settings-footnote">支持对话、项目与最近记录；本地输入输出由 AI 按需求处理。模型输出取决于服务可用性。</p></>}
       </div> : <div className="settings-search-empty"><Search size={30} /><h2>没有匹配的设置</h2><p>试试“字体”“标签”或“模型”。</p><button className="secondary-button" onClick={() => setSearch('')}>清除搜索</button></div>}

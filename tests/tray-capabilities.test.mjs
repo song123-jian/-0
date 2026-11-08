@@ -31,6 +31,7 @@ test('native inventory detects plugins without Skills, selects latest cache and 
     const state = await discoverLocalCapabilities({ scodexRoot: native, nativeHome: native, workspaceRoot: workspace, agentsHome: path.join(root, 'missing') });
     assert.equal(state.sources.length, 1); assert.equal(state.plugins.length, 1);
     assert.equal(state.plugins[0].version, '26.10.1'); assert.equal(state.plugins[0].codexEnabled, true);
+    assert.equal(state.plugins[0].configPath, path.join(native, 'config.toml'));
     assert.equal(state.plugins[0].connected, false); assert.equal(state.servers[0].connected, false);
     assert.doesNotMatch(JSON.stringify(state), /PRIVATE/);
   } finally { await rm(root, { recursive: true, force: true }); }

@@ -147,19 +147,19 @@ async function main() {
   if (!visualOnly) await page.evaluate('window.scodex.saveModelConnection(' + json({ name: '六次重试验收', baseUrl: 'http://127.0.0.1:' + server.address().port + '/v1', model: 'fixture', models: ['fixture'], apiKey: 'fixture-only', retryLimit: foldOnly ? 6 : 2, toolProtocol: 'native' }) + ')');
   else foldedId = (await chat()).messages.findLast(item => item.role === 'assistant' && item.finalContentOffset > 0).id;
   await reload();
-  await check('settings-select-six-save-and-reload', async () => {
+  await check('settings-unbounded-retry-input-save-and-reload', async () => {
     assert.equal(await page.evaluate('window.scodex.getModelConnection().then(c=>c.retryLimit)'), 2);
     await click('[aria-label="设置"]'); await click('.settings-category', page, '模型与连接');
     await wait(() => page.evaluate('Boolean(document.querySelector("#model-retry"))'), 'Retry settings');
-    const options = await page.evaluate('[...document.querySelector("#model-retry").options].map(o=>Number(o.value))');
-    assert.deepEqual(options, [0, 1, 2, 3, 4, 5, 6]);
+    const field = await page.evaluate('(()=>{const e=document.querySelector("#model-retry");return {type:e.type,min:e.min,step:e.step}})()');
+    assert.deepEqual(field, { type: 'number', min: '0', step: '1' });
     await insert('#model-retry', '6'); await click('.model-save-button');
     await wait(() => page.evaluate('document.querySelector(".model-message")?.textContent.includes("已保存")'), 'Settings saved');
     await reload();
     assert.equal(await page.evaluate('window.scodex.getModelConnection().then(c=>c.retryLimit)'), 6);
     await click('[aria-label="项目"]');
     await wait(() => page.evaluate('Boolean(document.querySelector("[aria-label=输入工作内容]"))'), 'Return to chat');
-    return { options, saved: 6 };
+    return { field, saved: 6 };
   });
   await check('old-history-folds-success-keeps-errors-and-cancellation-readable', async () => {
     const value = await page.evaluate('(()=>{const get=id=>document.querySelector("[data-message-id="+id+"] .message-execution");return {completedOpen:get("old-answer").open,failedOpen:get("failed-answer").open,cancelledOpen:get("cancel-answer").open,summary:get("old-answer").querySelector("summary").innerText}})()');

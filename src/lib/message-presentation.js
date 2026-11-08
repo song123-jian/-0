@@ -1,3 +1,4 @@
+import { localMessagePath, parseLocalPaths } from './message-paths.js';
 const MAX_ELAPSED_MS = 7 * 24 * 60 * 60 * 1000;
 const boundedTime = (value) => Number.isFinite(value) && value >= 0 ? Math.min(MAX_ELAPSED_MS, Math.floor(value)) : null;
 
@@ -63,20 +64,27 @@ export function parseInline(value, depth = 0) {
   };
   for (let i = 0; i < text.length;) {
     const rest = text.slice(i);
+    const pathToken = /^[a-z]:[\\/]/i.test(rest) ? parseLocalPaths(rest)[0] : null;
+    if (pathToken?.type === 'path') { tokens.push(pathToken); i += pathToken.text.length; continue; }
     const escaped = rest.match(/^\\([\\\x60*_[\]{}()#+.!|>~-])/);
     if (escaped) { pushText(escaped[1]); i += escaped[0].length; continue; }
     const code = rest.match(/^(\x60+)/);
     if (code) {
       const close = text.indexOf(code[1], i + code[1].length);
       if (close >= 0) {
-        tokens.push({ type: 'code', text: text.slice(i + code[1].length, close).replace(/\n/g, ' ') });
+        const content = text.slice(i + code[1].length, close).replace(/\n/g, ' ');
+        const target = localMessagePath(content);
+        tokens.push(target ? { type: 'path', path: target, text: content, code: true } : { type: 'code', text: content });
         i = close + code[1].length; continue;
       }
     }
-    const link = rest.match(/^\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/);
+    const link = rest.match(/^\[([^\]\n]{1,500})\]\((?:<([^>\n]{1,4096})>|([^\n)]{1,4096}))\)/);
     if (link) {
-      const href = safeMessageUrl(link[2]);
-      if (href) tokens.push({ type: 'link', href, children: depth < 4 ? parseInline(link[1], depth + 1) : [{ type: 'text', text: link[1] }] });
+      const destination = link[2] || link[3];
+      const target = localMessagePath(destination);
+      const href = safeMessageUrl(destination);
+      if (target) tokens.push({ type: 'path', path: target, text: link[1] });
+      else if (href) tokens.push({ type: 'link', href, children: depth < 4 ? parseInline(link[1], depth + 1) : [{ type: 'text', text: link[1] }] });
       else pushText(link[0]);
       i += link[0].length; continue;
     }
@@ -190,6 +198,19 @@ const actionLabels = {
 };
 export function operationCaption(operation) {
   if (operation.status === 'deferred') return operation.name === 'advisor_gate' ? '等待主模型核验 · 原操作未执行' : '已加载目录规则 · 原操作未执行';
+  if (operation.name?.startsWith('model_debate_')) {
+    const title = operation.title || operation.name || '三模型讨论';
+    const detail = String(operation.detail || '').split('\n')[0].trim();
+    if (operation.status === 'running') return '正在' + title;
+    if (operation.status === 'succeeded') {
+      const phaseResult = ['model_debate_proposal', 'model_debate_review'].includes(operation.name);
+      const phase = phaseResult ? title.split(' · ').at(-1) : '';
+      const resultDetail = phase && detail.startsWith(phase) ? detail.slice(phase.length) : detail;
+      return title + (resultDetail ? (phaseResult ? '' : ' · ') + resultDetail : '');
+    }
+    const suffix = { failed: '失败', cancelled: '已停止', interrupted: '已中断' }[operation.status] || '';
+    return title + (suffix ? ' · ' + suffix : '');
+  }
   const action = actionLabels[operation.name] || operation.title || operation.name || '操作';
   const prefix = { succeeded: '已', running: '正在', failed: '', cancelled: '', interrupted: '' }[operation.status] || '';
   const suffix = { failed: '失败', cancelled: '已停止', interrupted: '已中断' }[operation.status] || '';

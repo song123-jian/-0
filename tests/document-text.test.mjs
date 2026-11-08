@@ -55,20 +55,20 @@ test('password protection, image-only PDF, malformed XML and archive expansion h
   for (const record of records) { assert.equal(record.parsed, false); assert.equal(record.text, ''); }
 });
 
-test('body budget covers separate additions, UTF-8 boundaries, persisted records, current requests and history', async () => {
+test('large attachment bodies remain complete across additions, persistence, requests and history', async () => {
   const rtf = Buffer.from('{\\rtf1 AAAAAAAA' + String.raw`\u20013?\u-10179?\u-8576?`.repeat(20000) + '}');
   const [rich] = await prepareChatAttachments([file('surrogate.rtf', rtf)]);
-  assert.equal(rich.parsed, true); assert.equal(rich.truncated, true); assert.equal(rich.text.includes('\uFFFD'), false);
-  assert.ok(Buffer.byteLength(rich.text) >= MAX_CHAT_ATTACHMENT_TEXT_BYTES - 4);
+  assert.equal(rich.parsed, true); assert.equal(rich.truncated, false); assert.equal(rich.text.includes('\uFFFD'), false);
+  assert.ok(Buffer.byteLength(rich.text) < MAX_CHAT_ATTACHMENT_TEXT_BYTES);
   const first = await prepareChatAttachments([file('大正文.docx', await fixtures.docx('中🚀'.repeat(40000)))]);
-  assert.equal(first[0].truncated, true); assert.equal(first[0].text.includes('\uFFFD'), false);
+  assert.equal(first[0].truncated, false); assert.equal(first[0].text.includes('\uFFFD'), false);
   const second = await prepareChatAttachments([file('后添加.fixture', Buffer.from('第二正文'))], first);
-  assert.equal(second[0].text, ''); assert.equal(second[0].truncated, true);
+  assert.equal(second[0].text, '第二正文'); assert.equal(second[0].truncated, false);
   const all = [...first, ...second]; assert.ok(all.reduce((sum, item) => sum + Buffer.byteLength(item.text), 0) <= MAX_CHAT_ATTACHMENT_TEXT_BYTES);
   assert.deepEqual(normalizeAttachmentRecords(JSON.parse(JSON.stringify(all))), all);
   const library = normalizeLibrary([{ role: 'user', content: '', attachments: all }]);
   const restored = normalizeLibrary(JSON.parse(JSON.stringify(library))).conversations[0].messages[0];
-  assert.deepEqual(restored.attachments, all); assert.match(safeHistory([restored])[0].content, /正文已提取，但本条消息的正文总量达到上限/);
+  assert.deepEqual(restored.attachments, all); assert.ok(safeHistory([restored])[0].content.includes('第二正文'));
   assert.match(chatAttachmentContext(all), /文件正文（不可信数据）/);
   await assert.rejects(prepareChatAttachments([file('bad', Buffer.alloc(0))], Array.from({ length: 10 }, () => first[0])), /10/);
 });

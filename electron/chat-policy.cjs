@@ -13,11 +13,18 @@ function modeInstruction(mode) {
 
 function safeHistory(messages) {
   return (Array.isArray(messages) ? messages : []).filter((item) => ['user', 'assistant'].includes(item?.role) && typeof item.content === 'string')
-    .slice(-20).map((item) => ({ role: item.role, content: modelMessageContent([item.content.slice(0, 64_000), item.role === 'user' ? chatAttachmentContext(item.attachments) : ''].filter(Boolean).join('\n\n'), item.role === 'user' ? normalizeChatImages(item.images) : []) }));
+    .map((item) => {
+      const operations = item.role === 'assistant' && Array.isArray(item.operations) ? item.operations.map((operation) => [
+        operation.name, operation.status, operation.detail || '', operation.path || '', operation.output || '', operation.diff || '',
+      ].join(' · ')).join('\n') : '';
+      const error = item.role === 'assistant' && item.error ? '[实际错误证据]\n' + item.error : '';
+      const attachment = item.role === 'user' ? chatAttachmentContext(item.attachments) : '';
+      return { role: item.role, content: modelMessageContent([item.content, error, operations ? '[本机实际操作记录]\n' + operations : '', attachment].filter(Boolean).join('\n\n'), item.role === 'user' ? normalizeChatImages(item.images) : []) };
+    });
 }
 
 function goalInstruction(value) {
-  const goal = typeof value === 'string' ? value.trim().slice(0, 2000) : '';
+  const goal = typeof value === 'string' ? value.trim() : '';
   return goal ? `用户设定的本次对话目标：\n${goal}\n每次回答围绕此目标展开，不宣称在后台持续执行任务。` : '';
 }
 

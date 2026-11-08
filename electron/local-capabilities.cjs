@@ -73,7 +73,7 @@ async function discoverLocalCapabilities({ scodexRoot, workspaceRoot, nativeHome
           const pluginKey = source.id + ':' + provider.name + '/' + item.name;
           if (pluginSeen.has(pluginKey)) continue; pluginSeen.add(pluginKey);
           const declared = summary.plugins.get(item.name + '@' + provider.name);
-          plugins.push({ id: pluginKey, name: cleanName(item.name), provider: cleanName(provider.name), source: source.label, path: pluginPath, sourceId: source.id, version, codexEnabled: declared?.enabled ?? null, status: 'installed', connected: false });
+          plugins.push({ id: pluginKey, name: cleanName(item.name), provider: cleanName(provider.name), source: source.label, path: pluginPath, sourceId: source.id, configPath: source.configPath, version, codexEnabled: declared?.enabled ?? null, status: 'installed', connected: false });
           skillRoots.push({ path: pluginPath, sourceRoot: real, label: source.label, scope: 'plugin', prefix });
         }
       }

@@ -111,3 +111,22 @@ test('saving an in-progress response keeps actual elapsed time and restores it a
   assert.equal(message.pending, undefined);
   assert.equal(message.startedAt, undefined);
 });
+
+test('history keeps complete tool evidence, paths, errors and operation lists for request-time compression', () => {
+  const output = 'BEGIN ' + 'x'.repeat(30000) + ' END E:\\repo\\src\\large-file.cjs Error: access denied';
+  const operations = Array.from({ length: 70 }, (_, index) => ({
+    id: 'op-' + index, name: 'read_file', status: 'succeeded', detail: 'detail-' + index,
+    path: 'E:\\repo\\src\\file-' + index + '.cjs', output,
+  }));
+  const message = normalizeLibrary([{ role: 'assistant', content: 'result', error: 'Error: ' + 'e'.repeat(1000), operations }])
+    .conversations[0].messages[0];
+
+  assert.equal(message.error.length, 1007);
+  assert.equal(message.operations.length, 70);
+  assert.equal(message.operations[69].output, output);
+  assert.equal(message.operations[0].path, 'E:\\repo\\src\\file-0.cjs');
+  const history = safeHistory([{ ...message, role: 'assistant' }]);
+  assert.match(history[0].content, /Error: access denied/);
+  assert.ok(history[0].content.includes(output));
+  assert.ok(history[0].content.includes(message.error));
+});

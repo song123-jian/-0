@@ -84,7 +84,7 @@ function createCollaborationTools({ bridge, sourceId, readOnly = false, allowSen
       if (policy() !== 'on-request') throw Error('审批期间协作权限已变化。');
       result = await request('send', { conversationId: target.id, expectedStamp: target.stamp, text: args.text, executionEnabled: args.execution_enabled === true });
     }
-    return { ok: true, ...result, activity: { title: name === 'task_send' ? '提交任务交接' : name === 'task_wait' ? '等待任务结果' : '查看其他任务', detail: args.conversation_id || '任务列表', output: JSON.stringify(result).slice(0, 24000) } };
+    return { ok: true, ...result, activity: { title: name === 'task_send' ? '提交任务交接' : name === 'task_wait' ? '等待任务结果' : '查看其他任务', detail: args.conversation_id || '任务列表', output: JSON.stringify(result) } };
   } };
 }
 module.exports = { createCollaborationBridge, createCollaborationTools, DEFINITIONS };

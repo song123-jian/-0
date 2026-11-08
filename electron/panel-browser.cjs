@@ -175,6 +175,22 @@ function installPanelBrowser({ window, ipcMain, getPreferences = () => ({}), she
       } });
       tab.view.setBounds({ x: 0, y: 0, width: 1100, height: 760 });
       const contents = tab.view.webContents;
+      contents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown' || input.isAutoRepeat || input.isComposing || input.alt || input.shift || !(input.control || input.meta)
+          || disposed || approvalSuspended || attached !== tab.view || activeTab() !== tab) return;
+        const key = String(input.key || '').toLowerCase();
+        if (!['l', 't', 'w', 'r'].includes(key)) return;
+        event.preventDefault();
+        if (key === 'r') {
+          try { navigate(tab, tab.url); } catch (error) { tab.error = error.message; emit(); syncLayout(); }
+          return;
+        }
+        if (key === 't' && tabs.length >= MAX_TABS) return;
+        if (key === 't') handles['browser:action'](null, { type: 'new' });
+        if (key === 'w') handles['browser:action'](null, { type: 'close', id: tab.id });
+        window.webContents.focus();
+        window.webContents.send('browser:shortcut', { type: 'focus-address' });
+      });
       // Remote pages have no preload bridge or local file access; device access is opt-in per host.
       contents.setWindowOpenHandler(({ url: target }) => {
         if (tab.owner) { tab.notice = '网页请求新窗口，已阻止。请单独打开目标网址。'; emit(); return { action: 'deny' }; }

@@ -992,6 +992,24 @@ kbd { padding: 2px 7px; border: 1px solid #e3e7e8; border-radius: 5px; backgroun
 .workspace-file-menu-popover button { display: flex; min-height: 34px; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
 .workspace-file-menu-popover button:hover { background: var(--surface-strong); }
 .workspace-file-columns { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(125px, .72fr) minmax(0, 1.28fr); }
+.message-path-link { display: inline; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--green, #176c5b); font: inherit; text-align: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: inherit; overflow-wrap: anywhere; cursor: pointer; }
+.message-path-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.message-files-panel .workspace-file-columns { grid-template-columns: minmax(0, 1.6fr) minmax(145px, 1fr); }
+.message-file-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--border, #e3e8e4); }
+.message-file-preview-toolbar { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; padding: 10px; align-items: center; border-bottom: 1px solid var(--border, #e3e8e4); }
+.message-file-preview-toolbar strong { min-width: 0; flex: 1 1 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.message-file-preview-body { flex: 1; min-height: 0; min-width: 0; overflow: auto; padding: 12px; }
+.message-file-preview-body pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.message-file-preview-body .assistant-message-content { font-size: 13px; overflow-wrap: anywhere; }
+.message-file-preview-body img { max-width: 100%; height: auto; }
+.message-files-panel .workspace-file-preview { height: 100%; min-width: 0; padding: 16px; }
+.message-files-panel .workspace-file-toolbar { flex-wrap: nowrap; }
+.message-files-panel .workspace-file-status { overflow-wrap: anywhere; }
+.reference-settings > label { display: grid; gap: 6px; margin-bottom: 10px; }
+.reference-settings input { box-sizing: border-box; min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--border, #d9e1dc); border-radius: 6px; background: var(--surface, #fff); color: inherit; }
+.reference-settings dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 12px; font-size: 12px; overflow-wrap: anywhere; }
+.reference-settings dd { margin: 0; }
+.browser-expanded .message-files-panel .workspace-file-columns { grid-template-columns: minmax(0, 3fr) minmax(200px, 1fr); }
 .workspace-file-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 9px; overflow: hidden; padding: 15px 12px; border-right: 1px solid var(--line); text-align: center; }
 .workspace-file-preview-icon { display: grid; width: 38px; height: 38px; place-items: center; color: #737e79; }
 .workspace-file-preview strong { width: 100%; overflow: hidden; font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -1377,7 +1395,6 @@ kbd { padding: 2px 7px; border: 1px solid #e3e7e8; border-radius: 5px; backgroun
 .task-attachment-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .task-attachment-copy strong { overflow-wrap: anywhere; font-size: 15px; font-weight: 600; }
 .task-attachment-copy small { color: var(--muted); font-size: 14px; }
-.task-attachment-copy .task-attachment-path { overflow-wrap: anywhere; }
 .task-attachment-row .icon-button { width: 32px; height: 32px; }
 .task-schedule-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 13px; }
 .task-time-fields { margin-top: 13px; }

@@ -33,6 +33,11 @@ function normalizePermissionSettings(value = {}) {
   };
 }
 
+function isFullAccessSettings(settings = {}) {
+  const normalized = normalizePermissionSettings(settings);
+  return normalized.sandboxMode === 'danger-full-access' && normalized.approvalPolicy === 'never';
+}
+
 function isWithin(root, candidate) {
   if (!root || !candidate) return false;
   const relative = path.relative(path.resolve(root), path.resolve(candidate));
@@ -133,6 +138,7 @@ module.exports = {
   unrestrictedCommandAllowed,
   normalizeDomain,
   normalizePermissionSettings,
+  isFullAccessSettings,
   operationDescription,
   permissionInstruction,
   readWindowsSecurityContext,

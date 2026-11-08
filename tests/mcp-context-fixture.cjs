@@ -9,7 +9,7 @@ function createContextFixture({logFile=process.env.MCP_CONTEXT_LOG,secret=proces
   const log=async value=>{if(logFile)await fs.appendFile(logFile,JSON.stringify({...value,pid:process.pid})+'\n');};
   server.setRequestHandler(ListResourcesRequestSchema,async request=>{
     await log({method:'resources/list',cursor:request.params?.cursor});
-    return request.params?.cursor?{resources:['binary','big','slow','notify','failure'].map(name=>({uri:'notes://'+name,name})),...(badPagination?{nextCursor:'page-2'}:{})}:{resources:[{uri:'notes://readme',name:'项目说明',description:'中文资料 '+secret},{uri:'notes://multi',name:'多段资源'}],nextCursor:'page-2'};
+    return request.params?.cursor?{resources:['binary','big','many','slow','notify','failure'].map(name=>({uri:'notes://'+name,name})),...(badPagination?{nextCursor:'page-2'}:{})}:{resources:[{uri:'notes://readme',name:'项目说明',description:'中文资料 '+secret},{uri:'notes://multi',name:'多段资源'}],nextCursor:'page-2'};
   });
   if(!noTemplates)server.setRequestHandler(ListResourceTemplatesRequestSchema,async()=>({resourceTemplates:[{uriTemplate:'notes://projects/{project}/notes{?format}',name:'项目资料模板',description:'按项目和格式读取中文'}]}));
   server.setRequestHandler(ListPromptsRequestSchema,async()=>({prompts:[{name:'review',title:'中文审阅模板',description:'根据主题整理资料',arguments:[{name:'topic',description:'审阅主题',required:true}]}]}));
@@ -20,6 +20,7 @@ function createContextFixture({logFile=process.env.MCP_CONTEXT_LOG,secret=proces
     if(uri==='notes://notify')await server.notification({method:'notifications/resources/list_changed'});
     if(uri==='notes://binary')return{contents:[{uri,mimeType:'application/octet-stream',blob:Buffer.from('controlled-binary-payload').toString('base64')}]};
     if(uri==='notes://big')return{contents:[{uri,text:'大'.repeat(24000),mimeType:'text/plain'}]};
+    if(uri==='notes://many')return{contents:Array.from({length:45},(_,index)=>({uri:uri+'/'+index,text:'record-'+index}))};
     if(uri==='notes://multi')return{contents:[{uri,text:'第一段中文'},{uri:uri+'/second',text:'第二段中文'}]};
     return{contents:[{uri,mimeType:'text/markdown',text:'资料编号 C6142 · '+uri+' · '+secret}]};
   });

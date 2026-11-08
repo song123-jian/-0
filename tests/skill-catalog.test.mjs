@@ -20,9 +20,9 @@ test('disabled settings and live package changes are enforced for automatic skil
 test('manual selection remains compatible and package scope cannot be broadened',async t=>{
  const f=await fixture(t),a=await f.add('manual');const selected=await createSkillContext({skillId:a.id,...f.options}),c=await f.create({selected});assert.match(c.instruction,/GUIDANCE-manual/);assert.equal((await c.execute('skill_read',{path:'ref.md'})).content,'REFERENCE-manual');await assert.rejects(c.execute('skill_read',{path:'../private'}),/越出/);await assert.rejects(c.execute('skill_open',{skill_id:'C:/private/SKILL.md'}),/先 skill_search/);await assert.rejects(c.execute('skill_search',{query:'x',extra:true}),/参数/);
 });
-test('catalog and instruction pages stay bounded while distinct skills have no fixed count cap',async t=>{
+test('catalog metadata remains paged while Skill bodies load completely without a fixed content cap',async t=>{
  const f=await fixture(t);for(let i=0;i<25;i++)await f.add('s'+String(i).padStart(2,'0'));const c=await f.create();const page=await c.execute('skill_search',{}),last=await c.execute('skill_search',{offset:page.next_offset});assert.equal(page.entries.length,20);assert.equal(last.entries.length,5);assert.equal(last.next_offset,null);
- await fs.writeFile(f.getSkills()[0].absolutePath,'指导'.repeat(16000));const one=await c.execute('skill_open',{skill_id:'s00'}),two=await c.execute('skill_open',{skill_id:'s00',offset:one.next_offset});assert.equal(one.content+two.content,'指导'.repeat(16000));
+ await fs.writeFile(f.getSkills()[0].absolutePath,'指导'.repeat(16000));const one=await c.execute('skill_open',{skill_id:'s00'}),two=await c.execute('skill_open',{skill_id:'s00'});assert.equal(one.content,'指导'.repeat(16000));assert.equal(two.content,'');assert.equal(two.reused,true);
  for (const skill_id of ['s01','s02','s03','s04','s05']) assert.match((await c.execute('skill_open',{skill_id})).content,/GUIDANCE-/);
  assert.equal((await c.execute('skill_search',{})).loaded_skills.length,6);
  assert.ok(!c.instruction.includes('零至三个'));
@@ -47,12 +47,11 @@ test('copied or equivalent named Skill packages reuse canonical responsibility, 
  f.setPreferences({skillsEnabled:true,disabledSkillIds:[original.id]});await assert.rejects(c.execute('skill_open',{skill_id:alias.id}),/停用|卸载/);
 });
 
-test('aliases keep unread canonical pages available and duplicate references are not returned twice',async t=>{
+test('aliases reuse complete canonical bodies and duplicate references are not returned twice',async t=>{
  const f=await fixture(t);const a=await f.add('guide-a','导航'),b=await f.add('guide-b','导航副本');const body='资料'.repeat(16000);
  await fs.writeFile(a.absolutePath,body);await fs.writeFile(b.absolutePath,body);const c=await f.create();
  const first=await c.execute('skill_open',{skill_id:a.id});const reused=await c.execute('skill_open',{skill_id:b.id});
- assert.equal(reused.skill_id,a.id);assert.equal(reused.next_offset,first.next_offset);
- const last=await c.execute('skill_open',{skill_id:a.id,offset:reused.next_offset});assert.equal(first.content+last.content,body);
+ assert.equal(first.content,body);assert.equal(reused.skill_id,a.id);assert.equal(reused.content,undefined);assert.equal(reused.next_offset,null);
  const ref=await c.execute('skill_read',{path:'ref.md'});assert.equal(ref.content,'REFERENCE-guide-a');assert.equal((await c.execute('skill_read',{path:'ref.md'})).content,'');
 });
 

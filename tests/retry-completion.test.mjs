@@ -22,8 +22,8 @@ test('six retries recover on request seven across all allowed transient statuses
   assert.equal(events.filter(event => event.type === 'request-metrics').length, 7);
 });
 
-test('six is a hard retry ceiling and lower or disabled selections remain honored', async () => {
-  for (const [limit, expected] of [[0, 1], [1, 2], [2, 3], [6, 7], [999, 7]]) {
+test('configured retry counts remain honored without an application ceiling', async () => {
+  for (const [limit, expected] of [[0, 1], [1, 2], [2, 3], [6, 7], [8, 9]]) {
     let calls = 0;
     await assert.rejects(task({ connection: { ...connection, retryLimit: limit }, fetchImpl: async () => {
       calls++; return new Response('', { status: 503 });
@@ -32,7 +32,7 @@ test('six is a hard retry ceiling and lower or disabled selections remain honore
   }
   assert.equal(normalizeConnection(DEFAULT_CONNECTION).retryLimit, 6);
   for (let limit = 0; limit <= 6; limit++) assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, retryLimit: limit }).retryLimit, limit);
-  assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, retryLimit: 999 }).retryLimit, 6);
+  assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, retryLimit: 999 }).retryLimit, 999);
 });
 
 test('authentication, other statuses, transport failure and partial streams never retry', async () => {

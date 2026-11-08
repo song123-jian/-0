@@ -174,7 +174,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
       let excerpt = lines.slice(start - 1, start - 1 + count).map((line, i) => `${start + i}: ${line}`).join('\n'); const cut = excerpt.length > 32_000; excerpt = excerpt.slice(0, 32_000);
       return { ok: true, path: item.relative, hash: value.hash, total_lines: lines.length, start_line: start, content: excerpt,
         truncated: cut || start > 1 || start - 1 + count < lines.length, instructions: await instructions(item.target),
-        activity: { title: TITLES[name], path: item.target, detail: `${item.relative} · 从第 ${start} 行`, output: excerpt.slice(0, 12_000) } };
+        activity: { title: TITLES[name], path: item.target, detail: `${item.relative} · 从第 ${start} 行`, output: excerpt } };
     }
     if (name === 'search_text') {
       if (typeof args.query !== 'string' || !args.query || args.query.length > 200) throw new Error('搜索内容应为 1–200 个字符。');
@@ -195,7 +195,7 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
           } catch {}
         }
       }
-      return { ok: true, matches, truncated, activity: { title: TITLES[name], detail: `${args.query} · ${item.relative}`, output: matches.map((m) => `${m.path}:${m.line} ${m.text}`).join('\n').slice(0, 12_000) } };
+      return { ok: true, matches, truncated, activity: { title: TITLES[name], detail: `${args.query} · ${item.relative}`, output: matches.map((m) => `${m.path}:${m.line} ${m.text}`).join('\n') } };
     }
     throw new Error('未知工具。');
   }

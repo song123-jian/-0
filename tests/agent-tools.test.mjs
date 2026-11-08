@@ -135,3 +135,19 @@ test('command capture does not run for rejected permissions or invalid input', a
   await assert.rejects(tools.execute('run_command', { command: 'echo hello', cwd: 123 }), /路径/);
   assert.equal(captures, 0);
 });
+
+test('assigned edit agents expose run_command with real output and shared command capture', async t => {
+  let captures = 0; const authorized = [];
+  const { root, tools } = await fixture(t, {
+    fullAccess: true,
+    allowedPaths: ['assigned'],
+    allowedTools: ['list_directory', 'read_file', 'search_text', 'write_file', 'edit_file', 'run_command', 'update_plan'],
+    commandCapture: async action => { captures += 1; return action(); },
+    authorize: async operation => { authorized.push(operation); },
+  });
+  await fs.mkdir(path.join(root, 'assigned'));
+  const result = await tools.execute('run_command', { cwd: 'assigned', command: process.platform === 'win32' ? "Write-Output '子模型命令证据'" : "printf '子模型命令证据'" });
+  assert.equal(result.exitCode, 0); assert.match(result.output, /子模型命令证据/);
+  assert.equal(captures, 1); assert.deepEqual(authorized, ['agent-command']);
+  assert.ok(tools.definitions.some(item => item.function.name === 'run_command'));
+});

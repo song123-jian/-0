@@ -29,11 +29,12 @@ function useAction() {
   return { error, working, run };
 }
 
-export function PluginSettings({ preferences, skills = [], onPreference, onRefreshSkills }) {
+export function PluginSettings({ preferences, skills = [], inventory, onPreference, onPluginEnabled, onRefreshSkills }) {
   const [query, setQuery] = useState('');
   const action = useAction();
   const disabled = preferences.disabledSkillIds || [];
   const directories = preferences.skillDirectories || [];
+  const configuredPlugins = (inventory?.plugins || []).filter((plugin) => !plugin.managed && plugin.configPath);
   const filtered = skills.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(query.toLowerCase()));
   const save = async (update) => { const saved = await onPreference(update); if (!saved) throw new Error('保存失败，请重试。'); return saved; };
   const addDirectory = () => action.run(async () => {
@@ -50,32 +51,61 @@ export function PluginSettings({ preferences, skills = [], onPreference, onRefre
     <div className="plugin-skill-list">{filtered.map((skill) => <div className="plugin-skill-row" key={skill.id}><span className="plugin-skill-icon"><BookOpen size={18} /></span><div><strong>{skill.name}</strong><p title={skill.description}>{skill.description || '本地技能指引'}</p></div><span className="plugin-skill-source">{skill.id.startsWith('custom:') ? '自选目录' : skill.source.startsWith('skills/') ? '个人' : '插件'}</span><IntegrationSwitch label={`允许 AI 调用 ${skill.name}`} checked={!disabled.includes(skill.id)} disabled={!preferences.skillsEnabled || action.working} onChange={(checked) => action.run(() => save({ disabledSkillIds: checked ? disabled.filter((id) => id !== skill.id) : [...disabled, skill.id] }))} /></div>)}</div>
     {!filtered.length && <p className="integration-empty">{skills.length ? '没有匹配的技能' : '未找到可读取的 SKILL.md，可添加本地技能目录。'}</p>}
     <div className="integration-actions"><button className="secondary-button" disabled={action.working} onClick={() => action.run(onRefreshSkills)}><RefreshCw size={15} />重新读取</button></div>
+    <Group title="Codex 插件配置">
+      {configuredPlugins.length ? configuredPlugins.map((plugin) => <Row key={plugin.id} label={plugin.name} description={`${plugin.source} · ${plugin.provider}`}><IntegrationSwitch label={`启用插件 ${plugin.name}`} checked={plugin.codexEnabled !== false} disabled={action.working} onChange={(checked) => action.run(() => onPluginEnabled(plugin.id, checked))} /></Row>) : <Row label="未发现可配置插件" description="已读取本机 .codex 配置；插件启用状态会显示在这里。" />}
+    </Group>
     {directories.length > 0 && <Group title="自选技能目录">{directories.map((directory) => <Row key={directory} label={directory} description="从该目录读取 SKILL.md；移除不会删除本地文件。"><button className="icon-button" aria-label={`移除目录 ${directory}`} disabled={action.working} onClick={() => action.run(async () => { await save({ skillDirectories: directories.filter((item) => item !== directory) }); await onRefreshSkills(); })}><X size={16} /></button></Row>)}</Group>}
     <p className="settings-footnote">技能内容会在 AI 判断当前需求需要时提交给模型；聊天工具栏不再提供手动技能选择器。</p>
   </div>;
 }
 
-export function ComputerSettings({ preferences, desktopApps = [], onPreference }) {
+const DEFAULT_COMPUTER_CONFIG = { accentColor: '#339CFF', direction: 'ltr', locale: 'zh-CN', strings: { usingComputer: 'Scodex 正在使用你的电脑', escToCancel: '按 Esc 可停止' } };
+const DEFAULT_BROWSER_CONFIG = { approvalMode: 'ask', downloadApprovalMode: 'ask', fullCdpAccessEnabled: false };
+
+export function ComputerSettings({ preferences, integrationConfig, desktopApps = [], onPreference, onIntegrationUpdate }) {
   const action = useAction();
   const allowed = preferences.computerAllowedApps || [];
+  const savedComputer = integrationConfig?.computer || DEFAULT_COMPUTER_CONFIG;
+  const [draft, setDraft] = useState({ ...DEFAULT_COMPUTER_CONFIG, ...savedComputer, strings: { ...DEFAULT_COMPUTER_CONFIG.strings, ...(savedComputer.strings || {}) } });
+  useEffect(() => setDraft({ ...DEFAULT_COMPUTER_CONFIG, ...savedComputer, strings: { ...DEFAULT_COMPUTER_CONFIG.strings, ...(savedComputer.strings || {}) } }), [savedComputer.accentColor, savedComputer.direction, savedComputer.locale, savedComputer.strings?.usingComputer, savedComputer.strings?.escToCancel]);
+  const updateDraft = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const updateString = (key, value) => setDraft((current) => ({ ...current, strings: { ...current.strings, [key]: value } }));
+  const saveComputerConfig = () => action.run(async () => {
+    const saved = await onIntegrationUpdate?.({ computer: draft });
+    if (!saved) throw new Error('电脑操控配置保存失败，请重试。');
+  });
   return <div className="integration-settings">
     <Group title="控制">
+      <Row label="停止电脑操控" description="电脑操控运行时，Esc 或状态条“停止”会取消本轮操控。"><kbd>Esc</kbd></Row>
       <Row label="电脑操控" description="允许启动下方已授权应用；完整访问下，执行任务可截图、点击、输入、按键和滚动。"><IntegrationSwitch label="允许打开桌面应用" checked={preferences.computerControlEnabled} onChange={(checked) => onPreference({ computerControlEnabled: checked })} /></Row>
       {desktopApps.map((application) => <Row key={application.id} label={application.name} description={application.installed ? `${application.id === 'excel' ? '已检测到应用' : '已检测到浏览器；自动化扩展未接入'}` : '未检测到应用'}><div className="integration-actions">{application.installed && <button className="secondary-button" disabled={!preferences.computerControlEnabled || !allowed.includes(application.id) || action.working} onClick={() => action.run(() => window.scodex.openDesktopApp(application.id))}>打开</button>}{application.installed && application.id !== 'excel' && <button className="icon-button" aria-label={`管理 ${application.name} 扩展`} title="管理扩展" disabled={!preferences.computerControlEnabled || !allowed.includes(application.id) || action.working} onClick={() => action.run(() => window.scodex.openDesktopApp(application.id, 'extensions'))}><Settings2 size={16} /></button>}<IntegrationSwitch label={`允许打开 ${application.name}`} checked={allowed.includes(application.id)} disabled={!preferences.computerControlEnabled || !application.installed} onChange={(checked) => onPreference({ computerAllowedApps: checked ? [...allowed, application.id] : allowed.filter((id) => id !== application.id) })} /></div></Row>)}
     </Group>
+    <Group title="电脑操控外观与文案">
+      <Row label="强调色" description="同步到电脑操控悬浮提示条。"><input type="color" aria-label="电脑操控强调色" value={draft.accentColor} onChange={(event) => updateDraft('accentColor', event.target.value.toUpperCase())} /></Row>
+      <Row label="文字方向"><select aria-label="电脑操控文字方向" value={draft.direction} onChange={(event) => updateDraft('direction', event.target.value)}><option value="ltr">从左到右</option><option value="rtl">从右到左</option></select></Row>
+      <Row label="语言区域"><input className="integration-prefix" aria-label="电脑操控语言区域" maxLength={32} value={draft.locale} onChange={(event) => updateDraft('locale', event.target.value)} /></Row>
+      <Row label="使用电脑提示"><input className="integration-prefix" aria-label="使用电脑提示" maxLength={240} value={draft.strings.usingComputer} onChange={(event) => updateString('usingComputer', event.target.value)} /></Row>
+      <Row label="停止提示"><input className="integration-prefix" aria-label="停止提示" maxLength={240} value={draft.strings.escToCancel} onChange={(event) => updateString('escToCancel', event.target.value)} /></Row>
+      <Row label="保存配置" description={integrationConfig?.root ? `配置目录：${integrationConfig.root}` : '未找到参考配置目录，将在保存时创建。'}><button className="primary-button" type="button" disabled={action.working} onClick={saveComputerConfig}>{action.working ? '保存中…' : '保存电脑操控配置'}</button></Row>
+    </Group>
     {action.error && <p className="integration-error" role="alert">{action.error}</p>}
     <Group title="始终允许的应用">{allowed.length ? desktopApps.filter((item) => allowed.includes(item.id)).map((item) => <Row key={item.id} label={item.name} description="保留启动授权，可通过上方开关撤销。"><Monitor size={18} /></Row>) : <Row label="尚未授权应用" description="启用桌面应用后，可逐个允许打开。" />}</Group>
-    <p className="settings-footnote">桌面工具使用当前 Windows 账号，截图发送至所选模型；完整访问与从不请求审批可连续操作。浏览器扩展和 Excel 加载项仍需分别配置。</p>
+    <p className="settings-footnote">电脑操控悬浮提示条从 `.codex/computer-use/config.json` 读取颜色、方向、语言和文案；工具仍受当前授权策略与 Windows 用户权限限制。</p>
   </div>;
 }
 
-export function BrowserSettings({ preferences, onPreference }) {
+export function BrowserSettings({ preferences, integrationConfig, onPreference, onIntegrationUpdate }) {
   const action = useAction();
   const [history, setHistory] = useState(null);
   const [ruleHost, setRuleHost] = useState('');
   const [feedback, setFeedback] = useState('');
   useEffect(() => window.scodex.onBrowserDownloadError((message) => setFeedback(message)), []);
   const rules = preferences.browserSiteRules || [];
+  const browserConfig = integrationConfig?.browser || DEFAULT_BROWSER_CONFIG;
+  const saveIntegration = (update) => action.run(async () => {
+    const saved = await onIntegrationUpdate?.({ browser: update });
+    if (!saved) throw new Error('浏览器配置保存失败，请重试。');
+  });
   const save = async (update) => {
     const saved = await onPreference(update);
     if (!saved) throw new Error('保存失败，请重试。');
@@ -94,7 +124,8 @@ export function BrowserSettings({ preferences, onPreference }) {
   });
   return <div className="integration-settings">
     <Group><Row label="浏览器" description="显示内置标签工作台，网页与本地文件和模型接口隔离。"><IntegrationSwitch label="启用内置浏览器" checked={preferences.browserPanelOpen} onChange={(checked) => onPreference({ browserPanelOpen: checked })} /></Row></Group>
-    <Group title="AI 网页操作"><Row label="允许 AI 使用内置浏览器" description="执行任务时可搜索、读取网页并经审批操作；使用独立临时会话，与手工页面的登录信息分开。"><IntegrationSwitch label="允许 AI 使用内置浏览器" checked={preferences.browserAiEnabled} onChange={(checked) => onPreference({ browserAiEnabled: checked })} /></Row><Row label="操作范围" description="每次导航、读取、点击、填入、按键、滚动及截图均需审批；规划不开放写交互。截图以图片发给所选模型，需支持视觉；密码、上传和下载需手动处理。"><span className="settings-value">按次授权</span></Row><Row label="临时会话" description="仅当前项目和对话可由 AI 操作；切换项目、关闭 AI 浏览器或完整退出会清理。托盘隐藏保留页面。"><span className="settings-value">项目隔离</span></Row></Group>
+    <Group title="AI 网页操作"><Row label="允许 AI 使用内置浏览器" description="执行任务时可搜索、读取网页并直接操作；使用独立临时会话，与手工页面的登录信息分开。"><IntegrationSwitch label="允许 AI 使用内置浏览器" checked={preferences.browserAiEnabled} onChange={(checked) => onPreference({ browserAiEnabled: checked })} /></Row><Row label="操作审批" description="保存到 `.codex/browser/config.toml` 的 `approval_mode`。"><Segments label="浏览器操作审批" value={browserConfig.approvalMode} options={[[ 'ask', '每次询问' ], [ 'never_ask', '不询问' ]]} onChange={(value) => saveIntegration({ approvalMode: value })} /></Row><Row label="下载审批" description="保存到 `download_approval_mode`；不询问时直接保存到下载目录。"><Segments label="浏览器下载审批" value={browserConfig.downloadApprovalMode} options={[[ 'ask', '保存前询问' ], [ 'never_ask', '不询问' ]]} onChange={(value) => saveIntegration({ downloadApprovalMode: value })} /></Row><Row label="临时会话" description="仅当前项目和对话可由 AI 操作；切换项目、关闭 AI 浏览器或完整退出会清理。托盘隐藏保留页面。"><span className="settings-value">项目隔离</span></Row></Group>
+    <Group title="AI 操作审批"><Row label="审批方式" description="实际工具调用仍遵循 Scodex 当前权限边界。"><span className="settings-value">{browserConfig.approvalMode === 'never_ask' ? '不额外询问' : '按当前权限策略'}</span></Row></Group>
     <Group title="常规">
       <Row label="网页 URL 和链接打开位置" description="控制网页新窗口链接；地址栏输入始终在内置浏览器打开。"><select aria-label="网页链接打开位置" value={preferences.browserLinkOpenTarget || 'builtin'} onChange={(event) => onPreference({ browserLinkOpenTarget: event.target.value })}><option value="system">默认浏览器</option><option value="builtin">Scodex</option></select></Row>
       <Row label="本地 URL 打开位置" description="localhost 和回环地址的新窗口链接。"><select aria-label="本地 URL 打开位置" value={preferences.browserLocalUrlTarget || 'builtin'} onChange={(event) => onPreference({ browserLocalUrlTarget: event.target.value })}><option value="builtin">Scodex</option><option value="system">默认浏览器</option></select></Row>
@@ -108,7 +139,7 @@ export function BrowserSettings({ preferences, onPreference }) {
     <Group title="扩展程序"><Row label="扩展程序管理器" description="当前内置浏览器没有加载第三方扩展。"><span className="settings-value">未接入</span></Row></Group>
     <Group title="下载">
       <Row label="位置" description={preferences.browserDownloadDirectory || '系统下载文件夹'}><button className="secondary-button" disabled={action.working} onClick={() => action.run(async () => { const directory = await window.scodex.chooseBrowserDownloadDirectory(); if (directory) await onPreference({ browserDownloadDirectory: directory }); })}>更改</button></Row>
-      <Row label="下载前询问保存位置" description="启用时每次下载使用系统保存对话框；关闭后保存到上述目录。"><IntegrationSwitch label="下载前询问保存位置" checked={preferences.browserAskBeforeDownload !== false} onChange={(checked) => onPreference({ browserAskBeforeDownload: checked })} /></Row>
+      <Row label="下载前询问保存位置" description="启用时每次下载使用系统保存对话框；关闭后保存到上述目录。"><IntegrationSwitch label="下载前询问保存位置" checked={browserConfig.downloadApprovalMode === 'ask' && preferences.browserAskBeforeDownload !== false} onChange={(checked) => saveIntegration({ downloadApprovalMode: checked ? 'ask' : 'never_ask' })} /></Row>
       <Row label="下载历史记录" description="当前不会保存下载历史。"><span className="settings-value">未接入</span></Row>
     </Group>
     <Group title="浏览器权限"><Row label="网站设置" description="下方可为具体网站配置浏览、下载、摄像头和麦克风权限。" /><Row label="历史记录" description="浏览历史仅在用户点击“管理”时显示；AI 只读取自身标签，并单独请求审批。"><span className="settings-value">仅手动查看</span></Row><Row label="默认使用网站工具" description="当前聊天引擎没有调用 WebMCP 网站工具。"><span className="settings-value">未接入</span></Row></Group>
@@ -116,7 +147,7 @@ export function BrowserSettings({ preferences, onPreference }) {
       <form className="integration-site-form" onSubmit={(event) => { event.preventDefault(); addRule(); }}><input aria-label="网站或主机名" placeholder="example.com 或 localhost" value={ruleHost} onChange={(event) => setRuleHost(event.target.value)} /><button className="secondary-button" disabled={action.working || !ruleHost.trim()}><Plus size={15} />添加</button></form>
       <div className="integration-site-table"><div className="integration-site-head"><strong>网站或模式</strong><span>浏览</span><span>下载</span><span>设备权限</span></div><div className="integration-site-row"><strong>默认</strong><span>允许</span><span>允许</span><span>禁止</span></div>{rules.map((rule) => <div className="integration-site-row" key={rule.host}><strong>{rule.host}<button className="icon-button small" aria-label={`移除网站 ${rule.host}`} disabled={action.working} onClick={() => action.run(() => save({ browserSiteRules: rules.filter((item) => item.host !== rule.host) }))}><X size={14} /></button></strong>{[['browse', '浏览'], ['download', '下载']].map(([key, label]) => <select key={key} aria-label={`${rule.host} ${label}权限`} value={rule[key]} disabled={action.working} onChange={(event) => updateRule(rule.host, { [key]: event.target.value })}><option value="allow">允许</option><option value="block">禁止</option></select>)}<span className="integration-device-controls"><label><input type="checkbox" aria-label={`${rule.host} 摄像头`} checked={rule.camera} disabled={action.working} onChange={(event) => updateRule(rule.host, { camera: event.target.checked })} />摄像头</label><label><input type="checkbox" aria-label={`${rule.host} 麦克风`} checked={rule.microphone} disabled={action.working} onChange={(event) => updateRule(rule.host, { microphone: event.target.checked })} />麦克风</label></span></div>)}</div>
     </Group>
-    <Group title="开发者模式"><Row label="启用完整 CDP 访问权限" description="向模型开放当前对话 AI 标签的完整调试命令与事件；可读取敏感网页数据、运行脚本、修改页面及提交请求。仅使用独立临时会话，仍遵循当前审批策略。"><IntegrationSwitch label="启用完整 CDP 访问权限" checked={Boolean(preferences.browserCdpEnabled)} disabled={!preferences.browserAiEnabled} onChange={(checked) => onPreference({ browserCdpEnabled: checked })} /></Row></Group>
+    <Group title="开发者模式"><Row label="启用完整 CDP 访问权限" description="向模型开放当前对话 AI 标签的完整调试命令与事件；可读取敏感网页数据、运行脚本、修改页面及提交请求。仅使用独立临时会话，仍遵循当前审批策略。"><IntegrationSwitch label="启用完整 CDP 访问权限" checked={Boolean(browserConfig.fullCdpAccessEnabled)} disabled={!preferences.browserAiEnabled || action.working} onChange={(checked) => saveIntegration({ fullCdpAccessEnabled: checked })} /></Row><Row label="配置目录" description={integrationConfig?.root || '未找到 .codex 配置目录，将在保存时创建。'} /></Group>
     {action.error && <p className="integration-error" role="alert">{action.error}</p>}{feedback && <p role="status">{feedback}</p>}
   </div>;
 }

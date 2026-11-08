@@ -44,7 +44,7 @@ function createServiceTools({ manager, root, readOnly = false, guard = async () 
       else if (name === 'service_logs') result = manager.logs(root, args.service_id, args.max_chars);
       else result = manager.snapshot(root);
       const service = result.service; const ok = name !== 'service_start' || ['starting', 'running'].includes(service.status);
-      return { ok, ...result, ...(ok ? {} : { error: service.error || '命令已经退出，没有运行中的开发服务。' }), activity: { title: TITLES[name], detail: service?.name || '当前项目', path: service?.cwd || '', output: JSON.stringify(result, null, 2).slice(0, 24000), ...(service && !['starting', 'running', 'stopping'].includes(service.status) ? { exitCode: service.exitCode } : {}) } };
+      return { ok, ...result, ...(ok ? {} : { error: service.error || '命令已经退出，没有运行中的开发服务。' }), activity: { title: TITLES[name], detail: service?.name || '当前项目', path: service?.cwd || '', output: JSON.stringify(result, null, 2), ...(service && !['starting', 'running', 'stopping'].includes(service.status) ? { exitCode: service.exitCode } : {}) } };
     },
   };
 }

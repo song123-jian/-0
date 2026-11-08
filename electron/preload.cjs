@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('scodex', {
   quitApp: () => ipcRenderer.invoke('app:quit'),
   getLocalCapabilities: () => ipcRenderer.invoke('capabilities:list'),
   revealCapabilitySource: (id) => ipcRenderer.invoke('capabilities:reveal', id),
+  getIntegrationConfig: () => ipcRenderer.invoke('integration:get'),
+  saveIntegrationConfig: (update) => ipcRenderer.invoke('integration:save', update),
+  setCodexPluginEnabled: (id, enabled) => ipcRenderer.invoke('plugins:config-enable', id, enabled),
   onAppCommand: (listener) => {
     const handler = (_event, action) => listener(action);
     ipcRenderer.on('app:command', handler);
@@ -73,6 +76,7 @@ contextBridge.exposeInMainWorld('scodex', {
   cleanupWorktrees: (ids) => ipcRenderer.invoke('worktrees:cleanup', ids),
   revealWorktree: (id) => ipcRenderer.invoke('worktrees:reveal', id),
   savePreferences: (update) => ipcRenderer.invoke('app:preferences', update),
+  readReferenceSettings: (root) => ipcRenderer.invoke('settings:read-reference', root),
   openDesktopApp: (id, target) => ipcRenderer.invoke('computer:open-app', id, target),
   chooseSkillDirectory: () => ipcRenderer.invoke('skills:choose-directory'),
   openSkillDirectory: () => ipcRenderer.invoke('skills:open-directory'),
@@ -111,6 +115,11 @@ contextBridge.exposeInMainWorld('scodex', {
   },
   browserAction: (action) => ipcRenderer.invoke('browser:action', action),
   layoutBrowser: (bounds) => ipcRenderer.invoke('browser:layout', bounds),
+  onBrowserShortcut: (listener) => {
+    const handler = (_event, action) => listener(action);
+    ipcRenderer.on('browser:shortcut', handler);
+    return () => ipcRenderer.removeListener('browser:shortcut', handler);
+  },
   onBrowserState: (listener) => {
     const handler = (_event, state) => listener(state);
     ipcRenderer.on('browser:state', handler);
@@ -134,6 +143,11 @@ contextBridge.exposeInMainWorld('scodex', {
     return () => ipcRenderer.removeListener('terminal-session:event', handler);
   },
   openExternalFile: (filePath) => ipcRenderer.invoke('workspace:open-external', filePath),
+  locateMessagePath: (target, reveal = true) => ipcRenderer.invoke('message-files:locate', target, reveal),
+  listMessageDirectory: (id, directory) => ipcRenderer.invoke('message-files:list', id, directory),
+  previewMessageFile: (id, target) => ipcRenderer.invoke('message-files:preview', id, target),
+  revealMessageFile: (id, target) => ipcRenderer.invoke('message-files:reveal', id, target),
+  openMessageFile: (id, target) => ipcRenderer.invoke('message-files:open', id, target),
   chooseWorkspace: () => ipcRenderer.invoke('workspace:choose'),
   listDirectory: (directory) => ipcRenderer.invoke('workspace:list', directory),
   searchWorkspace: (query) => ipcRenderer.invoke('workspace:search', query),

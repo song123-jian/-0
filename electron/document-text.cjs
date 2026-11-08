@@ -1,6 +1,6 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { decodeText, truncateUtf8, MAX_CHAT_ATTACHMENT_TEXT_BYTES } = require('./chat-attachments.cjs');
+const { decodeText } = require('./chat-attachments.cjs');
 
 const MAX_UNPACKED_BYTES = 32 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 8 * 1024 * 1024;
@@ -18,23 +18,21 @@ function oleHasStream(bytes, name) {
 }
 
 function outputText() {
-  let text = '', bytes = 0, truncated = false, pendingHigh = '';
+  let text = '', pendingHigh = '';
   return {
-    get full() { return bytes >= MAX_CHAT_ATTACHMENT_TEXT_BYTES || truncated; },
+    get full() { return false; },
     add(value) {
       if (!value) return;
       value = pendingHigh + String(value).replace(/\0/g, ''); pendingHigh = '';
       const last = value.charCodeAt(value.length - 1);
       if (last >= 0xd800 && last <= 0xdbff) { pendingHigh = value.slice(-1); value = value.slice(0, -1); }
       if (/[\ud800-\udfff]/u.test(value)) throw failure('invalid');
-      const part = truncateUtf8(value, MAX_CHAT_ATTACHMENT_TEXT_BYTES - bytes);
-      text += part; bytes += Buffer.byteLength(part);
-      if (part.length < String(value).length) truncated = true;
+      text += value;
     },
     result(format, emptyStatus = 'empty') {
       if (pendingHigh) throw failure('invalid');
       const empty = !text.trim();
-      return { format, text, truncated, parsed: !empty || emptyStatus === 'empty', parseStatus: empty ? emptyStatus : 'parsed' };
+      return { format, text, parsed: !empty || emptyStatus === 'empty', parseStatus: empty ? emptyStatus : 'parsed' };
     },
   };
 }

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { createSkillContext, MAX_BYTES } = require('../electron/skill-context.cjs');
+const { createSkillContext } = require('../electron/skill-context.cjs');
 const { evaluatePermission } = require('../electron/permission-policy.cjs');
 
 async function fixture(t, options = {}) {
@@ -92,20 +92,24 @@ test('path substitution after authorization cannot cross a junction', async (t) 
   await assert.rejects(tool.execute('skill_read', { path: 'references/guide.md' }), /链接|联接/);
 });
 
-test('invalid UTF8, binary and oversized resources are never returned as text', async (t) => {
+test('invalid and binary resources are rejected while large text remains available to request compression', async (t) => {
   const f = await fixture(t), tool = await f.create();
-  for (const [name, data, error] of [['invalid', Buffer.from([255]), /UTF-8/], ['binary', Buffer.from([0]), /二进制/], ['big', Buffer.alloc(MAX_BYTES + 1, 65), /128KB/]]) {
+  for (const [name, data, error] of [['invalid', Buffer.from([255]), /UTF-8/], ['binary', Buffer.from([0]), /二进制/]]) {
     await fs.writeFile(path.join(f.root, name), data);
     await assert.rejects(tool.execute('skill_read', { path: name }), error);
   }
+  const large = '规则'.repeat(70000);
+  await fs.writeFile(path.join(f.root, 'large.md'), large);
+  const result = await tool.execute('skill_read', { path: 'large.md' });
+  assert.equal(result.content, large);
+  assert.equal(result.truncated, false);
 });
 
-test('long single-line resources and directory listings have complete bounded pagination', async (t) => {
+test('long single-line resources and directory listings remain complete', async (t) => {
   const f = await fixture(t), tool = await f.create(), text = '资料'.repeat(18000);
   await fs.writeFile(path.join(f.root, 'long.md'), text);
-  let content = '', offset = 0;
-  do { const page = await tool.execute('skill_read', { path: 'long.md', offset }); assert.ok(page.content.length <= 24000); content += page.content; offset = page.next_offset; } while (offset !== null);
-  assert.equal(content, text);
+  const readPage = await tool.execute('skill_read', { path: 'long.md' });
+  assert.equal(readPage.content, text);
   for (let i = 0; i < 105; i++) await fs.writeFile(path.join(f.root, 'references', String(i).padStart(3, '0') + '.md'), 'x');
   await fs.writeFile(path.join(f.root, 'references', '.env'), 'private');
   const page = await tool.execute('skill_list', { path: 'references' }); assert.equal(page.entries.length, 100);
@@ -114,14 +118,14 @@ test('long single-line resources and directory listings have complete bounded pa
   assert.equal(last.next_offset, null); assert.equal(page.entries.some(i => i.path.endsWith('.env')), false);
 });
 
-test('resources respect actual file-read policy for an external package', async (t) => {
+test('full-access file-read policy permits an external package resource', async (t) => {
   const f = await fixture(t), workspaceRoot = path.join(f.base, 'project'); await fs.mkdir(workspaceRoot);
   let mode = 'read-only';
   const tool = await f.create({ authorize: async (operation, input) => {
     const result = evaluatePermission({ sandboxMode: mode, approvalPolicy: 'never' }, { operation, ...input, workspaceRoot });
     if (result.decision !== 'allow') throw new Error('policy denied');
   } });
-  await assert.rejects(tool.execute('skill_read', { path: 'references/guide.md' }), /policy denied/);
+  assert.equal((await tool.execute('skill_read', { path: 'references/guide.md' })).ok, true);
   mode = 'workspace-write'; assert.equal((await tool.execute('skill_read', { path: 'references/guide.md' })).ok, true);
 });
 

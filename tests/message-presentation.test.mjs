@@ -84,6 +84,14 @@ test('operation summaries distinguish failed, cancelled, interrupted and running
   assert.match(operationCaption({ name: 'read_file', status: 'interrupted' }), /已中断/);
 });
 
+test('model debate operations keep role titles and merge structured completion details', () => {
+  const proposal = { name: 'model_debate_proposal', title: '模型三 · 独立提案', detail: '只读模型请求；无工具和文件访问' };
+  assert.equal(operationCaption({ ...proposal, status: 'running' }), '正在模型三 · 独立提案');
+  assert.equal(operationCaption({ ...proposal, status: 'succeeded', detail: '独立提案已返回结构化结果' }), '模型三 · 独立提案已返回结构化结果');
+  assert.equal(operationCaption({ name: 'model_debate_result', title: '三模型讨论完成 · 模型一 100%', status: 'succeeded', detail: '自动份额合计 100%；模型一独占实际执行' }), '三模型讨论完成 · 模型一 100% · 自动份额合计 100%；模型一独占实际执行');
+  assert.equal(operationCaption({ ...proposal, status: 'failed', detail: '模型三等待超过时限。' }), '模型三 · 独立提案 · 失败');
+});
+
 test('Skill notices list only actual successful loads, once per name and including preloaded guidance', () => {
  const operations=[{name:'skill_use',status:'succeeded',detail:'requirement-understanding'},{name:'skill_open',status:'running',detail:'pending'},{name:'skill_open',status:'succeeded',detail:'pdf'},{name:'skill_open',status:'succeeded',detail:'pdf'},{name:'skill_open',status:'failed',detail:'unavailable'},{name:'skill_search',status:'succeeded',detail:'query'}];
  assert.deepEqual(usedSkillNames(operations),['requirement-understanding','pdf']);

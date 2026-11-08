@@ -91,7 +91,7 @@ function TaskEditor({ task, onClose, onSave, projects, activeProjectId }) {
             <ChevronRight size={15} className="task-attachment-chevron" aria-hidden="true" />
           </summary>
           <div className="task-attachment-list" aria-label="任务附件详情">{form.attachments.map((item, index) => <div className="task-attachment-row" key={`${item.path}-${item.sha256}`}>
-            <Files size={17} aria-hidden="true" /><span className="task-attachment-copy"><strong>{item.name}</strong><small>{taskAttachmentSize(item.size)} · {item.mimeType}</small><small className="task-attachment-path" title={item.path}>{item.path}</small></span>
+            <Files size={17} aria-hidden="true" /><span className="task-attachment-copy"><strong>{item.name}</strong><small>{taskAttachmentSize(item.size)} · {item.mimeType}</small></span>
             <button className="icon-button" type="button" aria-label={`移除附件 ${item.name}`} title="移除附件" onClick={() => change('attachments', form.attachments.filter((_entry, entryIndex) => entryIndex !== index))}><X size={15} /></button>
           </div>)}</div>
         </details>}

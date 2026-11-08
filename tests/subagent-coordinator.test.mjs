@@ -27,6 +27,18 @@ test('non-overlapping edit tasks run concurrently while overlapping paths are re
   assert.doesNotThrow(() => coordinator.assertNoActiveTasks());
 });
 
+test('an edit task may coordinate its own command while another edit task remains protected', async () => {
+  const release = new Map();
+  const coordinator = createSubagentCoordinator({ workspaceRoot: 'C:/workspace', run: async ({ id }) => new Promise(resolve => release.set(id, resolve)) });
+  const first = await coordinator.start({ task: '运行并修改 A', mode: 'edit', paths: ['src/a.js'], parentRequestId: 'parent-command' });
+  assert.doesNotThrow(() => coordinator.assertNoActiveTasks({ writesOnly: true, ownerId: first.id }));
+  const second = await coordinator.start({ task: '修改 B', mode: 'edit', paths: ['src/b.js'], parentRequestId: 'parent-command' });
+  assert.throws(() => coordinator.assertNoActiveTasks({ writesOnly: true, ownerId: first.id }), /子任务.*运行/);
+  assert.throws(() => coordinator.assertNoActiveTasks({ writesOnly: true, ownerId: 'unknown' }), /子任务.*运行/);
+  release.get(first.id)({ text: 'a' }); release.get(second.id)({ text: 'b' });
+  await Promise.all([coordinator.wait(first.id, 1000, 'parent-command'), coordinator.wait(second.id, 1000, 'parent-command')]);
+});
+
 test('subagent coordinator rejects edits without an assigned path and cancels parent tasks', async () => {
   const coordinator = createSubagentCoordinator({ workspaceRoot: 'C:/workspace', run: async ({ signal }) => {
     await new Promise((resolve, reject) => { signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); });

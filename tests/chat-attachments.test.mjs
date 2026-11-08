@@ -25,11 +25,13 @@ test('arbitrary extensions add as metadata; UTF-8 and BOM UTF-16 text decode acc
   assert.equal(records.some((item) => 'data' in item), false);
 });
 
-test('UTF-8 total extraction budget is shared, codepoint-safe and enforced again on persisted/IPC records', () => {
+test('complete UTF-8 attachment text survives extraction and persisted/IPC records', () => {
   const records = normalizeChatAttachments([file('a.txt', Buffer.from('中🚀'.repeat(40000))), file('b.txt', Buffer.from('文'.repeat(50000)))]);
   assert.ok(records.reduce((sum, item) => sum + Buffer.byteLength(item.text), 0) <= MAX_CHAT_ATTACHMENT_TEXT_BYTES);
   assert.equal(records[0].text.includes('�'), false);
-  assert.equal(records[0].truncated, true);
+  assert.equal(records[0].truncated, false);
+  assert.equal(records[0].text, '中🚀'.repeat(40000));
+  assert.equal(records[1].text, '文'.repeat(50000));
   assert.deepEqual(normalizeAttachmentRecords(JSON.parse(JSON.stringify(records))), records);
   assert.throws(() => normalizeAttachmentRecords([{ text: 'bypass', size: -1 }]), /大小无效/);
 });
