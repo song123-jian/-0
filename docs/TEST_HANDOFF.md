@@ -1,6 +1,6 @@
 # 测试交接
 
-## 1.3.65 消息文件直达（本地已验证，源码待同步）
+## 1.3.65 消息文件直达（已验证，源码已上传）
 
 - 实际对象：release/Scodex-Workbench-1.3.65/win-unpacked/Scodex工作台.exe，应用/PE版本1.3.65；最终入口D:/cx/.Scodex/EXE快捷启动.lnk。EXE 8b251d94a8484651bb91bdebdae63a40c97443b4413ac6d544535155e0a77ec1；ASAR 03a5038c52c0d5915441ac6fec17e2141ba81b37ed19af3ea5f8b7d058f08c6c；lnk 1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103。
 - 环境/前置：Windows10.0.26200 x64、Node24.17.0、Electron45；隔离profile/项目及自建中文空格文件/目录，无模型服务或真实配置/聊天写入。实际EXE、renderer、IPC和Windows Explorer执行，未用模拟页面替代。
@@ -19,7 +19,8 @@
 - 构建方式：npx electron-builder --win --dir --x64 --config.directories.output=release/Scodex-Workbench-1.3.65 --config.electronDist=node_modules/electron/dist --publish never；[验收摘要](verification/1.3.65.json)、[交付清单](../release/file-links-1.3.65/delivery.json)。
 - 回滚/清理：恢复release/file-links-1.3.65/EXE快捷启动.pre-replace.lnk到根可回保留的1.3.64-final，备份SHA 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1。3轮processExited/fixtureRemoved/cleanup为true/true/passed，fixture原路径不存在，自建Explorer窗口关闭，无新增临时残留或常驻服务；完整旧目录及必要证据保留。
 - 有效复用/未覆盖：1.3.64上下文/模型布局、1.3.63队列未变结果继续有效；不重跑无关全项目或旧message-workspace-ui整轮。仅本地链接，不验证公网模型、原生选择器或完整Codex等价；截图仅辅助链接呈现，不能代替功能断言。
-- 上传待办：增量源码、文档及验收资料待同步https://github.com/song123-jian/-0 的main（基线3946d98），采用已验证GitHub REST对象SHA核对、非强制更新和远端回读；不重试未变Git HTTPS故障或发布Release。程序产物、用户数据及凭据排除。文档长终端写入被策略拒绝且未落盘，改用结构化文件工具后回读核验。
+- 源码上传验收：13个增量文件已同步https://github.com/song123-jian/-0 的main，基线3946d98，源码提交d066005f17ac191d5b5e9016926dce3907f50d28；GitHub REST逐对象SHA核对及非强制更新通过，GET回读ref和commit的tree/parent与本地完全一致，source-recovery退出0。最终交接状态随本次文档同步，末次文档提交与远端核验见本地release/file-links-1.3.65/upload-verification.json。程序产物、用户数据和凭据排除，未发布Release。文档长终端写入被策略拒绝且未落盘，改用结构化文件工具后回读核验。
+- 上传恢复记录：初次source命令退出1，13个blob及tree匹配但commit SHA不同，main更新前已拦截；精确复算证明辅助脚本移除末尾换行是唯一差异。恢复只用原始message重建commit，复用已有对象；本地/远端SHA完全一致，main非强制更新及最终回读通过。不重复上传文件或重跑未变程序测试；source-api-upload.json、upload-failure-analysis.json和source-recovery-api-upload.json保留失败、原因与成功结果。
 
 ## 1.3.64 Codex上下文接续与模型布局（已验证，源码已上传）
 

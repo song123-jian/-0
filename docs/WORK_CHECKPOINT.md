@@ -1,4 +1,4 @@
-## 当前检查点：1.3.65 消息文件直达（本地完成，源码待同步）
+## 当前检查点：1.3.65 消息文件直达（已完成，源码已上传）
 
 - 目标/范围：命名Markdown本地链接保留名称、图标、完整路径悬停及可访问名称；文件点击真实预览/Explorer定位，目录直接进入；复用原IPC和目录授权，不加依赖。
 - 已完成：1.3.64→1.3.65完整候选构建、根快捷入口原子切换及真实启动；8份代码/测试/版本增量审查无剩余高置信度问题。基线及精确旧文件位于release/file-links-1.3.65/baseline.json。
@@ -6,7 +6,8 @@
 - 验收纠正：原candidate-ui的600px布局读取隐藏零尺寸元素，原通过无效；驱动关闭第三工作台并补足可见/非零/边界断言后，仅layout范围补测通过，未重建正常产品。
 - 当前入口：EXE快捷启动.lnk→release/Scodex-Workbench-1.3.65/win-unpacked/Scodex工作台.exe；EXE 8b251d94a8484651bb91bdebdae63a40c97443b4413ac6d544535155e0a77ec1；ASAR 03a5038c52c0d5915441ac6fec17e2141ba81b37ed19af3ea5f8b7d058f08c6c；lnk 1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103。
 - 证据/交接：release/file-links-1.3.65/delivery.json、incremental-review.json及docs/verification/1.3.65.json；项目和测试交接记录实际状态。文档长终端写入被策略拒绝，未落盘，改用结构化apply_patch，不重试被拒命令。
-- 源码待办：https://github.com/song123-jian/-0 的main基线3946d982da4642a84b518860d058579185c7c3f7；复用干净source-repo，上传本轮8文件及必要交接/验收资料。沿用已验证GitHub REST逐对象SHA核对、非强制更新并远端回读，不重试未变Git HTTPS故障。
+- 源码/交接：https://github.com/song123-jian/-0 的main已非强制更新至d066005f17ac191d5b5e9016926dce3907f50d28，GET回读ref及commit的tree/parent完全一致；13个增量文件（8份代码/测试/版本及5份交接/验收资料）。最终状态随本次文档同步，末次文档SHA及远端核验见release/file-links-1.3.65/upload-verification.json；隔离克隆继续复用，不含程序产物或用户数据。
+- 上传恢复：初次辅助脚本移除message末尾换行，SHA校验在更新main前拦截；精确复算确认后保留原始message，仅重建commit并复用已校验blob/tree，恢复上传通过。source-api-upload.json、upload-failure-analysis.json和source-recovery-api-upload.json保留原因及实际结果；程序验证仍有效。
 - 回滚/清理：恢复release/file-links-1.3.65/EXE快捷启动.pre-replace.lnk可回1.3.64-final，旧完整目录保留。3轮测试进程/自建Explorer窗口退出、fixture原路径不存在；无本轮临时残留，不结束用户进程或写真实配置/聊天。
 - 约束/评估：原始路径仍简写文件名；只覆盖本地链接及所述视口，无模型请求、不声称完整Codex等价；无本地功能阻塞或足以追加的重构候选。
 - Skill：requirement-understanding95（30/20/16/15/9/5）；code-write-review94（30/20/15/15/9/5）；已读说明复用，无Agent。

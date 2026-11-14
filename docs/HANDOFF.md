@@ -1,14 +1,15 @@
 # 项目交接
 
-## 1.3.65 消息文件直达（本地完成，源码待同步）
+## 1.3.65 消息文件直达（已完成，源码已上传）
 
-- 当前状态：根[EXE快捷启动](../EXE快捷启动.lnk)已原子切至[1.3.65完整程序](../release/Scodex-Workbench-1.3.65/win-unpacked/Scodex工作台.exe)，实际入口启动/标签/文件打开3项通过；图标和用户数据保留，源码待上传。
+- 当前状态：根[EXE快捷启动](../EXE快捷启动.lnk)已原子切至[1.3.65完整程序](../release/Scodex-Workbench-1.3.65/win-unpacked/Scodex工作台.exe)，实际入口启动/标签/文件打开3项通过；图标和用户数据保留，本轮13个增量文件已上传main并回读确认。
 - 主要变更：本地Markdown命名链接保留“快捷入口”等名称，加文件图标、完整路径title及可访问名称；原始路径仍简写文件名。点击复用现有预览、Explorer定位与目录浏览，不新增依赖或扩大授权。
 - 版本/身份：1.3.64→1.3.65，沿用SemVer补丁映射，同轮修复不再递增；PE版本1.3.65。EXE 8b251d94a8484651bb91bdebdae63a40c97443b4413ac6d544535155e0a77ec1；ASAR 03a5038c52c0d5915441ac6fec17e2141ba81b37ed19af3ea5f8b7d058f08c6c；lnk 1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103。候选与最终相同；[交付清单](../release/file-links-1.3.65/delivery.json)、[验收摘要](verification/1.3.65.json)。
 - 验证/纠正：逻辑13/13、renderer及本地Electron45完整构建退出0、4包内容/9资源一致；candidate-ui前5项有效。原600px布局因隐藏零尺寸元素产生假阳性，不采用；修正驱动后layout-ui 3/3通过，600/1280px下6个链接可见、非零且在边界内。[最终聊天视图](verification/message-links-1.3.65.png)已查看，链接呈现正常。
 - 增量审查：baseline.json精确旧字节与本轮8份代码/测试/版本差异及直接引用已审查，布局验收断言遗漏已修正，无剩余高置信度问题；[审查记录](../release/file-links-1.3.65/incremental-review.json)。
 - 回滚/清理：将[原入口备份](../release/file-links-1.3.65/EXE快捷启动.pre-replace.lnk)复制回根入口，可返回保留的1.3.64-final，备份SHA 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1；新旧完整目录均保留。3轮测试进程、自建Explorer窗口退出，fixture清理成功；无本轮临时残留或常驻服务。
-- 仓库待办：https://github.com/song123-jian/-0 的main基线3946d98，本轮源码及必要文档/验收资料待上传；排除EXE/LNK、用户配置/聊天、release/dist/依赖。沿用已验证GitHub REST逐对象SHA核对、非强制更新及远端回读，不重复旧Git HTTPS故障，不发布Release。
+- 仓库状态：https://github.com/song123-jian/-0 的main已从3946d98非强制更新至[源码提交d066005](https://github.com/song123-jian/-0/commit/d066005f17ac191d5b5e9016926dce3907f50d28)，13文件（8份代码/测试/版本及5份交接/验收资料），远端ref、tree和parent与本地一致。排除EXE/LNK、用户配置/聊天、release/dist/依赖；未发布Release。最终交接状态随本次文档同步，末次文档SHA与远端核验见本地release/file-links-1.3.65/upload-verification.json。
+- 上传恢复：初次13个blob和tree全部一致，但辅助脚本去掉message末尾换行，导致commit SHA不同；更新main前已拦截。精确复算后仅以原始message重建commit，复用已上传对象，SHA完全一致且非强制更新/远端回读通过；程序验证不受影响。source-api-upload.json、upload-failure-analysis.json及source-recovery-api-upload.json保留证据。
 - 限制/决策：不写真实用户数据，不结束用户进程；仅本地链接和所述视口验收，不外推整个系统或Codex等价。旧1.3.64上下文/设置及1.3.63队列未变结果继续有效。轻量重构评估无有证据且收益足以追加的候选。文档长终端写入被策略拒绝且未落盘，已改用结构化文件工具。
 - 使用Skill：requirement-understanding95、code-write-review94；无Agent。
 
@@ -17,7 +18,7 @@
 | 命名链接、图标、完整路径悬停 | 通过 | candidate-ui及shortcut-ui |
 | 文件/快捷方式/目录、键盘、错误和授权边界 | 通过 | candidate-ui前5项、shortcut-ui 3/3 |
 | 可见链接窄屏布局、候选与最终入口 | 通过 | layout-ui 3/3、包核验及交付清单 |
-| 增量源码上传 | 待完成 | main基线3946d98 |
+| 增量源码上传 | 已完成 | 13文件，源码提交d066005及API远端回读 |
 
 ## 1.3.64 Codex上下文接续与模型布局（已完成）
 
