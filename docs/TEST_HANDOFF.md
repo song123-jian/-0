@@ -1,6 +1,6 @@
 # 测试交接
 
-## 1.3.64 Codex上下文接续与模型布局（本地验证通过）
+## 1.3.64 Codex上下文接续与模型布局（已验证，源码已上传）
 
 - 最终实际对象：release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe，应用/PE版本1.3.64、产品版本1.3.64.0；Windows10.0.26200 x64、Node24.17.0 / Electron45，隔离profile/项目和loopback模型HTTP。最终EXE c785cb63e5aaa535905fd897b34f50593321cef39729b728d136c8dc3f109c9b；ASAR 78cc245514ee35c1c7e4254ffb6eafb60850128804f31a91da4a4aa564c939d4。
 - 运行入口：D:/cx/.Scodex/EXE快捷启动.lnk，SHA 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1；目标/工作目录及原图标经COM回读，最终文件哈希与通过的候选相同。[可随源码读取的验收摘要](verification/1.3.64.json)、[完整交付清单](../release/codex-alignment-1.3.64/delivery.json)。
@@ -20,7 +20,9 @@
 - 有效结果复用：最终重建只涉及固定栏CSS和/compact重试识别；自动/重开/手动/编辑原有效实际场景未变，复用相关结果；1.3.63队列/计划未变结果继续有效，不全项目回归。初始package.json整文件字节比对因打包器移除scripts/build/devDependencies而失败，改为身份/依赖字段核对，业务模块/dist仍字节一致，不掩盖版本差异。
 - 回滚/清理：原入口备份release/codex-alignment-1.3.64/EXE快捷启动.pre-replace.lnk，SHA 583856a3e04c1791a6b2d8ff014e4e9104d210dd2b257f0cfbde4224f422de9d，恢复到根即可返回保留的1.3.63-capacity。5轮test报告均processExited=true、cleanup=passed，fixture实际路径均不存在，无常驻服务；保留测试源码、证据及有用途的候选/回滚目录。未结束用户进程或写真实配置/聊天。
 - 未覆盖：loopback替代模型HTTP/凭据，不验证公网摘要语义质量、费用、全部兼容服务、官方远端压缩与云账号；token显示为估算。历史原生关闭/文件选择器未因此补验，不声称完整Codex等价。
-- 源码仓库状态：待上传 https://github.com/song123-jian/-0；源码整理已完成，尚未提交推送。当前本地功能和入口通过；仅上传及最终文档/远端回读未完成。仅相关实现、配置、入口或验收变化时复测。
+- 源码上传验收：实际仓库 https://github.com/song123-jian/-0，分支main；git push origin 0e2811ff478c71eaf693e9d7e35b0c91f164c339:refs/heads/main退出0，git ls-remote origin refs/heads/main的预期与实际均为0e2811ff478c71eaf693e9d7e35b0c91f164c339，状态通过。累计54文件（22新增、32修改），3份已跟踪运行时ZIP未变，真实配置/聊天和程序产物均排除；本轮未发布GitHub Release。最终交接状态随本次文档提交同步，后续文档提交号及远端核验见本地release/codex-alignment-1.3.64/upload-verification.json。程序与测试输入未变化，复用上述有效结果，仅相关实现、配置、入口或验收变化时复测。
+
+- 上传恢复记录：文档push首次退出1（Recv failure: Connection was reset）；ls-remote连接超时，单连接HTTP/1.1推送低速超时。API GET refs/heads/main返回0e2811f，证明源码仍在远端、文档待传；API可达。替代验收为REST逐对象SHA比对、非强制分支更新与最终API回读；不重跑程序测试。本地upload-verification.json保留失败、替代操作及最终结果。
 
 ## 1.3.63 工作流与会话能力补齐（已验证）
 

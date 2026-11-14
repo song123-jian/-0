@@ -79,8 +79,15 @@
   },
   "repository": {
     "url": "https://github.com/song123-jian/-0",
+    "branch": "main",
     "base": "b18db09f7f8a66f3bae7169d6501a2423a9cb74a",
-    "status": "prepared-not-pushed"
+    "status": "pushed",
+    "sourceCommit": "0e2811ff478c71eaf693e9d7e35b0c91f164c339",
+    "sourceFiles": 54,
+    "remoteHeadAtSourceVerification": "0e2811ff478c71eaf693e9d7e35b0c91f164c339",
+    "verificationCommand": "git ls-remote origin refs/heads/main",
+    "documentation": "Upload status synchronized by the following documentation-only commit",
+    "githubReleasePublished": false
   },
   "limitations": [
     "Loopback model responses; public model quality/billing/compatibility not tested",

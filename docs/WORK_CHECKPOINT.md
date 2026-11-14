@@ -1,14 +1,16 @@
-## 当前检查点：1.3.64 Codex上下文接续与模型布局（本地交付完成，源码待上传）
+## 当前检查点：1.3.64 Codex上下文接续与模型布局（已完成）
 
 - 目标/验收：模型语义摘要、/compact、摘要持久恢复/失效、上下文状态；模型5分类简洁布局并保持草稿/独立保存；新版入口及累计源码上传。
 - 已完成：本地功能、1.3.64-final完整程序、原子根入口切换与实际启动；15文件增量审查通过，默认策略兼容及/compact失败重试问题已修复。
 - 有效验证：定向59项（最终32+未变27）；候选首轮前4项、remaining6/6、最终retry2/2、布局3/3、快捷入口2/2；8包内容/9资源/PE版本一致；最终截图已查看。5轮进程/fixture均清理。
 - 当前入口：EXE快捷启动.lnk→release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe；EXE c785cb63e5aaa535905fd897b34f50593321cef39729b728d136c8dc3f109c9b；ASAR 78cc245514ee35c1c7e4254ffb6eafb60850128804f31a91da4a4aa564c939d4；lnk 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1。
 - 证据/基线：release/codex-alignment-1.3.64/baseline.json、incremental-review.json、build-verification-final.json、delivery.json及四轮UI/shortcut报告；docs/verification/1.3.64.json是可上传摘要。原始1.3.63未变结果有效。
-- 待办：更新并核验最终文档；将已整理的全部累计源码提交并推送既定仓库main，远端回读，更新双交接的上传状态。隔离克隆release/codex-alignment-1.3.64/source-repo，基线b18db09f7f8a66f3bae7169d6501a2423a9cb74a。凭据/身份配置及dry-run有效，不代表已推送。
+- 源码/交接：累计54个文件（22新增、32修改）已推送 https://github.com/song123-jian/-0 的main；源码提交0e2811ff478c71eaf693e9d7e35b0c91f164c339，git ls-remote远端回读相同，非强制推送。隔离克隆release/codex-alignment-1.3.64/source-repo，基线b18db09f7f8a66f3bae7169d6501a2423a9cb74a。最终上传状态随本次文档提交同步；无功能待办或新增阻塞。后续文档提交号见本地upload-verification.json。
 - 回滚/约束：EXE快捷启动.pre-replace.lnk恢复旧1.3.63-capacity；保留完整目录、用户配置/聊天和用户进程。源码排除EXE/LNK、配置、聊天、缓存，3份远端已跟踪ZIP未变化。
 - 限制/假设：loopback替代模型，公网语义质量/费用未验；无Responses远端压缩/官方云账号等价承诺。上下文估算85%为本机策略；短历史可无需摘要；源SHA变化回退原文。无新增授权阻塞。
 - Skill：requirement-understanding、code-write-review、openai-docs；无Agent。下一步不重扫项目/历史、不重复有效测试。
+
+- 上传恢复：最终文档Git HTTPS重置/超时；API确认源码0e2811f已上传且文档待传。改用GitHub REST逐对象核对原提交SHA并非强制更新main，随后API回读；详见本地upload-verification.json。无产品代码变化或测试结果失效。
 
 ## 当前检查点：1.3.63 工作流与会话能力补齐（已完成）
 

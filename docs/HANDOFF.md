@@ -1,8 +1,8 @@
 # 项目交接
 
-## 1.3.64 Codex上下文接续与模型布局（本地交付完成，源码待上传）
+## 1.3.64 Codex上下文接续与模型布局（已完成）
 
-- 当前状态：根[EXE快捷启动](../EXE快捷启动.lnk)已原子切至[1.3.64完整程序](../release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe)，图标与用户数据保留；实际根入口启动/聊天2项通过。源码已整理到既定仓库的隔离克隆，尚未提交推送。
+- 当前状态：根[EXE快捷启动](../EXE快捷启动.lnk)已原子切至[1.3.64完整程序](../release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe)，图标与用户数据保留；实际根入口启动/聊天2项通过。累计源码已推送既定仓库main，远端回读确认源码提交0e2811ff478c71eaf693e9d7e35b0c91f164c339；最终上传状态随本次文档提交同步。
 - 版本/构建：1.3.63→1.3.64，沿用既有SemVer补丁映射；同轮恢复和CSS重建不再次递增。npm run build及本地Electron45目录构建均退出0；PE版本1.3.64 / 1.3.64.0，8份包内容和9项资源核对通过。[交付清单](../release/codex-alignment-1.3.64/delivery.json)、[可随源码阅读的验收摘要](verification/1.3.64.json)。
 - 最终身份：EXE c785cb63e5aaa535905fd897b34f50593321cef39729b728d136c8dc3f109c9b；ASAR 78cc245514ee35c1c7e4254ffb6eafb60850128804f31a91da4a4aa564c939d4；lnk 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1。
 - 范围：electron/context-compaction.cjs新增有界分批模型摘要、源内容SHA校验与恢复；main/runtime接入并保留系统/当前输入；conversations保存摘要和估算；聊天支持/compact、按钮、摘要查看及上下文状态；失败/取消保留原文，失败重试仍走摘要。模型与连接按模型一/二/三、通用设置、诊断分组，折叠服务信息/高级说明、修复密钥按钮重叠并固定保存栏；保留角色草稿与独立保存。
@@ -10,7 +10,7 @@
 - 验证/审查：有效定向逻辑59项（最终运行时/摘要32项，未变27项复用）；实际候选自动/手动/重开/编辑/失败取消有效，final-retry-ui 2/2、final-layout-ui 3/3、shortcut-ui 2/2。15份当前代码/版本差异已审查，旧默认策略回归及/compact重试分类问题均修复，无剩余高置信度问题。[审查](../release/codex-alignment-1.3.64/incremental-review.json)。
 - 回滚：将[原入口备份](../release/codex-alignment-1.3.64/EXE快捷启动.pre-replace.lnk)复制回根入口，可返回保留的1.3.63-capacity完整目录；备份SHA 583856a3e04c1791a6b2d8ff014e4e9104d210dd2b257f0cfbde4224f422de9d。只恢复入口，不替换配置/聊天；新旧程序都要保留完整win-unpacked目录。不结束用户进程。
 - 清理/限制：5轮测试fixture已删除、测试进程退出，无新增常驻服务。首轮编辑驱动旧弹窗假设失效，改为当前行内编辑后通过；首轮整轮failed保留，只复用独立有效项。包清单字节校验误差已改为运行身份/依赖结构校验，开发字段由打包器移除。模型HTTP/凭据由loopback替代，公网语义质量/费用/兼容性未验证；未实现Responses远端压缩、官方账号云会话，不宣称完全等价。原队列20条/计划等未变结果复用。
-- 源码仓库状态：待上传 https://github.com/song123-jian/-0；基线b18db09f7f8a66f3bae7169d6501a2423a9cb74a。累计源码、测试和文档同步，排除配置/聊天、EXE、构建缓存；3份已跟踪运行时ZIP与远端相同。凭据模式检查仅命中一个安全单测标记（无密钥内容），已定向核对。
+- 源码仓库状态：已上传 https://github.com/song123-jian/-0 的main；源码提交[0e2811f](https://github.com/song123-jian/-0/commit/0e2811ff478c71eaf693e9d7e35b0c91f164c339)，基线b18db09f7f8a66f3bae7169d6501a2423a9cb74a。累计54个文件（22新增、32修改）涵盖源码、测试及文档；push退出0，git ls-remote回读相同。排除配置/聊天、EXE、构建缓存；3份已跟踪运行时ZIP与远端相同。凭据模式检查仅命中一个安全单测标记（无密钥内容），已定向核对。本轮未发布GitHub Release，公开下载安装仍为历史1.3.31；本次上传状态另随文档提交同步。
 - 轻量重构评估：基于本轮差异和验收，无有证据且收益足够的额外重构，不扩展范围。
 - 使用Skill：requirement-understanding95（需求/边界）、code-write-review94（增量与编码）、openai-docs95（官方压缩能力对照）；未调用Agent。
 
@@ -19,7 +19,9 @@
 | 自动/手动摘要、状态、保存恢复和历史失效 | 本地通过 | 验收摘要、候选UI及final-retry-ui |
 | 模型配置分组、草稿/独立保存、密钥与固定底栏布局 | 通过 | final-layout-ui及[最终视图](verification/model-connection-1.3.64.png) |
 | 1.3.64完整构建、根入口更新和真实启动 | 通过 | build-verification-final、shortcut-ui与交付清单 |
-| 所有累计增量源码上传 | 待完成 | source-sync.json记录同步范围，尚未推送 |
+| 所有累计增量源码上传 | 完成 | 54文件，源码提交0e2811f，push及远端回读通过；最终文档另行同步 |
+
+- 上传恢复：源码推送成功；后续文档Git HTTPS先连接重置、后单连接HTTP/1.1超时，API只读确认main仍为源码提交。影响仅最终4份文档上传；改用已可达的GitHub REST上传文档Git对象，核对blob/tree/commit哈希一致后非强制更新main，并用API回读；程序与有效验收结果保持，失败证据保存在本地upload-verification.json。
 
 ## 1.3.63 工作流与会话能力补齐（已完成）
 
