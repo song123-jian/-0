@@ -1,0 +1,74 @@
+{
+  "version": "1.3.65",
+  "repository": "https://github.com/song123-jian/-0",
+  "releaseUrl": "https://github.com/song123-jian/-0/releases/tag/v1.3.65",
+  "releaseId": 445155585,
+  "tagSha": "923348b57a43396c5f4361c86397e8e7d6ca6c2d",
+  "programUnchanged": true,
+  "archive": {
+    "name": "Scodex-Workbench-1.3.65-win-x64.zip",
+    "bytes": 257608314,
+    "sha256": "727463b54ec0cc45ff801ebfb121b03dce9f755123f287b6ddf3104737572a1a",
+    "validatedFiles": 80,
+    "validation": "All original file lengths and SHA-256 values match ZIP entries; no extra, missing or duplicate entries"
+  },
+  "assets": [
+    {
+      "name": "Scodex-Workbench-1.3.65-win-x64.zip",
+      "bytes": 257608314,
+      "sha256": "727463b54ec0cc45ff801ebfb121b03dce9f755123f287b6ddf3104737572a1a",
+      "url": "https://github.com/song123-jian/-0/releases/download/v1.3.65/Scodex-Workbench-1.3.65-win-x64.zip"
+    },
+    {
+      "name": "Scodex-Workbench-1.3.65-files.json",
+      "bytes": 12855,
+      "sha256": "1cf99680de8f9df92fc4bdb0aa3738420e068571e3725e415a34b24245c99b24",
+      "url": "https://github.com/song123-jian/-0/releases/download/v1.3.65/Scodex-Workbench-1.3.65-files.json"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 203,
+      "sha256": "26eb4c918b73013ed1aadfbad947ec9d9d645a54c700a0ef782ed57f13fb0dda",
+      "url": "https://github.com/song123-jian/-0/releases/download/v1.3.65/SHA256SUMS.txt"
+    }
+  ],
+  "publicDownload": {
+    "status": "passed",
+    "route": "Anonymous GitHub release asset API -> public CDN",
+    "assets": [
+      {
+        "name": "Scodex-Workbench-1.3.65-win-x64.zip",
+        "status": "passed",
+        "apiStatus": 302,
+        "cdnStatus": 200,
+        "method": "HEAD",
+        "bytes": 257608314,
+        "expectedSha256": "727463b54ec0cc45ff801ebfb121b03dce9f755123f287b6ddf3104737572a1a"
+      },
+      {
+        "name": "Scodex-Workbench-1.3.65-files.json",
+        "status": "passed",
+        "apiStatus": 302,
+        "cdnStatus": 200,
+        "method": "GET",
+        "bytes": 12855,
+        "expectedSha256": "1cf99680de8f9df92fc4bdb0aa3738420e068571e3725e415a34b24245c99b24",
+        "sha256": "1cf99680de8f9df92fc4bdb0aa3738420e068571e3725e415a34b24245c99b24"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "status": "passed",
+        "apiStatus": 302,
+        "cdnStatus": 200,
+        "method": "GET",
+        "bytes": 203,
+        "expectedSha256": "26eb4c918b73013ed1aadfbad947ec9d9d645a54c700a0ef782ed57f13fb0dda",
+        "sha256": "26eb4c918b73013ed1aadfbad947ec9d9d645a54c700a0ef782ed57f13fb0dda"
+      }
+    ],
+    "limitations": "Direct github.com download requests reset before an HTTP response on this network; direct route not verified. Full ZIP was not redownloaded."
+  },
+  "localEntry": "EXE快捷启动.lnk",
+  "rollback": "Restore release/file-links-1.3.65/EXE快捷启动.pre-replace.lnk; preserve complete old directory and user data",
+  "temporaryCleanup": "No disposable test profiles created by distribution; preserve archive, manifests and delivery evidence"
+}
