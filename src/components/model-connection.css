@@ -31,8 +31,8 @@
 .model-help { display: inline-flex; color: var(--muted); cursor: help; }
 .model-key-state { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; color: var(--accent); font-size: calc(12px + var(--font-step)); }
 .model-key-input { position: relative; }
-.model-key-input input { padding-right: 43px; }
-.model-key-input > button { position: absolute; right: 4px; }
+.model-key-input input { padding-right: 11px; }
+.model-key-input > button { position: static; }
 .model-icon-button { display: inline-flex; flex: 0 0 30px; width: 30px; height: 30px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--muted); border-radius: 5px; cursor: pointer; }
 .model-icon-button:hover, .model-icon-button:focus-visible { background: var(--surface); color: var(--ink); }
 .model-field-heading { justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -63,7 +63,7 @@
 .model-latency { font-size: calc(12px + var(--font-step)); color: var(--muted); white-space: nowrap; }
 .model-message { margin: 0 0 14px; padding: 10px 12px; color: var(--accent); border: 1px solid var(--line); border-radius: 6px; line-height: 1.7; font-size: calc(14px + var(--font-step)); overflow-wrap: anywhere; }
 .model-message.error { color: #bb4440; }
-.model-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--line); }
+.model-form-footer { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); background: var(--paper); }
 .model-form-footer > span { color: var(--muted); font-size: calc(13px + var(--font-step)); line-height: 1.6; }
 .model-save-button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 15px; border: 1px solid var(--accent); border-radius: 6px; color: var(--paper); background: var(--accent); font-size: calc(14px + var(--font-step)); cursor: pointer; }
 .model-connection-form button:disabled { opacity: .5; cursor: default; }
@@ -72,5 +72,23 @@
 .model-subagent-heading h2 { margin: 0 0 5px; font-size: calc(16px + var(--font-step)); }
 .model-subagent-heading p { margin: 0; color: var(--muted); line-height: 1.6; font-size: calc(13px + var(--font-step)); }
 .model-subagent-fallback { flex: 0 0 auto; color: var(--muted); font-size: calc(12px + var(--font-step)); line-height: 1.5; text-align: right; }
+.model-config-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 0 20px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.model-config-tabs button { flex: 1 1 auto; padding: 9px 12px; min-height: 38px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.model-config-tabs button[aria-selected=true] { color: var(--ink); background: var(--paper); border-color: var(--line); font-weight: 600; }
+.model-config-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.model-config-panel[hidden] { display: none; }
+.model-config-panel.model-subagent-section, .model-config-panel > .model-subagent-section { margin: 0; padding: 0; border: 0; background: transparent; }
+.model-config-intro { margin-bottom: 20px; }
+.model-config-intro h3 { margin: 0 0 5px; font-size: calc(16px + var(--font-step)); }
+.model-config-intro p { margin: 0; color: var(--muted); font-size: calc(13px + var(--font-step)); line-height: 1.6; }
+.model-config-details { margin: 0 0 22px; border: 1px solid var(--line); border-radius: 7px; padding: 0 14px; }
+.model-config-details > summary { padding: 12px 0; cursor: pointer; color: var(--muted); }
+.model-config-details[open] > summary { margin-bottom: 10px; color: var(--ink); }
+.model-config-details .model-field:last-child { margin-bottom: 14px; }
+.model-config-panel .model-field { margin-bottom: 20px; }
+.model-config-panel .model-address-manager { margin-top: 0; }
+.model-config-panel .model-address-manager details { max-height: 400px; overflow: auto; overflow-wrap: anywhere; }
+.model-field label { flex-wrap: wrap; }
+@container settings (max-width: 560px) { .model-key-input { flex-wrap: wrap; } .model-key-input > input { flex-basis: calc(100% - 40px); } .model-key-input > .model-role-save { width: 100%; } .model-form-footer { flex-wrap: wrap; } .model-config-tabs button { padding: 8px; } }
 @container settings (max-width: 560px) { .model-subagent-heading { display: block; } .model-subagent-heading > span { display: block; margin-top: 8px; text-align: left; } }
 @container settings (max-width: 560px) { .model-name-row { grid-template-columns: 1fr; gap: 0; } .model-and-effort { flex-wrap: wrap; } .model-and-effort > input, .model-and-effort > select { flex-basis: 100%; } .model-effort { flex-basis: 100%; width: 100%; } .model-effort-menu { width: 100%; } .model-address-row { flex-wrap: wrap; } .model-address-row label { flex-basis: 100%; } .model-form-footer { align-items: flex-start; } }

@@ -32,7 +32,6 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   const subagentModels = [...new Set([...(Array.isArray(input.subagentModels) ? input.subagentModels : subagentBaseUrl === baseUrl ? models : []).slice(0, 500).map(modelId).filter(Boolean)])];
   const subagentModel = modelId(input.subagentModel || (subagentBaseUrl === baseUrl ? model : ''));
   if (subagentModel && !subagentModels.includes(subagentModel)) subagentModels.push(subagentModel);
-  if (subagentModel && subagentBaseUrl === baseUrl && !models.includes(subagentModel)) models.push(subagentModel);
   const advisorModels = [...new Set([...(Array.isArray(input.advisorModels) ? input.advisorModels : advisorBaseUrl === baseUrl ? models : []).slice(0, 500).map(modelId).filter(Boolean)])];
   const advisorModel = modelId(value.advisorModel);
   if (advisorModel && !advisorModels.includes(advisorModel)) advisorModels.push(advisorModel);
@@ -159,25 +158,31 @@ function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch,
       const childConfig = { ...config, baseUrl: config.subagentBaseUrl };
       return list(childConfig, input.subagentApiKey || (config.subagentBaseUrl === config.baseUrl ? input.apiKey : undefined), config, 'subagent');
     },
-    async request(kind, selectedEffort, selectedModel) {
+    async request(kind, selectedEffort, selectedModel, selectedMode) {
       await ensure(); if (readError) throw new Error(readError); const config = state.config;
-      if (kind === 'advisor') {
-        if (!config.advisorEnabled || !config.advisorModel) throw new Error('顾问模型尚未配置或启用。');
-        if (!config.advisorModels.includes(config.advisorModel)) throw new Error('顾问模型已不在配置列表中。');
-        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model: config.advisorModel, toolProtocol: config.advisorToolProtocol || config.toolProtocol, retryLimit: config.retryLimit, temperature: null, reportUsage: config.reportUsage, maxOutputTokens: config.maxOutputTokens, contextWindowTokens: config.advisorContextWindowTokens, ...(config.advisorReasoningEffort ? { reasoning_effort: config.advisorReasoningEffort } : {}) };
+      const explicitMode = selectedMode !== undefined;
+      if (explicitMode && !['main', 'subagent', 'advisor'].includes(selectedMode)) throw new Error('模型模式无效，请重新选择。');
+      const role = explicitMode ? selectedMode : kind;
+      if (explicitMode && selectedEffort && !EFFORTS.includes(selectedEffort)) throw new Error('推理强度无效。');
+      if (role === 'advisor') {
+        if ((!explicitMode && !config.advisorEnabled) || !config.advisorModel) throw new Error('顾问模型尚未配置或启用。');
+        const model = explicitMode && selectedModel ? modelId(selectedModel) : config.advisorModel;
+        if (!config.advisorModels.includes(model)) throw new Error('所选模型三已不在配置列表中，请重新选择。');
+        const effort = explicitMode && selectedEffort || config.advisorReasoningEffort;
+        return { endpoint: config.advisorBaseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, 'advisor'), model, toolProtocol: config.advisorToolProtocol || config.toolProtocol, retryLimit: config.retryLimit, temperature: null, reportUsage: config.reportUsage, maxOutputTokens: config.maxOutputTokens, contextWindowTokens: config.advisorContextWindowTokens, ...(effort ? { reasoning_effort: effort } : {}) };
       }
-      const subagent = kind === 'subagent';
+      const subagent = role === 'subagent';
       const childOwnService = config.subagentBaseUrl !== config.baseUrl;
       let model = subagent ? config.subagentModel || (childOwnService ? '' : config.model) : config.model;
       if (subagent && !model) throw new Error('请先获取或选择子模型。');
-      if (!subagent && selectedModel !== undefined && selectedModel !== null && selectedModel !== '') {
+      if ((!subagent || explicitMode) && selectedModel !== undefined && selectedModel !== null && selectedModel !== '') {
         model = modelId(selectedModel);
-        if (!config.models.includes(model)) throw new Error('所选模型已不在已配置列表中，请重新选择模型。');
+        if (!(subagent ? config.subagentModels : config.models).includes(model)) throw new Error('所选模型已不在已配置列表中，请重新选择模型。');
       }
       if (!subagent && selectedEffort && !EFFORTS.includes(selectedEffort)) throw new Error('推理强度无效。');
       const models = subagent ? config.subagentModels : config.models;
       if (subagent && !models.includes(model)) throw new Error('所选子模型已不在子模型列表中，请重新获取模型列表。');
-      const effort = subagent ? config.subagentReasoningEffort : selectedEffort || config.reasoningEffort;
+      const effort = subagent ? (explicitMode && selectedEffort || config.subagentReasoningEffort) : selectedEffort || config.reasoningEffort;
       const target = subagent ? { ...config, baseUrl: config.subagentBaseUrl } : config;
       return { endpoint: target.baseUrl + '/chat/completions', apiKey: await keyFor(config, undefined, subagent ? 'subagent' : 'main'), model, toolProtocol: subagent ? config.subagentToolProtocol || config.toolProtocol : config.toolProtocol, retryLimit: config.retryLimit, reportUsage: config.reportUsage, maxOutputTokens: config.maxOutputTokens, contextWindowTokens: subagent ? config.subagentContextWindowTokens : config.contextWindowTokens, imageModel: config.imageModel, ...(effort ? { reasoning_effort: effort } : {}) };
     },

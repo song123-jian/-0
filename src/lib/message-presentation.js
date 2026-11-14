@@ -195,6 +195,7 @@ const actionLabels = {
   spreadsheet_read: '读取表格', spreadsheet_edit: '保存表格',
   image_read: '查看图片', image_edit: '保存图片',
   artifact_read: '读取办公成品', artifact_write: '保存办公成品', artifact_image: '生成图片', goal_finish: '报告目标结果',
+  visualize_render: '生成交互图表',
 };
 export function operationCaption(operation) {
   if (operation.status === 'deferred') return operation.name === 'advisor_gate' ? '等待主模型核验 · 原操作未执行' : '已加载目录规则 · 原操作未执行';

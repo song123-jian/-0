@@ -10,6 +10,46 @@ const { normalizeLibrary, createConversation } = require('../electron/conversati
 const encryption = { isEncryptionAvailable: () => true, encryptString: (text) => Buffer.from('controlled:' + text), decryptString: (bytes) => bytes.toString().slice(11) };
 async function fixture(t, options = {}) { const root = await fs.mkdtemp(path.join(os.tmpdir(), 'scodex-model-unit-')); t.after(() => fs.rm(root, { recursive: true, force: true })); const file = path.join(root, 'model-connection.json'); return { file, service: createModelConnection(file, { encryption, ...options }) }; }
 
+test('explicit chat modes select each complete service profile without changing automatic role calls', async (t) => {
+  const { file, service } = await fixture(t);
+  await service.save({ ...DEFAULT_CONNECTION,
+    baseUrl: 'https://main.example/v1', apiKey: 'main-fixture', models: ['m1', 'm2'], model: 'm1', toolProtocol: 'native', contextWindowTokens: 100000,
+    subagentBaseUrl: 'https://child.example/v1', subagentApiKey: 'child-fixture', subagentModels: ['c1', 'c2'], subagentModel: 'c1', subagentToolProtocol: 'json', subagentReasoningEffort: 'low', subagentContextWindowTokens: 200000,
+    advisorBaseUrl: 'https://advisor.example/v1', advisorApiKey: 'advisor-fixture', advisorModels: ['a1', 'a2'], advisorModel: 'a1', advisorToolProtocol: 'native', advisorReasoningEffort: 'high', advisorContextWindowTokens: 300000, advisorEnabled: false,
+  });
+  const reopened = createModelConnection(file, { encryption });
+  for (const [mode, host, key, model, protocol, capacity] of [
+    ['main', 'main', 'main-fixture', 'm2', 'native', 100000],
+    ['subagent', 'child', 'child-fixture', 'c2', 'json', 200000],
+    ['advisor', 'advisor', 'advisor-fixture', 'a2', 'native', 300000],
+  ]) {
+    const request = await reopened.request('revision', 'max', model, mode);
+    assert.equal(request.endpoint, `https://${host}.example/v1/chat/completions`);
+    assert.equal(request.apiKey, key);
+    assert.equal(request.model, model);
+    assert.equal(request.toolProtocol, protocol);
+    assert.equal(request.contextWindowTokens, capacity);
+    assert.equal(request.reasoning_effort, 'max');
+  }
+  assert.equal((await reopened.get()).advisorEnabled, false);
+  const automatic = await reopened.request('subagent', 'ultra', 'c2');
+  assert.equal(automatic.model, 'c1');
+  assert.equal(automatic.reasoning_effort, 'low');
+  await assert.rejects(reopened.request('advisor'), /尚未配置或启用/);
+  await assert.rejects(reopened.request(undefined, 'max', 'm1', 'subagent'), /配置列表/);
+  await assert.rejects(reopened.request(undefined, 'max', 'c1', 'advisor'), /配置列表/);
+  await assert.rejects(reopened.request(undefined, 'max', 'a1', 'main'), /配置列表/);
+  await assert.rejects(reopened.request(undefined, 'max', 'm1', 'unknown'), /模式无效/);
+  await assert.rejects(reopened.request(undefined, 'invalid', 'c1', 'subagent'), /推理强度无效/);
+});
+
+test('chat mode three requires its own credential for a separate service even without team collaboration', async (t) => {
+  const { service } = await fixture(t);
+  await service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://main.example/v1', apiKey: 'main-fixture', model: 'm1', advisorEnabled: false,
+    advisorBaseUrl: 'https://advisor.example/v1', advisorModels: ['a1'], advisorModel: 'a1' });
+  await assert.rejects(service.request(undefined, '', 'a1', 'advisor'), /独立 API Key/);
+});
+
 test('model output token settings are not rejected by a fixed application ceiling', () => {
   assert.equal(normalizeConnection({ ...DEFAULT_CONNECTION, maxOutputTokens: 200000 }).maxOutputTokens, 200000);
 });
@@ -28,7 +68,7 @@ test('credentials are persisted through encryption, never returned, and isolated
   assert.equal((await service.get()).hasCredential, true);
   await assert.rejects(service.models({ ...DEFAULT_CONNECTION, baseUrl: 'https://another.example' }), /填写 API Key/);
   assert.equal(legacyCalls, 0);
-  const saved = await service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://new.example/v1', apiKey: 'controlled-unit-key', model: 'main-test', subagentModel: 'child-test', reasoningEffort: 'high', subagentReasoningEffort: 'minimal' });
+  const saved = await service.save({ ...DEFAULT_CONNECTION, baseUrl: 'https://new.example/v1', apiKey: 'controlled-unit-key', models: ['main-test', 'child-test'], model: 'main-test', subagentModel: 'child-test', reasoningEffort: 'high', subagentReasoningEffort: 'minimal' });
   assert.equal(JSON.stringify(saved).includes('controlled-unit-key'), false);
   const bytes = await fs.readFile(file, 'utf8'); assert.equal(bytes.includes('controlled-unit-key'), false);
   const reopened = createModelConnection(file, { encryption });
@@ -43,6 +83,30 @@ test('credentials are persisted through encryption, never returned, and isolated
   const inherited = await reopened.request('subagent'); assert.equal(inherited.model, 'main-test'); assert.equal('reasoning_effort' in inherited, false);
   assert.equal((await reopened.request(undefined, 'max', 'main-test')).reasoning_effort, 'max');
   assert.equal('reasoning_effort' in await reopened.request(undefined, '', 'main-test'), false);
+});
+
+test('same-address modes keep separate model lists through saving, reopening and requests', async (t) => {
+  const { file, service } = await fixture(t);
+  const config = { ...DEFAULT_CONNECTION, baseUrl: 'https://shared.example/v1', apiKey: 'controlled-unit-key',
+    models: ['glm-5.3', 'glm-5.3-flash'], model: 'glm-5.3',
+    subagentModels: ['grok-4.6', 'grok-4.7'], subagentModel: 'grok-4.7',
+    advisorModels: ['advisor-test'], advisorModel: 'advisor-test' };
+  await service.save(config);
+  const reopened = createModelConnection(file, { encryption });
+  const saved = await reopened.get();
+  assert.deepEqual(saved.models, config.models);
+  assert.deepEqual(saved.subagentModels, config.subagentModels);
+  assert.deepEqual(saved.advisorModels, config.advisorModels);
+  assert.equal((await reopened.request(undefined, '', 'grok-4.7', 'subagent')).model, 'grok-4.7');
+  await assert.rejects(reopened.request(undefined, '', 'grok-4.7', 'main'), /配置列表/);
+  const shared = await reopened.save({ ...saved, models: [...saved.models, 'grok-4.7'] });
+  assert.ok(shared.models.includes('grok-4.7'), 'Explicitly configured overlapping IDs remain valid');
+  await reopened.save({ ...shared, models: config.models });
+  assert.deepEqual((await createModelConnection(file, { encryption }).get()).models, config.models);
+  const inherited = normalizeConnection({ name: 'Inherited lists', baseUrl: config.baseUrl, model: 'glm-5.3', models: ['glm-5.3'], subagentModel: 'grok-4.7' });
+  assert.deepEqual(inherited.models, ['glm-5.3']);
+  assert.deepEqual(inherited.subagentModels, ['glm-5.3', 'grok-4.7']);
+  assert.deepEqual(inherited.advisorModels, ['glm-5.3']);
 });
 
 test('main and subagent credentials route independently and never expose either credential', async (t) => {

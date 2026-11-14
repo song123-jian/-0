@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { readCompletion, runModelTask } = require('../electron/agent-runtime.cjs');
 const { normalizeLibrary } = require('../electron/conversations.cjs');
+const { createVisualizationTools } = require('../electron/visualization-tools.cjs');
 const connection = { endpoint: 'http://127.0.0.1/v1/chat/completions', model: 'fixture', apiKey: 'test-only' };
 const tools = [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }];
 function stream(events, finish = true, byteSize = 7) {
@@ -75,6 +76,28 @@ test('runtime sends actual tool result back to model before completing', async (
   assert.equal(executed, 1); assert.equal(result.rounds, 2); assert.match(result.text, /实际正文/);
   assert.equal(requests[1].messages.at(-1).role, 'tool'); assert.match(requests[1].messages.at(-1).content, /实际正文/);
   assert.deepEqual(events.filter((e) => e.type === 'operation').map((e) => e.operation.status), ['running', 'succeeded']);
+});
+
+test('chart HTML is delivered to the renderer but never echoed into model tool history', async () => {
+  const visualizationTools = createVisualizationTools(), events = [], requests = [];
+  const html = '<canvas id="chart"></canvas><script>document.body.dataset.rendered="true"</script>';
+  const chartCall = stream([
+    delta({ tool_calls: [{ index: 0, id: 'chart-call', type: 'function', function: { name: 'visualize_render', arguments: JSON.stringify({ title: '趋势', html, widget_state: { year: 2026 } }) } }] }),
+    delta({}, 'tool_calls'),
+  ]);
+  await runModelTask({ connection, messages: [{ role: 'user', content: '绘制图表' }], tools: visualizationTools.definitions,
+    emit: event => events.push(event), executeTool: visualizationTools.execute,
+    fetchImpl: async (_url, init) => {
+      requests.push(JSON.parse(init.body));
+      return requests.length === 1 ? chartCall : stream([delta({ content: '图表已生成。' }), delta({}, 'stop')]);
+    },
+  });
+  const operation = events.filter(event => event.type === 'operation').at(-1).operation;
+  assert.equal(operation.status, 'succeeded');
+  assert.equal(operation.visualization.html, html);
+  const toolResult = requests[1].messages.find(message => message.role === 'tool');
+  assert.ok(toolResult);
+  assert.doesNotMatch(toolResult.content, /<canvas|<script|dataset\.rendered/);
 });
 
 test('incomplete or length-truncated tool response never executes', async () => {
@@ -208,6 +231,68 @@ test('upstream authentication failures from a gateway explain why model-list lat
     assert.match(error.message,/服务管理员检查上游密钥和模型路由/);
     return true;
   });
+});
+
+test('executor changes preserve tool pairs across native and JSON protocols without replay', async () => {
+  let completed = 0, current = 'first'; const models = [], executions = [];
+  const result = await runModelTask({ connection: { ...connection, model: current, toolProtocol: 'native' }, tools,
+    messages: [{ role: 'system', content: 'Original permissions' }, { role: 'user', content: 'Original task' }],
+    takeExecution: async () => {
+      const next = completed === 1 ? 'second' : completed === 2 ? 'third' : current;
+      if (current === next) return null;
+      current = next;
+      return { connection: { ...connection, model: next, toolProtocol: next === 'second' ? 'json' : 'native' }, systemPrompt: 'Same permissions, executor ' + next };
+    },
+    executeTool: async (_name, args) => { executions.push(args.path); completed++; return { ok: true, marker: 'actual-' + completed }; },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body); models.push(body.model);
+      assert.ok(body.messages.some(item => item.content === 'Original task'));
+      if (body.model === 'first') return toolReply('read_file', '{"path":"first"}');
+      if (body.model === 'second') {
+        assert.equal(body.tools, undefined);
+        assert.ok(body.messages.some(item => item.content?.includes('actual-1')));
+        assert.ok(!body.messages.some(item => item.role === 'tool' || item.tool_calls));
+        return stream([delta({ content: '{"type":"tool","name":"read_file","arguments":{"path":"second"}}' }), delta({}, 'stop')]);
+      }
+      assert.equal(body.tools.length, 1);
+      assert.equal(body.messages.filter(item => item.role === 'tool').length, 2);
+      assert.equal(body.messages.filter(item => item.tool_calls).length, 2);
+      assert.doesNotMatch(body.messages[0].content, /只能是一个完整 JSON/);
+      assert.match(body.messages[0].content, /executor third/);
+      return stream([delta({ content: 'Third executor verified both results.' }), delta({}, 'stop')]);
+    },
+  });
+  assert.deepEqual(models, ['first', 'second', 'third']);
+  assert.deepEqual(executions, ['first', 'second']);
+  assert.equal(result.operations, 2);
+});
+
+test('a switch queued during a final response is applied before committing completion', async () => {
+  let pending = false, switched = false; const models = [];
+  const result = await runModelTask({ connection, messages: [{ role: 'user', content: 'same task' }],
+    takeExecution: () => pending && !switched ? (switched = true, { connection: { ...connection, model: 'replacement' }, systemPrompt: 'New executor, same permission' }) : null,
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body); models.push(body.model);
+      if (body.model === connection.model) { pending = true; return stream([delta({ content: 'Previous answer' }), delta({}, 'stop')]); }
+      assert.ok(body.messages.some(item => item.content === 'Previous answer'));
+      return stream([delta({ content: 'Replacement verified' }), delta({}, 'stop')]);
+    },
+  });
+  assert.deepEqual(models, ['fixture', 'replacement']);
+  assert.equal(result.text.slice(result.finalContentOffset), 'Replacement verified');
+});
+
+test('executor handoff waits for the whole returned tool batch', async () => {
+  let pending = false, switched = false, completed = 0;
+  await runModelTask({ connection, messages: [], tools,
+    takeExecution: () => { if (!pending || switched) return null; assert.equal(completed, 2); switched = true; return { connection: { ...connection, model: 'next' } }; },
+    executeTool: async () => { completed++; pending = true; return { ok: true }; },
+    fetchImpl: async (_url, init) => {
+      if (JSON.parse(init.body).model === 'next') return stream([delta({ content: 'Verified' }), delta({}, 'stop')]);
+      return stream([delta({ tool_calls: [0, 1].map(index => ({ index, id: 'batch-' + index, type: 'function', function: { name: 'read_file', arguments: '{}' } })) }), delta({}, 'tool_calls')]);
+    },
+  });
+  assert.equal(completed, 2); assert.equal(switched, true);
 });
 
 test('desktop screenshots are forwarded to the model as actual image evidence', async () => {

@@ -1,6 +1,10 @@
-# 本机 Codex 对齐记录（Scodex 正式1.3.20）
+# 本机 Codex 对齐记录（Scodex 正式1.3.64）
 
 ## 范围与结论
+
+1.3.64已补充本地模型语义摘要、/compact/按钮、摘要恢复与源SHA失效、上下文估算显示；“模型与连接”改为三模型、通用设置和诊断5分类，保留草稿/独立保存并固定保存栏。有效定向逻辑59项、实际EXE及最终根快捷入口验收通过；详见[本轮验收摘要](verification/1.3.64.json)与[最终布局](verification/model-connection-1.3.64.png)。
+
+对照官方[slash命令](https://developers.openai.com/codex/cli/slash-commands)的/compact以及[配置说明](https://developers.openai.com/codex/config-reference)中的本地/远端压缩区分：本机采用兼容Chat Completions的本地模型摘要，85%为本机估算策略，不声称复刻官方内部阈值或支持Responses远程压缩。完整原聊天可查看，摘要作为历史资料、当前指令另保留。公网摘要质量和官方账号云会话未验证；整体不认定完全等价。以下为保留的历史范围记录。
 
 1.3.20已补齐Git丢弃与soft／mixed／hard重置：取消、并发、外部内容／索引变化、重命名／未跟踪文件、确认期间项目／退出与权限设置保护均接入；权限保存忙锁与git:mutate等待逻辑已进入当前候选。30项辅助测试、候选实际EXE 12项及包内构建一致性通过，根快捷方式已覆盖到正式1.3.20（SHA256 `9d45ce8e4cc2356ab7f9ce8d57ececa853b6609f13d00f51987c29a3fa50dd05`），旧正式1.3.19已精确删除且未备份。[候选验收](../release/git-discard-reset-20261030/candidate-ui-4/source-control-ui-verification.json)、[正式入口](../release/git-discard-reset-20261030/shortcut-verification.json)、[替换与清理](../release/git-discard-reset-20261030/final-delivery-verification.json)。实际UI由CDP驱动，远端使用本地bare仓库，模型使用loopback fixture；不据此声明整体95%或100%。
 1.3.19已补齐GitHub PR工作台：Windows加密连接、匿名／认证列表与默认折叠详情、草稿／正式创建、取消与重复PR回读、转为可审查、HEAD SHA绑定merge／squash合并，以及共享Git锁、项目切换／退出、只读和禁网保护。9项PR服务与4项Git定向用例、候选实际EXE9项及同哈希正式入口4项通过；正式SHA256 `e64f5578c8c7025e8a8984f641ed94b7601d4458399a214d3e9bfa48747fac43`。GitHub API使用本机兼容服务，真实EXE／IPC／Git／Windows加密参与，未验证公网账号或真实分支保护；不据此声明整体95%或100%。附件继续默认折叠成记录行，点击或Enter展开；微软雅黑正文16px、辅助14px。旧1.3.18及重复构建已移出原入口至“手动删除”，未复制备份，但自动审批阻止删除，尚需人工物理删除。[正式验收](../release/pr-flow-20261030/formal-entry/github-pulls-ui-verification.json)、[最终入口与清理状态](../release/pr-flow-20261030/final-delivery-verification.json)。

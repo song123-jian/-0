@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUp, BookOpen, Check, ChevronRight, FileCode2, FileSpreadsheet, FileText, FolderOpen, Globe, Image, ListChecks, LoaderCircle, MessageSquare, Monitor, Paintbrush, PanelTop, Paperclip, Plus, Presentation, Search, ShieldAlert, ShieldCheck, Goal, WandSparkles, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, BookOpen, Check, ChevronRight, FileCode2, FileSpreadsheet, FileText, FolderOpen, Globe, Image, ListChecks, LoaderCircle, MessageSquare, Monitor, Paintbrush, PanelTop, Paperclip, Plus, Presentation, Puzzle, Search, Server, ShieldAlert, ShieldCheck, Goal, Terminal, WandSparkles, X } from 'lucide-react';
 
 const FEATURED = [
   ['documents', 'Documents', '创建和编辑文档', FileText, 'blue'],
@@ -13,6 +13,7 @@ const FEATURED = [
 ];
 const errorText = (error) => String(error?.message || error || '操作失败').replace(/^Error invoking remote method '[^']+': /, '');
 const parentPath = (value) => value.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '');
+const goalRunLabels = { running: '执行中', completed: '已完成', blocked: '需要处理', paused: '已暂停', budget: '已达到执行上限' };
 
 function ToolItem({ icon: Icon, label, description, tone = '', checked, trailing, className = '', ...props }) {
   return <button type="button" className={'composer-menu-item ' + className} title={description ? `${label} · ${description}` : label} {...props}>
@@ -22,7 +23,7 @@ function ToolItem({ icon: Icon, label, description, tone = '', checked, trailing
   </button>;
 }
 
-export function ComposerTools({ workspaceRoot, directory, skills, conversations, activeId, activeSkill, mode, goal, goalRun, onGoalStart, contextAccess, busy, onFile, onImage, onFolder, onWorkbench, onMode, onGoal, onSkill, onChat, onView, onPermission }) {
+export function ComposerTools({ workspaceRoot, directory, skills, conversations, activeId, activeSkill, mode, goal, goalRun, onGoalStart, contextAccess, busy, onFile, onImage, onFolder, onWorkbench, onMode, onGoal, onSkill, onChat, onTool, onView, onPermission }) {
   const [panel, setPanel] = useState(null);
   const [page, setPage] = useState('tools');
   const [query, setQuery] = useState('');
@@ -52,6 +53,10 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
   }, [skills]);
   const visibleSkills = normalizedQuery ? orderedSkills.filter(({ skill, label }) => `${label} ${skill.name} ${skill.description}`.toLocaleLowerCase().includes(normalizedQuery)).slice(0, 30) : orderedSkills.slice(0, 8);
   const matchingChats = normalizedQuery ? conversations.filter((chat) => `${chat.title} ${chat.messages.map((item) => item.content).join(' ')}`.toLocaleLowerCase().includes(normalizedQuery)).slice(0, 12) : [];
+  const goalRunLabel = goalRunLabels[goalRun?.status];
+  const goalDescription = goalRunLabel
+    ? `目标${goalRunLabel}${goalRun.rounds ? ` · ${goalRun.rounds} 轮` : ''}`
+    : goal ? '编辑当前对话目标' : '设置本次对话目标';
 
   const dismiss = (restoreFocus = false) => {
     const target = panel === 'permissions' ? permissionsRef.current : triggerRef.current;
@@ -140,16 +145,23 @@ export function ComposerTools({ workspaceRoot, directory, skills, conversations,
         <div className="composer-menu-scroll" aria-busy={working || searching || folderLoading}>
           {page === 'tools' && <>
             {!normalizedQuery && <div className="composer-menu-group">
+              <div className="composer-menu-caption composer-menu-section-heading" role="heading" aria-level="3">上下文</div>
               <ToolItem icon={Paperclip} label="文件和文件夹" description="附加工作区内容" trailing disabled={working || restricted || busy} onClick={() => browse()} />
               <ToolItem icon={Image} tone="blue" label="图片" description="附加图片到当前消息" disabled={working || restricted || busy} onClick={() => run(onImage)} />
               <ToolItem icon={PanelTop} tone="green" label="附加 Scodex 工作台" description="当前工作状态快照" disabled={working || restricted || busy} onClick={() => run(onWorkbench)} />
-              <ToolItem icon={Goal} className="composer-goal-entry" label="目标" description={goal ? '编辑要持续追求的目标' : '设置要持续追求的目标'} checked={Boolean(goal)} disabled={busy} onClick={() => { setGoalDraft(goal || ''); setPage('goal'); }} />
+              <div className="composer-menu-caption composer-menu-section-heading" role="heading" aria-level="3">工具</div>
+              <ToolItem icon={Globe} tone="blue" label="浏览器" description="打开内置浏览器与工具标签" onClick={() => run(() => onTool('browser'))} />
+              <ToolItem icon={Terminal} label="终端" description="打开当前工作区的集成终端" onClick={() => run(() => onTool('terminal'))} />
+              <ToolItem icon={Server} tone="green" label="运行与预览" description="查看或管理当前项目的开发服务" onClick={() => run(() => onTool('services'))} />
+              <div className="composer-menu-caption composer-menu-section-heading" role="heading" aria-level="3">任务与创作</div>
+              <ToolItem icon={Goal} className="composer-goal-entry" label="目标" description={goalDescription} checked={Boolean(goal)} disabled={busy} onClick={() => { setGoalDraft(goal || ''); setPage('goal'); }} />
               <ToolItem icon={ListChecks} label="计划模式" description={mode === 'plan' ? '已开启，点击返回问答' : '开启计划模式'} checked={mode === 'plan'} disabled={busy} onClick={() => run(() => onMode(mode === 'plan' ? 'answer' : 'plan'))} />
               <ToolItem icon={Paintbrush} tone="green" label="绘图" description="打开本地图片编辑" onClick={() => run(() => onView('images'))} />
             </div>}
             <div className="composer-menu-group">
-              <div className="composer-menu-caption"><span>插件</span><small>已安装技能指引</small></div>
-              {visibleSkills.map(({ skill, label, description, icon, tone }) => <ToolItem key={skill.id} icon={icon} tone={tone} label={label} description={description} checked={activeSkill?.id === skill.id} disabled={working || restricted || busy} onClick={() => run(() => onSkill(skill))} />)}
+              <div className="composer-menu-caption" role="heading" aria-level="3"><span>插件与技能</span><small>已安装技能指引</small></div>
+              <ToolItem icon={Puzzle} tone="violet" label="插件中心" description="管理本机插件包与 MCP 连接" trailing onClick={() => run(() => onView('plugins'))} />
+              {visibleSkills.map(({ skill, label, description, icon, tone }) => <ToolItem key={skill.id} className="composer-installed-skill" icon={icon} tone={tone} label={label} description={description} checked={activeSkill?.id === skill.id} disabled={working || restricted || busy} onClick={() => run(() => onSkill(skill))} />)}
               {!visibleSkills.length && <p className="composer-menu-empty">{normalizedQuery ? '没有匹配的技能' : '暂无已安装技能'}</p>}
               {!normalizedQuery && <ToolItem icon={BookOpen} label="全部技能" description={`查看 ${skills.length} 项技能与使用说明`} trailing onClick={() => run(() => onView('skills'))} />}
             </div>

@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('scodex', {
   onCollaborationRequest: listener => { const handler = (_event, value) => listener(value); ipcRenderer.on('collaboration:request', handler); return () => ipcRenderer.removeListener('collaboration:request', handler); },
   prepareChatAttachments: (files, existing) => ipcRenderer.invoke('chat:prepare-attachments', files, existing),
   getAppState: () => ipcRenderer.invoke('app:get-state'),
+  registerVisualization: input => ipcRenderer.invoke('visualization:register', input),
+  releaseVisualization: url => ipcRenderer.invoke('visualization:release', url),
   mutateProject: (action, id, value, library) => ipcRenderer.invoke('projects:mutate', action, id, value, library),
   openProjectPath: id => ipcRenderer.invoke('projects:open-path', id),
   exportConversation: input => ipcRenderer.invoke('chat:export', input),
@@ -214,6 +216,7 @@ contextBridge.exposeInMainWorld('scodex', {
   pauseMessage: (requestId) => ipcRenderer.invoke('chat:pause', requestId),
   resumeMessage: (requestId) => ipcRenderer.invoke('chat:resume', requestId),
   steerMessage: (payload) => ipcRenderer.invoke('chat:steer', payload),
+  switchExecutor: (payload) => ipcRenderer.invoke('chat:switch-executor', payload),
   onChatEvent: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('chat:event', handler);

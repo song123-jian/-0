@@ -1,4 +1,4 @@
-import { connectionModels } from './lib/model-list.js';
+import { MODEL_MODES, chatModelMode, connectionModels, configuredConnectionModels, chatModel, modelModeError } from './lib/model-list.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DocumentPreview } from './components/document-preview.jsx';
 import CodeMirror from '@uiw/react-codemirror';
@@ -14,7 +14,7 @@ import {
   ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Braces, Check, ChevronDown,
   ChevronLeft, ChevronRight, CircleAlert, Clipboard, Columns3, Crop, FileCode2,
   FileImage, FilePlus2, FileSpreadsheet, Files, FolderOpen, Image as ImageIcon, Library,
-  GitBranch, Pin, Archive, CalendarClock, LoaderCircle, MessageSquare, Paperclip, Paintbrush, PanelLeftClose,
+  GitBranch, Pin, Archive, CalendarClock, ListPlus, LoaderCircle, MessageSquare, Paperclip, Paintbrush, PanelLeftClose,
   PanelLeftOpen, PanelRightOpen, Pause, Play, Plus, RotateCcw, RotateCw, Save, Search, Send, Sheet,
   Sparkles, StopCircle, Sun, Table2, Target, Type, X, Puzzle, Clock3, Ellipsis, SlidersHorizontal, SquarePlus,
 } from 'lucide-react';
@@ -28,6 +28,8 @@ import { SettingsPanel } from './components/settings-panel.jsx';
 import { ModelConnectionDialog } from './components/model-connection-dialog.jsx';
 import { MessageTimeline } from './components/message-timeline.jsx';
 import { ComposerTools } from './components/composer-tools.jsx';
+import { ConversationQueue } from './components/conversation-queue.jsx';
+import { MAX_QUEUED_MESSAGES, createQueuedMessage, changeQueuedMessages, canImplementPlan, IMPLEMENT_PLAN_PROMPT } from './lib/conversation-workflow.js';
 import { ToolsPanel, CommandPalette } from './components/tools-panel.jsx';
 import { ChatRuns } from './components/chat-runs.jsx';
 import { GitPanel } from './components/git-panel.jsx';
@@ -37,8 +39,10 @@ import { TaskCollaborationDialog } from './components/task-collaboration.jsx';
 import { listTasks, readTask, prepareTaskHandoff } from './lib/task-collaboration.js';
 import { prepareRevision, selectRevision, revisionStamp, revisionSource } from './lib/conversation-revisions.js';
 import { MessageContent, MessageExecution, MessagePaths } from './components/message-content.jsx';
+import { VisualizationFrame } from './components/visualization-frame.jsx';
 import { messageContentParts, settledTiming } from './lib/message-presentation.js';
 import { insertSteeringMessage, updateSteeringStatus, settleSteeringMessages, steeringLabel, includesModelHistory } from './lib/conversation-steering.js';
+import { ConversationContext } from './components/conversation-context.jsx';
 import { applyConversationAction, conversationText, forkChatAtMessage, newChatRecord } from './lib/conversation-actions.js';
 import { DEFAULT_SHORTCUTS, formatShortcut, matchesShortcut, normalizeShortcuts } from './lib/shortcuts.js';
 import { WorkspaceContextMenu, WorkspaceActionDialog } from './components/workspace-context-menu.jsx';
@@ -216,11 +220,35 @@ function App() {
   const reasoningEffort = availableReasoningEfforts.includes(currentChat?.reasoningEffort)
     ? currentChat.reasoningEffort
     : agentSettings.defaultReasoningEffort;
-  const availableModels = connectionModels(appState);
-  const selectedModel = availableModels.includes(currentChat?.model) ? currentChat.model
-    : availableModels.includes(appState?.connection?.model) ? appState.connection.model : availableModels[0];
+  const modelMode = chatModelMode(currentChat?.modelMode);
+  const availableModels = connectionModels(appState, modelMode);
+  const selectedModel = chatModel(appState, currentChat);
   const composerMode = pendingModeOverride && pendingModeOverride.conversationId === currentChat?.id ? pendingModeOverride.mode : 'answer';
-  const selectChatModel = (model) => { if (availableModels.includes(model)) updateChat(() => ({ model })); };
+  const selectChatModel = (model) => { if (availableModels.includes(model)) updateChat((chat) => ({ model, modelSelections: { ...chat.modelSelections, [modelMode]: model } })); };
+  const selectChatModelMode = async (mode) => {
+    if (!MODEL_MODES.some((item) => item.id === mode)) return;
+    const active = [...activeRequestsRef.current.values()].find(item => item.conversationId === currentChat?.id);
+    const error = modelModeError(appState, mode);
+    if (active && error) { showNotice(error); return; }
+    const applySelection = () => updateChat((chat) => {
+      const previousMode = chatModelMode(chat.modelMode), previousModel = chatModel(appState, chat);
+      const model = chatModel(appState, chat, mode);
+      return { modelMode: mode, model, modelSelections: { ...chat.modelSelections, ...(previousModel ? { [previousMode]: previousModel } : {}), ...(model ? { [mode]: model } : {}) } };
+    }, currentChat?.id);
+    if (active) {
+      if (active.switchSubmitting) return;
+      active.switchSubmitting = true;
+      setLiveRequests([...activeRequestsRef.current.values()]);
+      try {
+        await window.scodex.switchExecutor({ requestId: active.requestId, conversationId: active.conversationId, modelMode: mode, model: chatModel(appState, currentChat, mode), reasoningEffort });
+        applySelection();
+      } catch (failure) { showNotice(readableError(failure)); }
+      finally { active.switchSubmitting = false; setLiveRequests([...activeRequestsRef.current.values()]); }
+      return;
+    }
+    applySelection();
+    if (error) showNotice(error);
+  };
   const selectChatReasoningEffort = (effort) => { if (availableReasoningEfforts.includes(effort)) updateChat(() => ({ reasoningEffort: effort })); };
   const updateChat = useCallback((update, id) => { if (storageBusyRef.current) return; setLibrary((current) => current ? { ...current,
     conversations: current.conversations.map((chat) => chat.id === (id || current.activeId) ? { ...chat, ...update(chat), updatedAt: new Date().toISOString() } : chat),
@@ -244,6 +272,9 @@ function App() {
   const attachmentInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const activeRequestsRef = useRef(new Map());
+  const queueContinuationRef = useRef(new Set());
+  const workflowBusyRef = useRef(false);
+  const [workflowBusy, setWorkflowBusy] = useState(false);
   const [liveRequests, setLiveRequests] = useState([]);
   const currentRequest = liveRequests.find((request) => request.conversationId === currentChat?.id);
   const sending = Boolean(currentRequest);
@@ -256,6 +287,22 @@ function App() {
     setLiveRequests([...activeRequestsRef.current.values()]);
     if (libraryRef.current?.activeId !== request.conversationId) updateChat(() => ({ unreadResult: true }), request.conversationId);
   }, [updateChat]);
+  const restoreQueuedRequest = useCallback((request) => {
+    const queueItem = request?.queueItem;
+    if (!queueItem || request.queueItemRestored) return;
+    request.queueItemRestored = true;
+    updateChat((chat) => ({
+      queuedMessages: chat.queuedMessages?.some((item) => item.id === queueItem.id)
+        ? chat.queuedMessages
+        : [queueItem, ...(chat.queuedMessages || [])],
+      queuePaused: true,
+    }), request.conversationId);
+  }, [updateChat]);
+  const updateVisualizationState = useCallback((conversationId, messageId, visualizationId, widgetState) => setMessages((items) => items.map((item) => item.id === messageId ? {
+    ...item,
+    operations: item.operations?.map((operation) => operation.visualization?.id === visualizationId
+      ? { ...operation, visualization: { ...operation.visualization, widgetState } } : operation),
+  } : item), conversationId), [setMessages]);
   const [copiedId, setCopiedId] = useState('');
 
   const composerBuffersRef = useRef(new Map());
@@ -393,7 +440,18 @@ function App() {
     const updateRequestMessages = (update) => setMessages(update, request.conversationId);
     if (['complete', 'cancelled', 'error'].includes(event.type)) updateRequestMessages(items => settleSteeringMessages(items, event.requestId));
     if (['complete', 'cancelled', 'error'].includes(event.type) && event.fileChanges) updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, fileChanges: event.fileChanges } : item));
-    if (event.type === 'goal-state') {
+    if (event.type === 'context-compacting') {
+      updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, phase: 'compacting' } : item));
+    } else if (event.type === 'context-compacted') {
+      updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, contextCheckpoint: event.checkpoint,
+        contextUsage: { sentTokens: event.afterTokens, capacityTokens: event.capacityTokens } } : item));
+    } else if (event.type === 'context-compaction-failed') {
+      showNotice(event.message);
+    } else if (event.type === 'request-metrics' && event.contextCompression) {
+      updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, contextUsage: {
+        sentTokens: event.contextCompression.sentTokens, capacityTokens: Number.isFinite(event.contextCompression.capacityTokens) ? event.contextCompression.capacityTokens : null,
+      } } : item));
+    } else if (event.type === 'goal-state') {
       updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.status, rounds: event.rounds } }), request.conversationId);
     } else if (event.type === 'paused' || event.type === 'resumed') {
       const active = activeRequestsRef.current.get(event.requestId);
@@ -403,6 +461,20 @@ function App() {
         setLiveRequests([...activeRequestsRef.current.values()]);
       }
       updateRequestMessages(items => items.map((item) => item.id === event.requestId ? { ...item, phase: event.type === 'paused' ? 'paused' : activeRequestsRef.current.get(event.requestId)?.pausedPhase || item.phase } : item));
+    } else if (event.type === 'executor-switch-queued') {
+      request.pendingModelMode = event.modelMode;
+      request.pendingSwitchSerial = event.serial;
+      setLiveRequests([...activeRequestsRef.current.values()]);
+      showNotice('模式切换已排队，当前响应和工具完成后接续执行');
+    } else if (event.type === 'executor-changed') {
+      if (event.serial >= (request.pendingSwitchSerial || 0)) request.pendingModelMode = '';
+      setLiveRequests([...activeRequestsRef.current.values()]);
+      updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, modelMode: event.modelMode, model: event.model } : item));
+      showNotice((MODEL_MODES.find(mode => mode.id === event.modelMode)?.label || '所选模式') + '已接续执行');
+    } else if (event.type === 'executor-switch-expired') {
+      request.pendingModelMode = '';
+      setLiveRequests([...activeRequestsRef.current.values()]);
+      showNotice(event.message);
     } else if (event.type === 'steering-queued') {
       updateRequestMessages(items => updateSteeringStatus(items, event.requestId, event.steeringId, 'queued'));
       showNotice('引导已提交，当前模型继续运行');
@@ -439,18 +511,25 @@ function App() {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: item.content + event.text } : item));
       setApiState('connected');
     } else if (event.type === 'complete') {
+      if (!request.contextAction) queueContinuationRef.current.add(request.conversationId);
       if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: event.goalStatus || 'paused', summary: event.goalSummary || '' } }), request.conversationId);
       finishRequest(event.requestId);
       setApiState('connected');
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, content: event.text, finalContentOffset: event.finalContentOffset, pending: false, approval: null, phase: '', ...settledTiming(item) } : item));
       window.scodex.notify('complete').catch(() => {});
     } else if (event.type === 'cancelled') {
+      queueContinuationRef.current.delete(request.conversationId);
+      restoreQueuedRequest(request);
+      updateChat(() => ({ queuePaused: true }), request.conversationId);
       if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'paused', summary: '已停止；已执行结果保留。' } }), request.conversationId);
       finishRequest(event.requestId);
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId
         ? { ...item, pending: false, approval: null, operations: item.operations?.map((operation) => operation.status === 'running' ? { ...operation, status: 'cancelled' } : operation), cancelled: true, stoppedAfter: Math.max(0, Math.floor((Date.now() - (item.startedAt || Date.now())) / 1000)), ...settledTiming(item) }
         : item));
     } else if (event.type === 'error') {
+      queueContinuationRef.current.delete(request.conversationId);
+      restoreQueuedRequest(request);
+      updateChat(() => ({ queuePaused: true }), request.conversationId);
       if (request.goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'blocked', summary: event.message } }), request.conversationId);
       finishRequest(event.requestId);
       if (/HTTP 401|HTTP 403/.test(event.message)) setApiState('invalid');
@@ -459,7 +538,7 @@ function App() {
       updateRequestMessages((items) => items.map((item) => item.id === event.requestId ? { ...item, pending: false, approval: null, operations: item.operations?.map((operation) => operation.status === 'running' ? { ...operation, status: 'interrupted' } : operation), error: event.message, ...settledTiming(item) } : item));
       window.scodex.notify('issue').catch(() => {});
     }
-  }), [setMessages, finishRequest, updateChat]);
+  }), [setMessages, finishRequest, restoreQueuedRequest, updateChat]);
 
   useEffect(() => {
     if (!library || !appState || appState.historyError || storageBusy) return;
@@ -1495,11 +1574,16 @@ function App() {
     if (type === 'drop') { dragDepth.current = 0; setFileDragActive(false); attachChatFiles(event.dataTransfer.files); }
   };
 
-  const sendMessage = async (message = prompt, retryContent = null, targetId = null, revisionAction = null, handoff = null, goalExecution = null) => {
+  const sendMessage = async (message = prompt, retryContent = null, targetId = null, revisionAction = null, handoff = null, goalExecution = null, workflow = null) => {
+    let compactOnly = String(message || '').trim() === '/compact' && !revisionAction && !handoff && !goalExecution && !workflow;
+    if (workflowBusyRef.current && !workflow) throw Error('正在提交工作流，请稍候。');
     const detached = Boolean(targetId);
     const targetChat = libraryRef.current?.conversations.find(c=>c.id === (targetId || libraryRef.current.activeId));
     if (!targetChat || targetChat.archivedAt) throw Error('聊天不可用，请先恢复归档。');
     const activeRequest = [...activeRequestsRef.current.values()].find((request) => request.conversationId === targetChat.id);
+    if (compactOnly && activeRequest) throw Error('请在当前任务完成或停止后压缩上下文。');
+    if (workflow && activeRequest) throw Error('此聊天仍在运行，待发送内容已保留。');
+    if (workflow?.queueItem && targetChat.queuedMessages?.[0]?.id !== workflow.queueItem.id) throw Error('待发送队列已变化。');
     if (activeRequest && !revisionAction && !handoff && !goalExecution) {
       const steeringText = String(message || '').trim();
       const steeringImages = detached ? [] : imageAttachments;
@@ -1539,41 +1623,50 @@ function App() {
     if (revisionPlan) retryContent = revisionPlan.user;
     const targetMessages = revisionPlan ? revisionPlan.chat.messages : targetChat.messages || [];
     const text = revisionPlan ? revisionPlan.user.content : String(message || '').trim();
-    const outgoingImages = retryContent?.images || (detached ? [] : imageAttachments);
-    const outgoingAttachments = retryContent?.attachments || (detached ? [] : attachments);
-    const requestModel = retryContent?.model && availableModels.includes(retryContent.model) ? retryContent.model : availableModels.includes(targetChat.model) ? targetChat.model : appState?.connection?.model || availableModels[0];
-    const requestEffort = handoff ? (handoff.settings.availableReasoningEfforts.includes(targetChat.reasoningEffort) ? targetChat.reasoningEffort : handoff.settings.defaultReasoningEffort)
+    compactOnly = text === '/compact' && !handoff && !goalExecution && !workflow;
+    const outgoingImages = compactOnly ? [] : retryContent?.images || (detached ? [] : imageAttachments);
+    const outgoingAttachments = compactOnly ? [] : retryContent?.attachments || (detached ? [] : attachments);
+    const requestModelMode = chatModelMode(workflow?.queueItem?.modelMode || (retryContent ? retryContent.modelMode : targetChat.modelMode));
+    const requestModels = connectionModels(appState, requestModelMode);
+    const requestModel = workflow?.queueItem?.model || retryContent?.model || chatModel(appState, targetChat, requestModelMode);
+    const retryModels = retryContent ? configuredConnectionModels(appState, requestModelMode) : requestModels;
+    const modelError = modelModeError(appState, requestModelMode) || (!retryModels.includes(requestModel) ? '原消息的模型已不在当前模式列表中，请在“模型与连接”中恢复该模型后重试。' : '');
+    if (modelError) { if (detached || revisionAction) throw Error(modelError); showNotice(modelError); return; }
+    const requestEffort = workflow?.queueItem?.reasoningEffort || (handoff ? (handoff.settings.availableReasoningEfforts.includes(targetChat.reasoningEffort) ? targetChat.reasoningEffort : handoff.settings.defaultReasoningEffort)
       : retryContent?.reasoningEffort && availableReasoningEfforts.includes(retryContent.reasoningEffort)
-      ? retryContent.reasoningEffort : availableReasoningEfforts.includes(targetChat.reasoningEffort) ? targetChat.reasoningEffort : agentSettings.defaultReasoningEffort;
+      ? retryContent.reasoningEffort : availableReasoningEfforts.includes(targetChat.reasoningEffort) ? targetChat.reasoningEffort : agentSettings.defaultReasoningEffort);
     if ((!text && !outgoingImages.length && !outgoingAttachments.length) || attachmentReading.current || storageBusyRef.current || !targetChat) { if (detached) throw Error('工作台正在处理附件或聊天存储，请稍候。'); return; }
     if ([...activeRequestsRef.current.values()].some((request) => request.conversationId === targetChat.id)) { if (detached) throw Error('此聊天仍在运行。'); return; }
     if (!canShareContext && (outgoingImages.length || outgoingAttachments.length)) { if (revisionAction) throw Error('当前为仅对话权限，请先更改权限再重试附件'); showNotice('当前为仅对话权限，请先更改权限再重试附件'); return; }
     // Infer each message mode unless the composer menu sets a one-shot override.
-    const requestMode = retryContent?.mode || (!detached && pendingModeOverride?.conversationId === targetChat?.id ? pendingModeOverride.mode : inferWorkMode(text, Boolean(!detached && fileContext || outgoingImages.length || outgoingAttachments.length)));
+    const requestMode = compactOnly ? targetChat.mode : workflow?.mode || retryContent?.mode || (!detached && pendingModeOverride?.conversationId === targetChat?.id ? pendingModeOverride.mode : inferWorkMode(text, Boolean(!detached && fileContext || outgoingImages.length || outgoingAttachments.length)));
     const automaticSkill = findAutomaticSkill(text, enabledSkills);
-    const context = canShareContext && !detached ? fileContext : null;
-    const executionEnabled = canShareContext && (handoff ? handoff.executionEnabled === true : revisionAction ? revisionAction.executionEnabled === true : retryContent?.executionEnabled === false ? false : true);
+    const context = !compactOnly && canShareContext && !detached ? fileContext : null;
+    const executionEnabled = !compactOnly && canShareContext && (workflow ? workflow.executionEnabled === true : handoff ? handoff.executionEnabled === true : revisionAction ? revisionAction.executionEnabled === true : retryContent?.executionEnabled === false ? false : true);
     const requestId = window.crypto.randomUUID();
     const retrySkill = retryContent?.skillId ? enabledSkills.find((item) => item.id === retryContent.skillId) : null;
-    const outgoingSkill = canShareContext ? retrySkill || (!detached ? activeSkill : null) || automaticSkill : null;
+    const outgoingSkill = !compactOnly && canShareContext ? retrySkill || (!detached ? activeSkill : null) || automaticSkill : null;
     if (!retryContent) {
       if (!detached) setPendingModeOverride(null);
       if (targetChat.mode !== requestMode) updateChat(() => ({ mode: requestMode }), targetChat.id);
     }
-    const userEntry = { id: `${requestId}-user`, role: 'user', content: text, executionEnabled, model: requestModel, reasoningEffort: requestEffort, ...(outgoingImages.length ? { images: outgoingImages } : {}), ...(outgoingAttachments.length ? { attachments: outgoingAttachments } : {}), skillName: outgoingSkill?.name || '', skillId: outgoingSkill?.id || '', mode: requestMode, contextName: context?.path.split(/[\\/]/).pop() || '' };
-    const assistantEntry = { id: requestId, role: 'assistant', executionEnabled, model: requestModel, content: '', pending: true, startedAt: Date.now() };
+    const userEntry = { id: `${requestId}-user`, role: 'user', content: text, executionEnabled, modelMode: requestModelMode, model: requestModel, reasoningEffort: requestEffort, ...(outgoingImages.length ? { images: outgoingImages } : {}), ...(outgoingAttachments.length ? { attachments: outgoingAttachments } : {}), skillName: outgoingSkill?.name || '', skillId: outgoingSkill?.id || '', mode: requestMode, contextName: context?.path.split(/[\\/]/).pop() || '' };
+    const assistantEntry = { id: requestId, role: 'assistant', mode: requestMode, executionEnabled, modelMode: requestModelMode, model: requestModel, content: '', pending: true, startedAt: Date.now() };
+    if (compactOnly) { userEntry.contextAction = true; assistantEntry.contextAction = true; }
     if (revisionPlan) updateChat(() => ({ ...revisionPlan.chat, messages: [...targetMessages, userEntry, assistantEntry] }), targetChat.id);
     else setMessages((current) => retryContent ? [...current.filter((item) => item.id !== retryContent.userId && item.id !== retryContent.assistantId), userEntry, assistantEntry] : [...current, userEntry, assistantEntry], targetChat.id);
-    if (!revisionPlan) updateChat(() => ({ draft: '' }), targetChat.id);
-    if (!detached) { setImageAttachments([]); setAttachments([]); setFileContext(null); }
+    if (!revisionPlan && !workflow && (!compactOnly || prompt.trim() === '/compact')) updateChat(() => ({ draft: '' }), targetChat.id);
+    if (workflow?.queueItem) updateChat(chat => ({ queuedMessages: chat.queuedMessages.slice(1) }), targetChat.id);
+    if (revisionAction) updateChat(() => ({ queuePaused: true }), targetChat.id);
+    if (!detached && !compactOnly) { setImageAttachments([]); setAttachments([]); setFileContext(null); }
     const requestProjectId = targetChat.projectId || '';
-    activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId, goalExecution, phase: 'preparing', paused: false });
+    activeRequestsRef.current.set(requestId, { requestId, conversationId: targetChat.id, projectId: requestProjectId, goalExecution, contextAction: compactOnly, queueItem: workflow?.queueItem || null, queueItemRestored: false, phase: 'preparing', paused: false });
     if (goalExecution) updateChat(() => ({ goalRun: { ...goalExecution, status: 'running', rounds: 0, summary: '' } }), targetChat.id);
     setLiveRequests([...activeRequestsRef.current.values()]);
     const dispatch = async () => { try {
       const retryIndex = revisionPlan ? targetMessages.length : retryContent ? targetMessages.findIndex((item) => item.id === retryContent.userId) : targetMessages.length;
       const history = targetMessages.slice(0, retryIndex).filter((item) => includesModelHistory(item) && (item.role === 'user' || item.role === 'assistant') && (item.content || item.error || item.images?.length || item.attachments?.length || item.operations?.length) && ((!item.error && !item.cancelled) || item.operations?.length || item.error))
-        .map((item) => ({ role: item.role, content: [item.content, item.error ? '[实际错误证据]\n' + item.error : '', executionEnabled && item.operations?.length ? '[本机实际操作记录]\n' + item.operations.map((operation) => [operation.name, operation.status, operation.detail || '', operation.path || '', operation.output || '', operation.diff || ''].join(' · ')).join('\n') : ''].filter(Boolean).join('\n\n'), ...(canShareContext ? { images: item.images, attachments: item.attachments } : {}) }));
+        .map((item) => ({ id: item.id, role: item.role, content: [item.content, item.error ? '[实际错误证据]\n' + item.error : '', canShareContext && item.operations?.length ? '[本机实际操作记录]\n' + item.operations.map((operation) => [operation.name, operation.status, operation.detail || '', operation.path || '', operation.output || '', operation.diff || ''].join(' · ')).join('\n') : ''].filter(Boolean).join('\n\n'), ...(canShareContext ? { images: item.images, attachments: item.attachments } : {}) }));
       await window.scodex.updateDirtyPaths([...(fileDirty && activeFile ? [activeFile] : []), ...(tableDirty && tablePath ? [tablePath] : []), ...(imageDirty && imagePath ? [imagePath] : [])]);
       await window.scodex.sendMessage({
         requestId,
@@ -1585,9 +1678,12 @@ function App() {
         goal: targetChat.goal || '',
         ...(goalExecution ? { goalExecution } : {}),
         reasoningEffort: requestEffort,
+        modelMode: requestModelMode,
         model: requestModel,
         prompt: text || (outgoingImages.length ? '请描述这些图片。' : outgoingAttachments.length ? '请查看这些附件。' : ''),
         messages: history,
+        compactOnly,
+        contextCheckpoint: targetMessages.slice(0, retryIndex).findLast(item => item.contextCheckpoint)?.contextCheckpoint,
         skill: outgoingSkill?.content || '',
         skillId: outgoingSkill?.id || '',
         fileContext: context ? `文件：${context.path}\n${context.content}` : '',
@@ -1596,28 +1692,92 @@ function App() {
       });
     } catch (error) {
       if (activeRequestsRef.current.has(requestId)) {
+        queueContinuationRef.current.delete(targetChat.id);
+        restoreQueuedRequest(activeRequestsRef.current.get(requestId));
+        updateChat(() => ({ queuePaused: true }), targetChat.id);
         finishRequest(requestId);
         if (goalExecution) updateChat(chat => ({ goalRun: { ...chat.goalRun, status: 'blocked', summary: readableError(error) } }), targetChat.id);
         setMessages((items) => items.map((item) => item.id === requestId ? { ...item, pending: false, approval: null, error: readableError(error), ...settledTiming(item) } : item), targetChat.id);
       }
     } };
-    if (handoff) {
+    if (handoff || workflow) {
       try {
         await window.scodex.saveHistory(libraryRef.current);
-        if (handoff.authorize && !await handoff.authorize()) throw Error('来源请求已停止，交接未运行。');
+        if (handoff?.authorize && !await handoff.authorize()) throw Error('来源请求已停止，交接未运行。');
       } catch (error) {
+        restoreQueuedRequest(activeRequestsRef.current.get(requestId));
         finishRequest(requestId);
-        setMessages(items => items.map(item => item.id === requestId ? { ...item, pending: false, error: readableError(error), ...settledTiming(item) } : item), targetChat.id);
+        if (workflow) updateChat(chat => ({
+          messages: chat.messages.filter(item => item.id !== requestId && item.id !== userEntry.id),
+        }), targetChat.id);
+        else setMessages(items => items.map(item => item.id === requestId ? { ...item, pending: false, error: readableError(error), ...settledTiming(item) } : item), targetChat.id);
         throw error;
       }
       dispatch();
-      return { submitted: true, requestId, conversationId: targetChat.id, note: '交接已保存并提交，运行结果须读取目标任务确认；停止来源不会撤回已提交的交接。' };
+      return { submitted: true, requestId, conversationId: targetChat.id, ...(handoff ? { note: '交接已保存并提交，运行结果须读取目标任务确认；停止来源不会撤回已提交的交接。' } : {}) };
     }
     const completion = dispatch();
     if (revisionPlan) return { started: true, revisionId: revisionPlan.chat.revisionId };
     if (detached) return { started: true, requestId, conversationId: targetChat.id };
     await completion;
   };
+
+  const pauseQueue = (id = currentChat?.id) => {
+    queueContinuationRef.current.delete(id);
+    updateChat(() => ({ queuePaused: true }), id);
+  };
+  const enqueueMessage = () => {
+    if (workflowBusyRef.current || storageBusyRef.current || !currentChat || !sending) return;
+    if (imageAttachments.length || attachments.length || fileContext) throw Error('待发送队列目前仅支持文字，附件和上下文已保留。');
+    const activeQueueItem = [...activeRequestsRef.current.values()].some(request => request.conversationId === currentChat.id && request.queueItem);
+    if ((currentChat.queuedMessages?.length || 0) + Number(activeQueueItem) >= MAX_QUEUED_MESSAGES) throw Error('此聊天最多保留20条队列消息（含正在发送的队列消息）。');
+    const item = createQueuedMessage(prompt, { mode: pendingModeOverride?.conversationId === currentChat.id ? pendingModeOverride.mode : inferWorkMode(prompt, false),
+      modelMode, model: selectedModel, reasoningEffort, executionEnabled: canShareContext,
+      scopeProjectId: appState?.activeProjectId, workspaceRoot });
+    if (modelModeError(appState, modelMode)) throw Error(modelModeError(appState, modelMode));
+    updateChat(chat => ({ queuedMessages: [...(chat.queuedMessages || []), item], queuePaused: chat.queuedMessages?.length ? chat.queuePaused : false, draft: '' }));
+    setPendingModeOverride(null);
+  };
+  const dispatchQueuedMessage = async (id) => {
+    if (workflowBusyRef.current) throw Error('正在提交工作流，请稍候。');
+    const chat = libraryRef.current?.conversations.find(item => item.id === id);
+    const item = chat?.queuedMessages?.[0];
+    if (!chat || chat.archivedAt || !item) return;
+    if (storageBusyRef.current || historyStatus === 'error' || settingsDialogOpen || modelDialogOpen || revisionEditor || actionDialog) throw Error('请先处理存储或当前对话框，再继续队列。');
+    if ((item.scopeProjectId || '') !== (appState?.activeProjectId || '') || chat.projectId && chat.projectId !== appState?.activeProjectId
+      || item.workspaceRoot.replaceAll('\\', '/').toLowerCase() !== workspaceRoot.replaceAll('\\', '/').toLowerCase()) throw Error('工作项目已变化，请回到消息加入队列时的项目后继续。');
+    workflowBusyRef.current = true; setWorkflowBusy(true);
+    try {
+      updateChat(() => ({ queuePaused: false }), id);
+      return await sendMessage(item.text, null, id, null, null, null, { queueItem: item, mode: item.mode, executionEnabled: item.executionEnabled });
+    } catch (error) { pauseQueue(id); throw error; }
+    finally { workflowBusyRef.current = false; setWorkflowBusy(false); }
+  };
+  const resumeQueue = async () => {
+    if (sending) { updateChat(() => ({ queuePaused: false })); return; }
+    return dispatchQueuedMessage(currentChat?.id);
+  };
+  const implementPlan = async (messageId) => {
+    if (workflowBusyRef.current || !canShareContext) throw Error('请先启用完全访问并等待当前工作流提交完成。');
+    const chat = libraryRef.current?.conversations.find(item => item.id === currentChat?.id);
+    if (!canImplementPlan(chat, messageId)) throw Error('计划已变化，请重新核对最新计划。');
+    if (chat.draft || imageAttachments.length || attachments.length || fileContext) throw Error('请先处理当前草稿或附件，再执行计划。');
+    if (storageBusyRef.current || settingsDialogOpen || modelDialogOpen || revisionEditor || actionDialog) throw Error('请先处理当前对话框或存储操作。');
+    workflowBusyRef.current = true; setWorkflowBusy(true);
+    try { pauseQueue(chat.id); return await sendMessage(IMPLEMENT_PLAN_PROMPT, null, chat.id, null, null, null, { mode: 'code', executionEnabled: true }); }
+    finally { workflowBusyRef.current = false; setWorkflowBusy(false); }
+  };
+  useEffect(() => {
+    if (workflowBusy || storageBusy || !library) return;
+    for (const id of queueContinuationRef.current) {
+      if (liveRequests.some(request => request.conversationId === id)) continue;
+      queueContinuationRef.current.delete(id);
+      const chat = libraryRef.current?.conversations.find(item => item.id === id);
+      if (!chat?.queuedMessages?.length || chat.queuePaused || chat.archivedAt) continue;
+      dispatchQueuedMessage(id).catch(error => { pauseQueue(id); showNotice(readableError(error)); });
+      break;
+    }
+  }, [library, liveRequests, workflowBusy, storageBusy]);
 
   collaborationActionRef.current = async ({ action, input, id }, fromModel = false) => {
     if (!libraryRef.current || storageBusyRef.current || appState?.historyError) throw Error('聊天存储尚未就绪。');
@@ -1655,6 +1815,8 @@ function App() {
 
   const cancelRequest = async (requestId = activeRequestId) => {
     if (!activeRequestsRef.current.has(requestId)) return;
+    if (workflowBusyRef.current) { showNotice('正在保存待发送任务，请稍后停止。'); return; }
+    pauseQueue(activeRequestsRef.current.get(requestId).conversationId);
     await window.scodex.cancelMessage(requestId).catch((error) => showNotice(readableError(error)));
   };
 
@@ -1952,20 +2114,30 @@ function App() {
                       onEditSubmit={action => sendMessage('', null, currentChat.id, action)}
                       canExecute={canShareContext}
                       onRegenerate={() => openMessageRevision('regenerate', message.id)}
-                      actionsDisabled={sending || storageBusy || attachmentLoading}
+                      onImplementPlan={canImplementPlan(currentChat, message.id) ? () => implementPlan(message.id).catch(error => showNotice(readableError(error))) : undefined}
+                      actionsDisabled={sending || storageBusy || attachmentLoading || workflowBusy}
                       onApplyCode={applyCodeToEditor}
                       onApproval={(id, allowed) => window.scodex.approveAgentCommand(id, allowed)}
                       onOpenFile={openWorkspaceFile}
                       onMessagePath={openMessagePath}
                       onBrowser={() => runToolAction('browser')}
                       onServices={() => runToolAction('services')}
+                      onVisualizationState={(messageId, visualizationId, widgetState) => updateVisualizationState(currentChat.id, messageId, visualizationId, widgetState)}
+                      onVisualizationFollowUp={(text, chatId) => sendMessage(text, null, chatId)}
                     />
                   ))}
                 </div>
               )}
             </MessageTimeline>
             <div className="composer-area">
+              <ConversationContext messages={messages} disabled={sending || storageBusy || workflowBusy || attachmentLoading}
+                onCompact={() => sendMessage('/compact').catch(error => showNotice(readableError(error)))} />
               <div className="composer-box">
+                <ConversationQueue key={currentChat?.id} items={currentChat?.queuedMessages} paused={currentChat?.queuePaused} running={sending}
+                  disabled={storageBusy || workflowBusy || attachmentLoading}
+                  onChange={(id, action, text) => updateChat(chat => ({ queuedMessages: changeQueuedMessages(chat.queuedMessages, id, action, text) }))}
+                  onPause={() => pauseQueue()}
+                  onResume={() => resumeQueue().catch(error => showNotice(readableError(error)))} />
                 <input ref={attachmentInputRef} type="file" multiple className="visually-hidden" aria-label="选择聊天附件" disabled={!canShareContext || sending || attachmentLoading} onChange={(event) => { attachChatFiles(event.target.files); event.target.value = ''; }} />
                 <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="visually-hidden" aria-label="选择聊天图片" disabled={!canShareContext || sending || attachmentLoading} onChange={(event) => { attachChatImages(event.target.files); event.target.value = ''; }} />
                 {(attachments.length > 0 || imageAttachments.length > 0 || fileContext) && <ComposerAttachmentDisclosure
@@ -1985,7 +2157,7 @@ function App() {
                     if (event.nativeEvent.isComposing || event.keyCode === 229 || event.shiftKey) return;
                     const sendWithEnter = preferences.sendShortcut === 'enter' && event.key === 'Enter' && !event.ctrlKey && !event.metaKey;
                     const sendWithControl = preferences.sendShortcut !== 'enter' && event.key === 'Enter' && (event.ctrlKey || event.metaKey);
-                    if (sendWithEnter || sendWithControl) { event.preventDefault(); sendMessage(); }
+                    if (sendWithEnter || sendWithControl) { event.preventDefault(); sendMessage().catch(error => showNotice(readableError(error))); }
                   }}
                   placeholder={canShareContext ? "提问，或描述要完成的工作，Scodex 自动衔接处理…" : "和 Scodex 对话"}
                   disabled={!library}
@@ -2017,11 +2189,15 @@ function App() {
                       onGoal={(goal) => updateChat(() => ({ goal, goalRun: undefined }))}
                       onSkill={selectSkill}
                       onChat={selectConversation}
+                      onTool={runToolAction}
                       onView={navigateView}
                       onPermission={changeContextPermission}
                     />
                   </div>
                   <div className="composer-submit">
+                    <select className="composer-model-mode" aria-label="选择模型模式" aria-busy={Boolean(currentRequest?.pendingModelMode)} data-pending-mode={currentRequest?.pendingModelMode || undefined} title={currentRequest?.pendingModelMode ? '模式切换已排队，当前响应和工具完成后生效' : modelModeError(appState, modelMode) || '选择模型模式'} value={modelMode} disabled={!currentChat || currentRequest?.switchSubmitting || storageBusy} onChange={(event) => selectChatModelMode(event.target.value)}>
+                      {MODEL_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}{modelModeError(appState, mode.id) ? '（未配置）' : ''}</option>)}
+                    </select>
                     <select className="composer-model-button" aria-label="选择模型" title="选择模型" value={selectedModel || ''} disabled={!availableModels.length || sending || storageBusy} onChange={(event) => selectChatModel(event.target.value)}>
                       {!availableModels.length && <option value="">请先配置模型</option>}
                       {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
@@ -2032,7 +2208,7 @@ function App() {
                         {availableReasoningEfforts.map((effort) => <option key={effort} value={effort}>{REASONING_EFFORT_LABELS[effort] || effort}</option>)}
                       </select>
                     </label>
-                    {sending ? <><button className="send-button pause-button" aria-label={currentRequest?.paused ? '恢复任务' : '暂停任务'} title={currentRequest?.paused ? '恢复任务' : '暂停任务'} onClick={() => (currentRequest?.paused ? resumeRequest() : pauseRequest())}>{currentRequest?.paused ? <Play size={15} /> : <Pause size={15} />}</button><button className="send-button stop-button" aria-label="停止生成" title="停止生成" onClick={() => cancelRequest()}><span className="stop-square" /></button><button className="send-button steering-send-button" aria-label="提交引导但不中断模型运行" title="提交引导 · 不中断模型运行" disabled={storageBusy || attachmentLoading || !prompt.trim()} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button></> : <button className="send-button" aria-label="发送消息" title={preferences.sendShortcut === 'enter' ? 'Enter 发送 · Shift Enter 换行' : 'Ctrl Enter 发送'} disabled={storageBusy || attachmentLoading || (!prompt.trim() && imageAttachments.length === 0 && attachments.length === 0)} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button>}
+                    {sending ? <><button className="send-button pause-button" aria-label={currentRequest?.paused ? '恢复任务' : '暂停任务'} title={currentRequest?.paused ? '恢复任务' : '暂停任务'} disabled={workflowBusy} onClick={() => (currentRequest?.paused ? resumeRequest() : pauseRequest())}>{currentRequest?.paused ? <Play size={15} /> : <Pause size={15} />}</button><button className="send-button stop-button" aria-label="停止生成" title="停止生成" disabled={workflowBusy} onClick={() => cancelRequest()}><span className="stop-square" /></button><button className="send-button queue-send-button" aria-label="加入待发送队列" title="加入待发送队列" disabled={storageBusy || workflowBusy || attachmentLoading || !prompt.trim()} onClick={() => { try { enqueueMessage(); } catch (error) { showNotice(readableError(error)); } }}><ListPlus size={18} /></button><button className="send-button steering-send-button" aria-label="提交引导但不中断模型运行" title="提交引导 · 不中断模型运行" disabled={storageBusy || workflowBusy || attachmentLoading || !prompt.trim()} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button></> : <button className="send-button" aria-label="发送消息" title={preferences.sendShortcut === 'enter' ? 'Enter 发送 · Shift Enter 换行' : 'Ctrl Enter 发送'} disabled={storageBusy || workflowBusy || attachmentLoading || (!prompt.trim() && imageAttachments.length === 0 && attachments.length === 0)} onClick={() => sendMessage().catch((error) => showNotice(readableError(error)))}><ArrowUp size={18} /></button>}
                   </div>
                 </div>
               </div>
@@ -2234,7 +2410,7 @@ function ComposerAttachmentDisclosure({ attachments = [], images = [], fileConte
   </details>;
 }
 
-export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onRetryUser, onApplyCode, onApproval, onOpenFile, onMessagePath, onBrowser, onServices, onEdit, onRegenerate, editRequest, onEditCancel, onEditSubmit, canExecute, actionsDisabled }) {
+export function MessageBubble({ message, conversationId, copied, onCopy, onFork, onRetry, onRetryUser, onApplyCode, onApproval, onOpenFile, onMessagePath, onBrowser, onServices, onVisualizationState, onVisualizationFollowUp, onEdit, onRegenerate, onImplementPlan, editRequest, onEditCancel, onEditSubmit, canExecute, actionsDisabled }) {
   if (message.role === 'user') return <article data-message-id={message.id} className={'user-message' + (message.images?.length ? ' user-message-with-images' : '') + (editRequest ? ' user-message-editing' : '')}>
     {message.steering && <div className="user-message-meta steering-message-status" role="status" data-state={message.steering.status}>{steeringLabel(message)}</div>}
     <MessageAttachmentDisclosure attachments={message.attachments} images={message.images} />
@@ -2247,9 +2423,13 @@ export function MessageBubble({ message, conversationId, copied, onCopy, onFork,
   return <article data-message-id={message.id} className="assistant-message"><div className="assistant-message-mark"><Sparkles size={15} /></div><div className="assistant-message-main"><div className="assistant-message-label">{message.model || '助手'}</div>
     <MessageExecution message={message} activity={parts.activity} onApproval={onApproval} onOpenFile={onOpenFile} onMessagePath={onMessagePath} onBrowser={onBrowser} onServices={onServices} />
     {parts.answer && <MessageContent content={parts.answer} onPath={onMessagePath} collapsible onApplyCode={!message.pending && !message.error ? onApplyCode : undefined} />}
+    {message.operations?.filter((operation) => ['visualize_render', 'takeover_visualize_render'].includes(operation.name) && operation.status === 'succeeded' && operation.visualization).map((operation) => <VisualizationFrame key={operation.visualization.id} visualization={operation.visualization}
+      onStateChange={(id, widgetState) => onVisualizationState?.(message.id, id, widgetState)}
+      onFollowUp={(text) => onVisualizationFollowUp?.(text, conversationId)} />)}
     {!message.pending && message.fileChanges && <TaskFileChanges record={message.fileChanges} conversationId={conversationId} disabled={actionsDisabled} />}
     {message.error && <div className="message-error"><CircleAlert size={16} /><span>{message.error}</span></div>}
     {message.cancelled && <div className="cancelled-label">已停止生成，已完成的操作保留在上方记录中。</div>}
+    {onImplementPlan && <button className="text-tool implement-plan" aria-label="按此计划执行" disabled={actionsDisabled || !canExecute} title={canExecute ? '按此计划执行' : '请先启用完全访问'} onClick={onImplementPlan}><Play size={15} />按此计划执行</button>}
     <div className="message-actions">{onRegenerate && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="重新生成此回答" disabled={actionsDisabled} onClick={onRegenerate}><RotateCw size={15}/>重新生成</button>}{onFork && !message.pending && !message.error && !message.cancelled && <button className="text-tool" aria-label="从此回答分支到新聊天" disabled={actionsDisabled} onClick={onFork}><GitBranch size={15}/>在新对话中分支</button>}{message.content && <button className="icon-button small" title="复制回答" aria-label="复制回答" onClick={onCopy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</button>}{(message.error || message.cancelled) && <button className="text-tool retry-message" disabled={actionsDisabled} onClick={onRetry}><RotateCw size={14} />{message.operations?.length ? '继续任务' : '重试'}</button>}</div></div></article>;
 }
 

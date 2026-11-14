@@ -1,0 +1,49 @@
+{
+  "status": "passed",
+  "version": "1.3.55",
+  "electron": "45.0.0",
+  "executable": "D:\\cx\\.Scodex\\node_modules\\electron\\dist\\electron.exe",
+  "entry": "快捷启动.lnk -> start-scodex.cmd -> npm run dev",
+  "environment": {
+    "platform": "win32",
+    "node": "v24.17.0"
+  },
+  "checks": [
+    {
+      "name": "actual-vite-ready",
+      "status": "passed",
+      "evidence": {
+        "pid": 26800,
+        "url": "http://127.0.0.1:4178/"
+      }
+    },
+    {
+      "name": "real-renderer-and-isolated-profile",
+      "status": "passed",
+      "evidence": {
+        "version": "1.3.55",
+        "userDataPath": "C:\\Users\\宋建建\\AppData\\Local\\Temp\\scodex-startup-8032\\profile",
+        "historyError": "",
+        "url": "http://127.0.0.1:4178/",
+        "pid": 27000
+      }
+    },
+    {
+      "name": "settings-ui-and-persistence",
+      "status": "passed",
+      "evidence": {
+        "initialTheme": "system",
+        "chosenTheme": "dark",
+        "reloadedTheme": "dark"
+      }
+    }
+  ],
+  "limitations": [
+    "No external model request; isolated profile; actual Electron and Vite processes."
+  ],
+  "ports": {
+    "vite": 4178,
+    "devTools": 49359
+  },
+  "finishedAt": "2026-11-09T05:57:24.350Z"
+}

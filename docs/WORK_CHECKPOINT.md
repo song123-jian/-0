@@ -1,3 +1,110 @@
+## 当前检查点：1.3.64 Codex上下文接续与模型布局（本地交付完成，源码待上传）
+
+- 目标/验收：模型语义摘要、/compact、摘要持久恢复/失效、上下文状态；模型5分类简洁布局并保持草稿/独立保存；新版入口及累计源码上传。
+- 已完成：本地功能、1.3.64-final完整程序、原子根入口切换与实际启动；15文件增量审查通过，默认策略兼容及/compact失败重试问题已修复。
+- 有效验证：定向59项（最终32+未变27）；候选首轮前4项、remaining6/6、最终retry2/2、布局3/3、快捷入口2/2；8包内容/9资源/PE版本一致；最终截图已查看。5轮进程/fixture均清理。
+- 当前入口：EXE快捷启动.lnk→release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe；EXE c785cb63e5aaa535905fd897b34f50593321cef39729b728d136c8dc3f109c9b；ASAR 78cc245514ee35c1c7e4254ffb6eafb60850128804f31a91da4a4aa564c939d4；lnk 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1。
+- 证据/基线：release/codex-alignment-1.3.64/baseline.json、incremental-review.json、build-verification-final.json、delivery.json及四轮UI/shortcut报告；docs/verification/1.3.64.json是可上传摘要。原始1.3.63未变结果有效。
+- 待办：更新并核验最终文档；将已整理的全部累计源码提交并推送既定仓库main，远端回读，更新双交接的上传状态。隔离克隆release/codex-alignment-1.3.64/source-repo，基线b18db09f7f8a66f3bae7169d6501a2423a9cb74a。凭据/身份配置及dry-run有效，不代表已推送。
+- 回滚/约束：EXE快捷启动.pre-replace.lnk恢复旧1.3.63-capacity；保留完整目录、用户配置/聊天和用户进程。源码排除EXE/LNK、配置、聊天、缓存，3份远端已跟踪ZIP未变化。
+- 限制/假设：loopback替代模型，公网语义质量/费用未验；无Responses远端压缩/官方云账号等价承诺。上下文估算85%为本机策略；短历史可无需摘要；源SHA变化回退原文。无新增授权阻塞。
+- Skill：requirement-understanding、code-write-review、openai-docs；无Agent。下一步不重扫项目/历史、不重复有效测试。
+
+## 当前检查点：1.3.63 工作流与会话能力补齐（已完成）
+
+- 目标/验收已满足：活动队列项计入20条上限；满额新增拦截并保留草稿；失败恢复全部20条且尾项/顺序完整；重开暂停且零新增请求；根快捷入口切换及实际运行通过。
+- 交付入口：EXE快捷启动.lnk 指向 release/Scodex-Workbench-1.3.63-capacity/win-unpacked/Scodex工作台.exe；版本沿用本轮1.3.63，图标保持。EXE 72dbb9250cb4e5413e4e561aa64d0a4866140afb1e7944e5c411f2a5e165bdf2；ASAR eacdbf7a756c7b2e6acd9cea9481c1cc4da7ee61d8ef292266482cc2fa057dd3；lnk 583856a3e04c1791a6b2d8ff014e4e9104d210dd2b257f0cfbde4224f422de9d。
+- 有效验证：打包58332退出0；版本/9项资源/6份包内容一致；真实候选recovery67514退出0、4/4通过；最终快捷入口1176退出0、2/2通过；无未结束有限任务或常驻服务。原逻辑7/7及未变计划/分支/布局结果继续有效，不重跑全项目。
+- 变更/审查：src/workbench.jsx 的 enqueueMessage 容量检查和 tests/conversation-workflow-ui.cjs 的显式EXE/recovery/满额场景；精确旧字节与上次审查SHA匹配，本次增量无剩余高置信度问题。原始 baseline.json、恢复 capacity-baseline.json 和最终 capacity-incremental-review.json 均在 release/workflow-session-1.3.63。
+- 证据/双交接：build-verification.json、capacity-ui/conversation-workflow-ui.json、capacity-shortcut-ui/composer-model-modes-ui.json、capacity-delivery-verification.json；项目/测试交接与能力对照已更新，文档落盘核验见 capacity-document-verification.json。最终截图已查看，预期503状态和20条已暂停/保留草稿显示正确。
+- 回滚/清理：EXE快捷启动.pre-capacity.lnk 可恢复旧1.3.63，原1.3.62备份也保留。两轮测试fixture已删除且进程退出；历史1个临时lnk仍在本轮证据目录的手动删除下，旧记录缺少确切原路径/拒绝原因，不重复删除，详见交付清单；不影响功能。
+- 约束/风险：未写真实聊天或配置、未发布远端或更新其他安装目录。只用loopback模型；公网模型/云服务、原生关闭和文件选择器未验证，不能外推100%等价。
+- 待办/评估：当前授权交付无功能待办或阻塞；仅历史手动清理项。轻量重构评估无足以追加的有证据候选。
+
+## 上一检查点：1.3.62 聊天工具入口补充（已完成）
+
+- 目标：在聊天“添加工具和上下文”菜单补齐现有程序的浏览器、集成终端、运行与预览入口；按上下文→工具→任务与创作→插件与技能排列；保留全部原功能，不将未连接的电脑控制/MCP 描述为已可用。
+- 已实施：`src/components/composer-tools.jsx` 新增三个入口并接现有工具路由；`src/workbench.jsx` 传入现有 `runToolAction`；`tests/composer-checks.cjs` 增加顺序断言及三个面板的实际 UI 检查；`package.json`/`package-lock.json` 递增为1.3.62。
+- 已验证：测试驱动 `node --check` 通过；package 与 lockfile 版本一致；源码回读确认入口和回调。`npm run build` 退出0，1836模块完成。Vite 仅提示生产 JS bundle 超过500kB。
+- 构建恢复：首次构建中断、恢复后默认下载仍阻塞，已取消会话15843（退出1），未用于交付。改用本地完整45.0.0运行时 `--config.electronDist=node_modules/electron/dist`，同版本完整构建退出0；ASAR辅助校验的Windows路径分隔符错误修正后通过，未改产品或再加版本。
+- 正式入口：根 `EXE快捷启动.lnk` 已原子切至1.3.62完整目录，SHA `E7CADA1106BB6D2D3E3F85564BA6E408258A59F18AFC725927479FF74A48A05E`，保留原图标。旧1.3.61入口备份`release/composer-menu-1.3.62/EXE快捷启动.pre-replace.lnk`，SHA `A7D8A9D4A3B6F309B3DB968F8689E076F3C254BD80695F01068848DE084EEBC1`，保留旧完整目录，复制备份回根lnk即可回滚。
+- 当前进展：构建54332退出0；规范路径的包校验通过，报告`release/composer-menu-1.3.62/build-verification.json`。EXE SHA `D84083CAEE09F487E37CDE71B9393D2C2A086332C082413909898F0DD084526F`，ASAR SHA `C41A0B38D32FDA659FB7CFFC8B849CF4000D8389AC28E1DE89B1AA010A284138`。实际Composer smoke会话83434退出0，新入口与聊天保留/旧功能/排序/1064×660和20px布局通过，日志及截图已保存并查看。进程和fixture由finally清理成功。五文件基线SHA精确还原，增量审查无待修复问题。
+- 最终入口验收：会话51736退出0，根快捷启动真实UI往返2/2通过，版本/profile/工作区正确。`shortcut-ui/composer-model-modes-ui.json`与`delivery-verification.json`记录进程退出、精确fixture删除和最终哈希通过。产品代码与候选未变，复用已通过Composer结果。
+- 收尾：增量审查无待修复问题，测试临时文件和进程已清理，无本轮手动删除项；项目和测试交接已更新为最终实际状态，回读/链接/UTF-8无BOM核验见`release/composer-menu-1.3.62/document-verification.json`。无需再实施；轻量重构评估未发现当前范围需要追加的高收益改动。
+- 限制：用户真实profile/公网模型及原生窗口关闭/关闭时草稿刷新不在本轮候选测试覆盖；无Git元数据，增量审查采用已记录读取基线及本轮直接差异。
+
+## 上一检查点：1.3.61 聊天输入工具菜单补充（已完成）
+
+- 目标：用户授权自行补充“+ 添加工具和上下文”菜单；调整组织并补充入口，不移除原功能。
+- 实现：`src/components/composer-tools.jsx` 增加上下文/任务分组、目标运行提示和插件中心；`src/styles.css` 增加标题样式；`tests/composer-checks.cjs` 适配当前实际 UI；`tests/smoke.cjs` 增加仅 composer scope 可启用的原生关闭跳过开关，默认不变。
+- 版本/产物：1.3.60→1.3.61，沿用既有补丁映射。完整目录 `release/Scodex-Workbench-1.3.61/win-unpacked`；EXE SHA-256 `B13BFE603C1CC256A6C9464CDBA338930D2F6B2D2A5A8351E35D72849B6FC3E2`，ASAR SHA-256 `7B1105E4A6290CAAE6BEDD1B62D16562793981165F92D33EC7360E405A92D1EF`。包内版本及 renderer JS/CSS 与当前 dist 匹配。
+- 入口：根 `EXE快捷启动.lnk` 指向 1.3.61，工作目录正确，原图标保留；哈希 `A7D8A9D4A3B6F309B3DB968F8689E076F3C254BD80695F01068848DE084EEBC1`。1.3.60 回滚备份 `release/composer-menu-1.3.61/EXE快捷启动.pre-replace.lnk` 哈希 `566E5ADD9AFBBEC098928DA494D7EF508F83BB91039363A72FF77959005475B7`，1.3.60 完整目录保留。
+- 有效验证：Composer 候选 EXE 菜单/目标/附件/技能/权限/路由/布局 smoke 通过，目标逻辑4/4；2026-11-12 将新聊天目标断言改为检查菜单实际显示“设置本次对话目标”，`node --check tests/composer-checks.cjs` 通过，候选 EXE Composer smoke 退出码0，日志 `release/composer-menu-1.3.61/composer-smoke-final-rerun-20261112.log`。实际根快捷方式启动并经 UI 收到 loopback 回复2/2。截图 `release/Scodex-Workbench-1.3.61/win-unpacked/workbench-composer.png` 已查看，当前页面及视口无可见错误。报告和哈希见 `docs/TEST_HANDOFF.md`。
+- 审查/限制：无 Git 元数据；人工审查限定菜单组件、CSS、测试驱动和打包 renderer，与 1.3.60 交付包对照；本次只修改并复审测试驱动中的新聊天目标断言，未改变候选包。早期失败为测试选择器/持久化预期陈旧，修正后菜单范围全过。候选无原生窗口句柄，最终 composer scope 显式跳过原生关闭及关闭时草稿刷新，此范围尚未验证；公网模型未验证。
+- 状态：快捷入口更新及真实启动验收完成；隔离测试进程/fixture 退出清理；1.3.60 回滚入口、候选和证据保留。项目与测试双交接已更新；使用 Skill：requirement-understanding、frontend-implementation、code-write-review。
+
+## 当前检查点：1.3.60 绘图功能补齐（已完成）
+
+- 目标/边界：补齐聊天交互图表、有限状态保存、确认后追问和普通/接手图表活动兼容。不承诺与Codex或其插件100%等价，不扩写其他目标/计划功能。
+- 最终版本与入口：1.3.59→1.3.60（既有SemVer补丁映射），根EXE快捷启动.lnk已切至release/Scodex-Workbench-1.3.60/win-unpacked/Scodex工作台.exe。原自定义图标不变，完整目录不能只搬走EXE。
+- 身份：EXE SHA256 3ffdf1b5bdd1aabbe74a18271b1866bf644d7c5fd4cfa88721ba95cc19530aa6；ASAR 543cb0c31f9d378dd5750161aafaa8f37d461b958df8aa542e0b8c8e5af73daa；lnk 566e5add9afbbec098928da494d7ef508f83bb91039363a72ff77959005475b7。
+- 已实现：visualization-contract/tools/documents、main/preload接入；conversations持久化；VisualizationFrame沙箱、状态/追问桥接、nonce CSP、本地协议、请求白名单、有界恢复、稳定状态回调；workbench和标签/样式接入。
+- 有效验证：44项既有逻辑有效+4项新增协议规则；最终工作流9/9、最终布局1/1、真实快捷入口2/2；构建均退出0，9份包内容字节一致，17份相关文本UTF-8无BOM。最终截图晚于末次修复且已查看。
+- 证据：release/visualization-1.3.60/delivery.json；ui-state-final、ui-delivery-view、shortcut-ui下JSON报告；protocol-tests-final.log。data恢复/零网络保留ui-stable-chat前10项中有效证据，不复用其第11项假阳性布局。
+- 审查：ASAR及1.3.59有效记录作为基线，workbench重构基线哈希匹配；只审查本轮增量。CSP继承、导航事件遗漏、父刷新丢待保存状态已修复，无剩余高置信度本轮缺陷。无必要范围外重构。
+- 运行/回滚：所有有限会话结束，测试进程退出，无新增常驻服务；release/visualization-1.3.60/EXE快捷启动.pre-replace.lnk恢复至根可返回保留的1.3.59目录。
+- 清理：删除被策略拒绝，未重试；12个自建fixture已移至手动删除/visualization-1.3.60，原路径不存在，可手动删除；映射见delivery.json。快捷测试fixture已清理。
+- 限制：仅loopback模型，不验证公网连接/质量或上游专属插件；接手图表保存活动已验证，完整自动接手未新验。data导航在沙箱内发生后恢复一次，重复异常停止，不承诺同步阻止全部跳转。PE框架版本仍Electron45，应用版本由包/IPC确认。
+- 约束：未读真实凭据内容、未写真实聊天/配置、未发布GitHub、未改其他安装目录，保留用户原有改动。
+- 状态/待办：本轮授权范围已完成，无功能阻塞；仅可选手动清理目录。项目/测试交接已写入并完成最终落盘核验。使用Skill：code-write-review、frontend-implementation、security-best-practices。
+
+## 当前检查点：1.3.59 所选模式执行与运行中切换（已完成）
+
+- 目标：用户确认“两者都要”。所选模式独立提案并评议全部方案，整合讨论结果，负责文件、命令、验证和交付；执行中可以补充修改方案/文件，也可以切换执行模式，三模式保持同一聊天和上下文。
+- 实现：main/model-team动态绑定真实三方配置、其余两方监督及不同完成核验者；runtime保留工具调用/结果，在当前响应和完整工具批次结束后接续新连接；preload/IPC校验聊天、配置和网络权限，workbench显示待切换及生效状态并更新消息身份/用量。不重放已成功操作，运行中引导保留。
+- 版本：上次1.3.58，本轮1.3.59，沿用既有SemVer补丁映射；同轮重建未重复递增。源码和最终完整目录均包含最新切换实现。
+- 最终入口：根[EXE快捷启动](../EXE快捷启动.lnk)已原子替换为release/Scodex-Workbench-1.3.59/win-unpacked/Scodex工作台.exe，工作目录及原自定义图标已回读。旧1.3.58完整目录和明确备份快捷方式保留；哈希、运行和回滚见[交付清单](../release/team-executor-1.3.59/delivery.json)。
+- 构建身份：EXE SHA-256 da9a0c6ad51a8264febd79736b9fff5ba2f85a6cccff86b7f6e719fdf6bcbf7a，ASAR 245627b8a32e4bb9992f1e06bfc9317cf42b298dff736023af65eca3e4bbc932；[包身份](../release/team-executor-1.3.59/artifact-identity.json)确认4份Electron模块及renderer匹配，必要运行资源齐全。
+- 有效验证：定向逻辑61/61、renderer和完整目录构建通过；最终包基础身份/三模式执行/两种降级/运行中补充7项独立通过；[连续切换与职责](../release/team-executor-1.3.59/switch-candidate-ui-r2/team-executor-ui.json)3/3和[实际快捷入口](../release/team-executor-1.3.59/shortcut-ui/team-executor-ui.json)2/2通过。连续一→二→三→一为同一chat/request，真实edit共4次、命令1次，native→JSON→native和无效配置拒绝通过。
+- 审查基线：[15份原文件清单](../release/team-executor-1.3.59/baseline.json)，无Git元数据；本轮仅12份代码/测试/版本元数据的[增量审查](../release/team-executor-1.3.59/incremental-review.json)，未变化结论按哈希复用。UTF-8无BOM、变更空白和版本源一致性通过，无剩余高置信度问题；轻量重构评估无必要扩展事项。
+- 失败证据：final-candidate-ui整轮failed保留，前7项独立有效。切换驱动误从持久化文件找pending，尚未发起切换即超时；改用实时运行态和稳定requestId后3/3通过，未修改正常业务代码或重建未变候选。关闭清理改为先取消已知请求并等终态。
+- 清理：有限会话8447已退出1，95947/67432退出0；最终两个测试fixture已删除、进程退出，无新增常驻服务。失败轮次自建进程已精确回收；删除fixture被自动审批拒绝后，已移入项目手动删除目录，原路径不存在，待手动删除，见[精确清理记录](../release/team-executor-1.3.59/switch-recovery-cleanup.json)。
+- 约束及限制：用户连接配置SHA-256仍53cc2c54bb6d2283aa5a2a059c767ff9bda8d2a740a76a2d2d2e3631d87db7c3；未读取凭据内容或修改真实聊天，未终止用户进程、发布GitHub或替换其他安装目录。模型HTTP/凭据由loopback替代，公网服务未验证。未签名目录构建的PE框架版本仍为Electron45，应用版本以包元数据和真实IPC为准。
+- Skill：requirement-understanding 95（30/20/16/15/9/5，需求及角色边界）；code-write-review 94（30/20/15/15/9/5，定向差异及编码/直接回归），复用已读说明，无Agent。
+- 当前需求无功能待办；[项目交接](HANDOFF.md)和[测试交接](TEST_HANDOFF.md)已同步，最终落盘回读及文档验证随本轮执行。后续仅按变化范围复测，不重新扫描历史或重复仍有效测试。
+
+## 上一检查点：1.3.58 模式列表隔离与输入栏尺寸（已完成）
+
+- 当前目标：模式一界面隐藏模式二默认的Grok但保留已保存模型配置；顺序改为模式→模型→回答深度，三个控件放大一档，三模式仍共享同一聊天和上下文。
+- 已核实根因：`normalizeConnection`把同地址子模型默认值追加到主模型清单；本机实际列表已有Grok且主默认仍为glm-5.3。遵照用户最新选择，不直接修改用户连接配置；程序停止未来自动追加，并仅在模式一选择器隐藏同地址的模式二默认模型。旧消息仍可按原配置模型重试，明确共用其余模型仍照常可见。
+- 方案更新：1.移除同地址自动回填并实现可见列表与已配置模型白名单分离；2.模式→模型→回答深度、三控件13px并扩宽/增高；3.定向测试及1.3.58候选真实EXE验收、更新根快捷入口；4.不变更用户配置并完成增量审查、双交接。目标版本1.3.57→1.3.58，沿用SemVer补丁映射。
+- 修改基线：`release/composer-controls-1.3.58/baseline`及`baseline.json`，13个直接相关文件含旧快捷方式。交接、源码及版本与上轮最终哈希一致；没有Git元数据。
+- 关键约束：不写用户配置/聊天/凭据，不发布GitHub、不改其他安装目录、不终止用户进程。旧1.3.57正在运行；候选验收使用隔离profile和loopback模型服务。
+- 已完成：同地址停止自动回填；模式一只隐藏和模式二默认相同的Grok，配置/历史重试保留；模式选择器调到模型左侧，三控件13px/加宽加高。
+- 构建状态：最终renderer重建通过、1.3.58完整运行目录打包退出0。最终EXE SHA-256 `a6b861077c70432316ce5c179aa39a2973a64f1e924a7f50d79687a140bbfea9`、ASAR `b238f9c46b41ec3bb35dd76effe745822a228e53cb8d6d7523489bff24b4dfad`，ICU/PAK/snapshot/locale和工作区工具ZIP齐全。首次打包的schema错误已通过win.signAndEditExecutable=false修正，保留失败package.log和成功package-r2.log。
+- 已完成：候选实际EXE界面5/5通过（同地址已存配置保留Grok/模式一隐藏、重启、历史Grok主模式重试、三模式6条共用上下文、顺序/尺寸/键盘和600/1280px布局），报告`candidate-ui/composer-model-modes-ui.json`；截图已查看，1280×780当前状态无可见错误。候选fixture删除且进程退出。
+- 快捷入口已完成：根`EXE快捷启动.lnk`已原子切至1.3.58完整目录，工作目录及原自定义图标均已回读核对；SHA-256 `42547b4155e47e3a8b73436fd82b1e44f9d0ab03594de7c4eda1e39221e22278`。实际经Windows快捷方式启动并UI发送/完成2/2通过，报告`shortcut-ui/composer-model-modes-ui.json`，命令会话55663退出0。
+- 入口恢复记录：首次File.Replace因空备份路径被Windows拒绝且未发生替换；改用明确`EXE快捷启动.pre-replace.lnk`备份路径后成功。备份哈希`8a59ea43f4931d17e66065db67f40911ce7262b50f297c19ab0746520854cac1`与原基线相同，1.3.57完整目录保留。
+- 验证：有效逻辑24项；9份文本UTF-8无BOM、差异空白检查通过，ASAR6份入口/模块/renderer与当前文件字节一致、版本源一致。ASAR首次辅助脚本因Windows路径分隔符失败，改原生分隔符后通过，记录`archive-verification.json`；无需重建程序。用户配置SHA-256 `53cc2c54bb6d2283aa5a2a059c767ff9bda8d2a740a76a2d2d2e3631d87db7c3`未变化。
+- Skill评估：requirement-understanding 95（30/20/16/15/9/5，固定前置与增量范围核对）、frontend-implementation 91（28/20/14/15/9/5，真实页面布局/键盘检查）、code-write-review 94（30/20/15/15/9/5，基线归属与写后编码复核）；均有可定向验证的直接收益，无Agent。相关记忆查询为空。
+- 最终增量审查：仅4份业务源文件、3份相关测试和2份版本元数据相对本轮基线的差异；共同默认模型保护已修正并复验，未发现其余高置信度问题。轻量重构评估无必要扩大范围事项。
+- 交付及回滚：[交付清单](../release/composer-controls-1.3.58/delivery.json)、[项目交接](HANDOFF.md)、[测试交接](TEST_HANDOFF.md)。恢复备份快捷方式即可返回旧完整目录；新旧均须保留完整win-unpacked资源。应用版本1.3.58以包内元数据及实际UI/IPC为准；沿用未签名构建，Windows PE框架资源版本仍为Electron45.0.0。
+- 清理及限制：本轮候选和快捷验收进程均退出，两个fixture原路径均不存在；无新增待清理项。旧1.3.57用户主进程26044及其窗口保留，先退出旧程序再打开新版快捷入口，避免单实例复用旧窗口。模型HTTP/凭据使用loopback fixture，公网连通性未验证；用户配置哈希最终核对仍未变化。
+- 待办/阻塞：无功能待办；本轮最终文档回读与UTF-8无BOM、链接和交付清单验证随落盘执行，不重复运行已通过的程序测试。
+
+## 上一检查点：1.3.57 输入栏模型模式（已完成）
+
+- 目标已完成：模型/回答深度区域缩小，模型名后增加模式一/二/三，分别使用现有模型一/二/三的完整配置。三模式共用同一聊天记录和上下文，切换不拆分聊天。
+- 实现：模型宽度142→110px，字号13→12px；聊天保存所选模式及各模式模型，消息保存原请求模式以支持重试；旧数据默认模式一；缺少配置或模式三默认模型时明确提示并拒发。
+- 修改范围：`src/lib/model-list.js`、`src/workbench.jsx`、`src/styles.css`、`electron/model-connection.cjs`、`electron/main.cjs`、`electron/conversations.cjs`，版本源和相关测试。没有Git元数据，修改前11份文本和旧快捷方式基线位于 `release/composer-model-modes-1.3.57/baseline`。
+- 版本及交付：沿用既有SemVer补丁递增映射，1.3.56→1.3.57；失败重建不另加版本。完整程序为 `release/Scodex-Workbench-1.3.57/win-unpacked/Scodex工作台.exe`，根目录 `EXE快捷启动.lnk` 已切至该路径并保留 `EXE快捷启动.ico`。
+- 有效验证：逻辑36项通过，其中模型列表3项随边界修正复测通过；最终实际EXE共享上下文/缺配置/键盘/600与1280px布局4/4；实际经根目录快捷方式启动及UI发送2/2。原候选的重试、重启等未受影响结果复用，未将失败的完整UI轮次记作通过。
+- 增量审查：仅11份基线文本差异与新增UI脚本；修复模式三缺默认模型提示边界，未发现其余高置信度问题。12份代码/元数据文本UTF-8无BOM、差异空白和版本一致性检查通过。
+- 交付身份与证据：[交付清单](../release/composer-model-modes-1.3.57/delivery.json)，含最终EXE/ASAR/快捷方式SHA-256、测试报告、截图、回滚信息；[项目交接](HANDOFF.md)、[测试交接](TEST_HANDOFF.md) 已同步。
+- 清理：7个本轮UI临时profile已删除，测试启动的进程均已退出；基线、必要日志与截图保留。旧1.3.56完整目录保留，回滚仅恢复基线快捷方式；必须保留完整运行目录，不能单独复制EXE。
+- 约束及限制：没有读取真实凭据、改动用户数据或终止用户进程；模型HTTP均为loopback fixture，未验证公网服务。未发布GitHub或替换其他安装目录。
+- 待办/阻塞：无；基于本次差异的轻量重构评估未发现有必要扩大范围的事项。使用Skill：requirement-understanding、frontend-implementation、code-write-review。
+
 <!-- formal-build-1.3.55:start -->
 ## 当前检查点：1.3.55 模型三完成态文案、正式入口与 GitHub 发布已完成
 

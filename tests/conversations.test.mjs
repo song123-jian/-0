@@ -51,6 +51,27 @@ test('selected skill identity survives history reload without accepting control 
   assert.equal('skillId' in invalid.conversations[0].messages[0], false);
 });
 
+test('model modes and per-role model choices survive chat, message and revision persistence', () => {
+  const chat = { ...createConversation(), modelMode: 'advisor', model: 'a2', modelSelections: { main: 'm2', subagent: 'c2', advisor: 'a2' },
+    messages: [{ id: 'mode-user', role: 'user', content: '问题', modelMode: 'subagent', model: 'c2' }],
+    revisions: [{ id: 'old-version', messages: [{ id: 'old-user', role: 'user', content: '旧问题', modelMode: 'advisor', model: 'a2' }] }] };
+  const saved = normalizeLibrary({ activeId: chat.id, conversations: [chat] });
+  const reopened = normalizeLibrary(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(reopened, saved);
+  assert.equal(reopened.conversations[0].modelMode, 'advisor');
+  assert.deepEqual(reopened.conversations[0].modelSelections, chat.modelSelections);
+  assert.equal(reopened.conversations[0].messages[0].modelMode, 'subagent');
+  assert.equal(reopened.conversations[0].revisions[0].messages[0].modelMode, 'advisor');
+});
+
+test('old chats default to mode one and invalid role selections are sanitized', () => {
+  const saved = normalizeLibrary({ conversations: [{ id: 'old-chat', modelMode: 'unknown', modelSelections: { main: 'm1', subagent: 'bad model', advisor: 12, extra: 'ignored' },
+    messages: [{ role: 'user', content: 'old' }, { role: 'assistant', content: 'reply', modelMode: 'unknown' }] }] }).conversations[0];
+  assert.equal(saved.modelMode, 'main');
+  assert.deepEqual(saved.modelSelections, { main: 'm1' });
+  assert.deepEqual(saved.messages.map((message) => message.modelMode), ['main', 'main']);
+});
+
 test('image-only user messages produce a model prompt and cancelled output keeps its elapsed time', () => {
   const dataUrl = `data:image/jpeg;base64,${Buffer.from('image-bytes').toString('base64')}`;
   const user = { role: 'user', content: '', images: [{ name: 'photo.jpg', dataUrl }] };
@@ -73,6 +94,30 @@ test('image attachments are bounded, normalized and retained for message history
     { type: 'text', text: '看图' },
     { type: 'image_url', image_url: { url: dataUrl } },
   ]);
+});
+
+test('interactive charts and bounded widget state survive save and reopen', () => {
+  const chart = { id: 'chart-1', title: '季度趋势', html: '<canvas id="trend"></canvas>', widgetState: { quarter: '2026-Q2' } };
+  const saved = normalizeLibrary({ conversations: [{ ...createConversation(), messages: [{ id: 'chart-message', role: 'assistant', content: '趋势如下', operations: [
+    { id: 'chart-operation', name: 'visualize_render', status: 'succeeded', detail: '季度趋势', visualization: chart },
+  ] }] }] });
+  const reopened = normalizeLibrary(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(reopened, saved);
+  assert.deepEqual(reopened.conversations[0].messages[0].operations[0].visualization, chart);
+
+  const oversized = normalizeLibrary({ conversations: [{ messages: [{ role: 'assistant', content: '', operations: [
+    { id: 'large-chart-operation', name: 'visualize_render', status: 'succeeded', visualization: { ...chart, html: 'x'.repeat(128 * 1024 + 1) } },
+  ] }] }] });
+  assert.equal(oversized.conversations[0].messages[0].operations[0].visualization, undefined);
+});
+
+test('charts produced by takeover execution survive save and reopen', () => {
+  const chart = { id: 'takeover-chart-1', title: '接手趋势', html: '<canvas id="trend"></canvas>', widgetState: { quarter: '2026-Q2' } };
+  const saved = normalizeLibrary({ conversations: [{ ...createConversation(), messages: [{ id: 'takeover-chart-message', role: 'assistant', content: '接手图表', operations: [
+    { id: 'takeover-chart-operation', name: 'takeover_visualize_render', status: 'succeeded', detail: '接手趋势', visualization: chart },
+  ] }] }] });
+  const reopened = normalizeLibrary(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(reopened.conversations[0].messages[0].operations[0].visualization, chart);
 });
 
 test('invalid or duplicate IDs recover and an empty library always has an active conversation', () => {

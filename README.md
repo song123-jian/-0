@@ -2,6 +2,12 @@
 
 A Windows desktop workbench built with Electron, React, and Vite. Start a conversation and complete local tasks without creating a project; projects are optional and the last project can be archived or deleted. It brings project files, coding tasks, Git and pull-request workflows, installed skills, and MCP connections into one local application.
 
+## Current source: 1.3.64
+
+The source includes the accumulated local workflow/session changes, semantic context summaries with `/compact` and restart recovery, and a compact model-connection editor with five categories and independent role saves. Full chat history remains available; stale summaries are rejected after history changes.
+
+See the [alignment and limits](docs/CODEX_ALIGNMENT.md), [verification summary](docs/verification/1.3.64.json), and [model settings preview](docs/verification/model-connection-1.3.64.png). Validation uses the actual Windows EXE and isolated profiles with a loopback model service; public-provider summary quality and Codex remote compaction are not certified. This update uploads source; the published installer below remains the earlier 1.3.31 release.
+
 ## Download
 
 The Windows x64 installer is available from the [Scodex Workbench 1.3.31 release](https://github.com/song123-jian/-0/releases/tag/v1.3.31), or [download the installer directly](https://github.com/song123-jian/-0/releases/download/v1.3.31/Scodex-Workbench-Setup-1.3.31-x64.exe).

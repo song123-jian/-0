@@ -36,5 +36,5 @@ export function steeringLabel(message) {
 }
 
 export function includesModelHistory(message) {
-  return !message.steering || message.steering.status === 'accepted';
+  return !message.contextAction && (!message.steering || message.steering.status === 'accepted');
 }

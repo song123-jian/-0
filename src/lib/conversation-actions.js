@@ -4,7 +4,8 @@ export function newChatRecord(projectId = '', mode = 'answer', now = new Date().
 
 export function forkChatRecord(source, projectId = source.projectId || '', now = new Date().toISOString()) {
   const next = { ...structuredClone(source), id: crypto.randomUUID(), title: (source.title + ' · 分叉').slice(0, 100), projectId,
-    parentId: source.id, createdAt: now, updatedAt: now, pinned: false, unreadResult: false, archivedAt: null };
+    parentId: source.id, createdAt: now, updatedAt: now, pinned: false, unreadResult: false, archivedAt: null,
+    queuedMessages: undefined, queuePaused: true };
   const messageIds = new Map();
   const cloneMessages = values => values.map(m => {
     if (!messageIds.has(m.id)) messageIds.set(m.id, next.id + '-m-' + messageIds.size);
@@ -30,6 +31,7 @@ export function forkChatAtMessage(source, messageId, projectId = source.projectI
   if (index < 0 || source.messages[index]?.role !== 'assistant') throw Error('请选择一条回答消息。');
   const next = { ...structuredClone(source), id: crypto.randomUUID(), title: (source.title + ' · 从回答分支').slice(0, 100), projectId,
     parentId: source.id, createdAt: now, updatedAt: now, pinned: false, unreadResult: false, archivedAt: null,
+    queuedMessages: undefined, queuePaused: true,
     revisionId: undefined, revisionLabel: undefined, revisionCreatedAt: undefined, revisions: undefined };
   const messageIds = new Map();
   next.messages = source.messages.slice(0, index + 1).map((message) => {

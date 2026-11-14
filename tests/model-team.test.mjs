@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { createModelTeam, advisorReply, supervisionReply, takeoverReply, summarizeTakeoverEvidence, advisorCompatibleEffort, runCompatibleAdvisorRequest, allocateModelShares, proposalReply, reviewReply, runModelDebate, DEBATE_CRITERIA } = require('../electron/model-team.cjs');
+const { createModelTeam, executionRoleForMode, advisorReply, supervisionReply, takeoverReply, summarizeTakeoverEvidence, advisorCompatibleEffort, runCompatibleAdvisorRequest, allocateModelShares, proposalReply, reviewReply, runModelDebate, DEBATE_CRITERIA } = require('../electron/model-team.cjs');
 const { runModelTask } = require('../electron/agent-runtime.cjs');
 const { createSubagentCoordinator } = require('../electron/subagent-coordinator.cjs');
 const { createSubagentTools } = require('../electron/subagent-tools.cjs');
@@ -16,6 +16,49 @@ const proposal = role => JSON.stringify({ title: role + ' plan', summary: '方�
 const scoreReview = (reviewer, plans, scoreFor = () => 8) => JSON.stringify({ evaluations: plans.map(item => ({ proposalId: item.id, scores: Object.fromEntries(Object.keys(DEBATE_CRITERIA).map(key => [key, scoreFor(item.id, key)])), critique: reviewer + ' 对该方案的具体评议' })) });
 const parsedProposals = () => ['main', 'explorer', 'advisor'].map(role => proposalReply(proposal(role), role));
 const parsedReviews = (plans, scoreFor) => ['main', 'explorer', 'advisor'].map(reviewer => reviewReply(scoreReview(reviewer, plans, scoreFor), reviewer, plans.map(item => item.id)));
+
+test('composer modes identify the actual team execution role', () => {
+  assert.equal(executionRoleForMode('main'), 'main');
+  assert.equal(executionRoleForMode('subagent'), 'explorer');
+  assert.equal(executionRoleForMode('advisor'), 'advisor');
+  assert.equal(executionRoleForMode(), 'main');
+});
+
+test('discussion completion and failure retain the selected executor instead of assigning model one', async () => {
+  const models = ['main', 'explorer', 'advisor'].map(role => ({ role, model: role + '-fixture' }));
+  for (const executorRole of ['main', 'explorer', 'advisor']) {
+    const events = [];
+    const result = await runModelDebate({ executorRole, task: 'Bounded task', models, emit: event => events.push(event), runModel: async ({ model, stage }) => stage === 'proposal' ? proposal(model.role) : scoreReview(model.role, parsedProposals()) });
+    assert.equal(result.executorRole, executorRole);
+    const complete = events.findLast(event => event.operation?.name === 'model_debate_result').operation;
+    assert.ok(complete.detail.includes(result.executorLabel));
+    assert.equal(JSON.parse(complete.output).executorRole, executorRole);
+    const failed = await runModelDebate({ executorRole, task: 'Bounded task', models, runModel: async ({ model }) => { if (model.role === 'main') throw Error('unavailable'); return proposal(model.role); } });
+    assert.equal(failed.executorRole, executorRole);
+    assert.equal(failed.allocation, null);
+    assert.ok(failed.reason.includes(failed.executorLabel));
+  }
+});
+
+test('the two other models supervise and can correct execution, including model one', async () => {
+  for (const executorRole of ['main', 'explorer', 'advisor']) {
+    const seen = [], handoffs = [], consultations = [];
+    const team = createModelTeam({ enabled: true, skipPlanReview: true, executorRole, supervisionPlans: parsedProposals(),
+      supervise: async input => { seen.push(input.role); return JSON.stringify({ verdict: 'revise', summary: '核对执行', corrections: ['按新需求修正文件'] }); },
+      takeover: async input => { handoffs.push(input.role); return { status: 'succeeded', summary: '已修正并验证', evidence: [{ tool: 'edit_file', ok: true }] }; },
+      consult: async input => { consultations.push(input.role); return review(); },
+    });
+    await team.beforeTool('write_file', { path: 'result.txt' });
+    await team.afterTool('write_file', { path: 'result.txt' }, { ok: true }, 'succeeded');
+    await team.afterTool('read_file', { path: 'result.txt' }, { ok: true }, 'succeeded');
+    const others = ['main', 'explorer', 'advisor'].filter(role => role !== executorRole);
+    assert.deepEqual(seen, [...others, ...others]);
+    assert.deepEqual(handoffs, others);
+    await team.beforeFinal('实际结果');
+    assert.deepEqual(consultations, [executorRole === 'advisor' ? 'main' : 'advisor']);
+    assert.ok(!consultations.includes(executorRole));
+  }
+});
 
 test('share allocation gives a clear winner 100 percent and excludes weak constraint compliance', () => {
   const plans = parsedProposals();
@@ -455,6 +498,25 @@ test('active task deduplication never shares results with another parent', async
   await assert.rejects(coordinator.read(a.id, 'parent-b'), /不属于/);
   release.forEach(resolve => resolve('done'));
   await Promise.all([coordinator.wait(a.id, 1000, 'parent-a'), coordinator.wait(b.id, 1000, 'parent-b')]);
+});
+
+test('runtime executor changes reassign supervisors and completion reviewer while retaining facts', async () => {
+  const supervised = [], consulted = [];
+  const team = createModelTeam({ enabled: true, skipPlanReview: true, supervisionPlans: parsedProposals(),
+    supervise: async input => { supervised.push(input.role); return JSON.stringify({ verdict: 'ready', summary: 'checked', corrections: [] }); },
+    consult: async input => { consulted.push(input); return review(); },
+  });
+  await team.beforeTool('edit_file', {});
+  await team.afterTool('edit_file', { path: 'kept.txt' }, { ok: true }, 'succeeded');
+  assert.deepEqual(supervised.sort(), ['advisor', 'explorer']);
+  team.setExecutorRole('advisor'); supervised.length = 0;
+  await team.afterTool('read_file', { path: 'kept.txt' }, { ok: true }, 'succeeded');
+  assert.deepEqual(supervised.sort(), ['explorer', 'main']);
+  await team.beforeFinal('verified');
+  assert.equal(consulted[0].role, 'main');
+  assert.match(consulted[0].context, /kept.txt/);
+  assert.match(consulted[0].context, /executor-switch/);
+  assert.throws(() => team.setExecutorRole('unknown'), /无效/);
 });
 
 test('escaped long context remains valid JSON and quoted credential fields are redacted', async () => {

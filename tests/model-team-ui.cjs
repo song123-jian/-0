@@ -298,7 +298,7 @@ async function main() {
     await settings();
     assert.equal(await page.evaluate('document.querySelector(".model-team-roles input[type=checkbox]")?.disabled'), true);
     const roleLabels = await page.evaluate('[...document.querySelectorAll(".model-team-roles dt")].map(item => item.textContent.trim())');
-    assert.deepEqual(roleLabels, ['模型一', '模型二', '模型三']);
+    assert.deepEqual(roleLabels, ['所选模式', '三个模型', '其余两个模型']);
     const serviceLabels = await page.evaluate('[...document.querySelectorAll(".model-subagent-heading h2")].map(item => item.textContent.trim())');
     assert.deepEqual(serviceLabels, ['模型二服务', '模型三服务']);
     assert.ok(usage.records.filter(r => r.role === 'advisor').every(r => ['debate-proposal', 'debate-review', 'execution-supervision', 'plan', 'repeated-error', 'completion'].includes(r.stage)));

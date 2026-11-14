@@ -1,5 +1,234 @@
 # 测试交接
 
+## 1.3.64 Codex上下文接续与模型布局（本地验证通过）
+
+- 最终实际对象：release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe，应用/PE版本1.3.64、产品版本1.3.64.0；Windows10.0.26200 x64、Node24.17.0 / Electron45，隔离profile/项目和loopback模型HTTP。最终EXE c785cb63e5aaa535905fd897b34f50593321cef39729b728d136c8dc3f109c9b；ASAR 78cc245514ee35c1c7e4254ffb6eafb60850128804f31a91da4a4aa564c939d4。
+- 运行入口：D:/cx/.Scodex/EXE快捷启动.lnk，SHA 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1；目标/工作目录及原图标经COM回读，最终文件哈希与通过的候选相同。[可随源码读取的验收摘要](verification/1.3.64.json)、[完整交付清单](../release/codex-alignment-1.3.64/delivery.json)。
+- 场景/预期：接近容量时摘要老历史、保留当前需求和聊天；重开沿用摘要且零自动重放；手动按钮和/compact保留草稿；历史编辑后旧摘要不发送、旧版本保留；摘要失败/取消不提交检查点，失败重试真正生成摘要；5分类切换、三角色独立保存/密钥使用及600/1280布局、固定保存按钮；最终Windows快捷方式真实发送。
+
+| 验证范围 | 实际操作及结果 | 状态/证据 |
+| --- | --- | --- |
+| 定向逻辑/兼容 | node --test context-compaction/context-compression/agent-runtime/conversations/model-connection-draft/conversation-steering；新增默认保护先出现1项旧回归，限定显式启用后runtime+summary32项复测通过；未受影响27项有效 | 有效59项通过；targeted-tests.log、targeted-tests-final.log、runtime-summary-retest.log |
+| renderer/完整包 | npm run build；electron-builder --win --dir --x64 --config.directories.output=release/Scodex-Workbench-1.3.64-final --config.electronDist=node_modules/electron/dist --publish never | final-build-r2.log退出0，8份包内容/9资源及版本通过；[包身份](../release/codex-alignment-1.3.64/build-verification-final.json) |
+| 自动摘要/重开/手动 | node tests/context-compaction-ui.cjs初始all范围，原候选1.3.64；保留全18条、当前输入不变、14条原历史由摘要代替；重开零请求，下一轮只发1次；手动草稿保留 | 首轮前4项独立通过，整轮因编辑选择器陈旧failed，不标整轮通过；[首轮报告](../release/codex-alignment-1.3.64/candidate-ui/context-compaction-ui.json) |
+| 历史编辑与原版本 | SCODEX_COMPACTION_SCOPE=remaining，OUTPUT=candidate-ui-r2；重新建立手动摘要前提，实际行内修改覆盖过的消息，新版本不发送旧摘要，原版本/摘要保留 | remaining整轮6/6通过；[报告](../release/codex-alignment-1.3.64/candidate-ui-r2/context-compaction-ui.json) |
+| 失败重试/取消 | EXE指向final目录、SCOPE=failure-retry、OUTPUT=final-retry-ui；/compact收到受控500后点实际重试，生成摘要再普通接续；挂起摘要后停止，原文和原检查点保留 | 最终2/2通过；[报告](../release/codex-alignment-1.3.64/final-retry-ui/context-compaction-ui.json) |
+| 分类/草稿/保存/布局 | 同final EXE，SCOPE=layout、OUTPUT=final-layout-ui；三角色独立保存，其他草稿留存，后续真实请求使用新密钥；通用全部保存；方向键/End切分类；600/1280×900十组几何及固定保存按钮检查 | 最终3/3通过；[报告](../release/codex-alignment-1.3.64/final-layout-ui/context-compaction-ui.json)、[最终截图](verification/model-connection-1.3.64.png)，已查看，当前设备/页面/视口/数据下无可见错误 |
+| 最终根快捷入口 | SCODEX_MODES_VERSION=1.3.64、SCOPE=shortcut-smoke、EXE指定final、SHORTCUT指定根lnk、OUTPUT=shortcut-ui运行node tests/composer-model-modes-ui.cjs | 实际入口2/2通过；[报告](../release/codex-alignment-1.3.64/shortcut-ui/composer-model-modes-ui.json) |
+| 增量审查/编码 | 以baseline.json为本轮基线；15份代码/元数据、直接调用与新模块定向审查，两个问题修复，UTF-8无BOM及可读性核对 | 通过；[审查](../release/codex-alignment-1.3.64/incremental-review.json) |
+
+- 有效结果复用：最终重建只涉及固定栏CSS和/compact重试识别；自动/重开/手动/编辑原有效实际场景未变，复用相关结果；1.3.63队列/计划未变结果继续有效，不全项目回归。初始package.json整文件字节比对因打包器移除scripts/build/devDependencies而失败，改为身份/依赖字段核对，业务模块/dist仍字节一致，不掩盖版本差异。
+- 回滚/清理：原入口备份release/codex-alignment-1.3.64/EXE快捷启动.pre-replace.lnk，SHA 583856a3e04c1791a6b2d8ff014e4e9104d210dd2b257f0cfbde4224f422de9d，恢复到根即可返回保留的1.3.63-capacity。5轮test报告均processExited=true、cleanup=passed，fixture实际路径均不存在，无常驻服务；保留测试源码、证据及有用途的候选/回滚目录。未结束用户进程或写真实配置/聊天。
+- 未覆盖：loopback替代模型HTTP/凭据，不验证公网摘要语义质量、费用、全部兼容服务、官方远端压缩与云账号；token显示为估算。历史原生关闭/文件选择器未因此补验，不声称完整Codex等价。
+- 源码仓库状态：待上传 https://github.com/song123-jian/-0；源码整理已完成，尚未提交推送。当前本地功能和入口通过；仅上传及最终文档/远端回读未完成。仅相关实现、配置、入口或验收变化时复测。
+
+## 1.3.63 工作流与会话能力补齐（已验证）
+
+- 实际对象：release/Scodex-Workbench-1.3.63-capacity/win-unpacked/Scodex工作台.exe，应用版本1.3.63；根入口 D:/cx/.Scodex/EXE快捷启动.lnk。EXE SHA-256 72dbb9250cb4e5413e4e561aa64d0a4866140afb1e7944e5c411f2a5e165bdf2，ASAR eacdbf7a756c7b2e6acd9cea9481c1cc4da7ee61d8ef292266482cc2fa057dd3；同轮重建，不再次递增版本。
+- 环境与前置：Windows10.0.26200 x64、Node24.17.0、本机Electron45.0.0；隔离profile、项目及loopback HTTP服务。真实EXE、renderer、IPC、持久化和快捷方式均实际执行；仅模型HTTP响应/凭据被替代，不使用真实聊天或配置。
+- 本轮实际命令：本地electron-builder --win --dir --x64 --config.directories.output=release/Scodex-Workbench-1.3.63-capacity --config.electronDist=node_modules/electron/dist --publish never；SCODEX_WORKFLOW_APP_DIR指定该win-unpacked后运行 verify-release.cjs。SCODEX_WORKFLOW_SCOPE=recovery、SCODEX_WORKFLOW_EXE指定候选、SCODEX_WORKFLOW_OUTPUT=release/workflow-session-1.3.63/capacity-ui，运行 node tests/conversation-workflow-ui.cjs。最终 SCODEX_MODES_VERSION=1.3.63、SCODEX_MODES_SCOPE=shortcut-smoke、SCODEX_MODES_EXE指定同一候选、SCODEX_MODES_SHORTCUT指定根lnk、SCODEX_MODES_OUTPUT指定capacity-shortcut-ui，运行 node tests/composer-model-modes-ui.cjs。未设显式EXE/APP_DIR时驱动默认仍是旧1.3.63目录，复验必须指定本次最终路径。
+
+| 测试范围/实际操作 | 预期与实际结果 | 状态 | 可定位证据 |
+| --- | --- | --- | --- |
+| 独立打包、包身份/版本/9项资源/6份源码与renderer比对 | 包含当前修复，字节一致；打包58332退出0 | 通过 | [构建核验](../release/workflow-session-1.3.63/build-verification.json)、capacity-package.log |
+| 实际派发队列项后服务报错/取消，再手动继续 | 项目队首恢复一次，暂停、不重放，手动重试成功；含身份共4项 | 通过 | [recovery报告](../release/workflow-session-1.3.63/capacity-ui/conversation-workflow-ui.json)，67514退出0 |
+| 1条队列项发送中，再加入19条，尝试第21条；HTTP503后保存并重开 | 新增被拦截且草稿保留，20条顺序与尾项完整；重开暂停且零新增请求 | 通过 | recovery报告的queue-capacity-reserves-active-item-and-persists-recovery |
+| 原子替换根lnk后实际启动、核对版本/profile、UI发送及接收完成 | 最终入口使用验收候选和完整运行资源，2/2；1176退出0 | 通过 | [最终快捷入口报告](../release/workflow-session-1.3.63/capacity-shortcut-ui/composer-model-modes-ui.json) |
+| 精确前后差异、UTF-8/BOM/乱码/空白及直接影响审查 | 两份旧源码哈希与原审查一致，当前差异无剩余高置信度问题 | 通过 | [容量增量审查](../release/workflow-session-1.3.63/capacity-incremental-review.json)、source-verification.json |
+
+- 有效结果复用：队列逻辑7/7；旧候选candidate-ui-r3 11/11中的计划执行、分支/权限和600/1064/1280布局等未变范围有效；旧入口2/2作为历史保留，最终入口以本次2/2为准。renderer构建1839模块成功，capacity-renderer-build.log保留；未重跑无关全项目检查。
+- 截图：已查看[最终恢复状态](../release/workflow-session-1.3.63/capacity-ui/queue-recovery-final.png)，1280×780下预期HTTP503、待发送20/已暂停及保留草稿显示正确，未见布局异常。截图仅辅助证据，恢复内容与顺序以实际持久化回读断言为准。
+- 清理：两轮 report.processExited=true、cleanup=passed，实际fixture C:\Windows\Temp\scodex-workflow-73ab4a75-ff26-403f-8785-5d5b159ed649 和 C:\Windows\Temp\scodex-chat-modes-1c6b4c52-552e-4b31-820e-cdca5130d559 均核对不存在；候选程序精确路径下无残留进程，无常驻测试服务。本轮候选lnk已被原子替换消耗。
+- 历史遗留：1个临时lnk仍在 release/workflow-session-1.3.63/手动删除/EXE快捷启动.tmp-5fc2368dbec6429a8eaeda3f14b696e8.lnk；旧记录未保留确切原路径/拒绝原因，未重复删除，可手动删除该精确文件，对功能无影响。旧原子替换.bak与有效旧程序/入口作回滚保留，详见[交付清单](../release/workflow-session-1.3.63/capacity-delivery-verification.json)。
+- 回滚与入口：根lnk SHA 583856a3e04c1791a6b2d8ff014e4e9104d210dd2b257f0cfbde4224f422de9d；恢复 EXE快捷启动.pre-capacity.lnk 可回旧1.3.63，备份SHA 01679705fe186225a7176576a0082791e0041ac84a41a5abbfa92f27a0819422；旧1.3.62备份继续保留，不更改用户数据。
+- 失败/未覆盖：既有关闭确认、退出信号、引导/键盘夹具失败等报告不作通过证据；一次历史存储超时未复现且原因未确证。公网模型/云端账号服务、原生窗口关闭及文件选择器尚未完成验证，不以loopback结果外推等价。
+- 必要复测条件：仅本次相关源码、依赖、环境、输入、入口或验收条件变化时复验受影响范围。当前队列交付范围已通过，无功能阻塞；双交接文档仅执行修改章节、链接、UTF-8无BOM和落盘一致性验收。
+
+## 1.3.62 聊天工具入口补充（已验证）
+
+- 对象：正式1.3.62完整目录 `release/Scodex-Workbench-1.3.62/win-unpacked`，程序`Scodex工作台.exe`，根入口`EXE快捷启动.lnk`。上次正式版本1.3.61，本轮按既有SemVer映射递增一个补丁版本。Windows10.0.26200 x64、Node24.17.0、Electron45.0.0；隔离profile/工作区，无真实用户配置或凭据写入。
+- 有效辅助结果：`node --check tests/composer-checks.cjs`、package/lock版本一致性、`npm run build`（1836模块）均通过。1.3.61历史记录保留，本次相关菜单与入口已在1.3.62真实程序复验，未重跑无关全项目测试。
+- 构建：默认下载构建会话15843已取消、退出1；此前58372中断无候选。改用 `--config.electronDist=node_modules/electron/dist` 后会话54332退出0，EXE文件版本1.3.62、产品版本1.3.62.0。包资源校验首次因ASAR路径强制正斜杠而失败；只读诊断证实包内renderer存在且本机规范路径可读，后续辅助校验使用 `path.normalize`，产品构建结果仍有效。
+- 包校验：ASAR版本1.3.62，EXE SHA-256 `D84083CAEE09F487E37CDE71B9393D2C2A086332C082413909898F0DD084526F`，ASAR SHA-256 `C41A0B38D32FDA659FB7CFFC8B849CF4000D8389AC28E1DE89B1AA010A284138`；运行资源和Node/Python/pip包存在，dist三文件与包内逐字节一致。见[构建核验](../release/composer-menu-1.3.62/build-verification.json)。
+- 候选UI通过：`SCODEX_SMOKE_SCOPE=composer SCODEX_SMOKE_SKIP_NATIVE_CLOSE=1 SCODEX_SMOKE_EXE=<1.3.62 EXE>`运行`node tests/smoke.cjs`，会话83434退出0。先隐藏第三工作台，再用菜单打开浏览器、已就绪终端及空闲服务面板；聊天ID和输入框保留，菜单分组顺序正确。原附件/嵌套文件夹/搜索/二进制拒绝/工作台快照/技能/计划/目标保存与重载/权限持久化与IPC拒绝/插件技能路由/键盘和关闭交互通过。
+- 布局与证据：1064×660、20px字体下菜单位置与搜索栏在视口内，辅助文字至少18px，实际字体Microsoft YaHei；最终截图已查看，当前设备、页面、视口和数据状态下无可见错误。[日志](../release/composer-menu-1.3.62/composer-smoke-final.log)、[截图](../release/Scodex-Workbench-1.3.62/win-unpacked/workbench-composer.png)。测试finally进程回收及临时目录清理未报错。新增驱动语法检查退出0。
+- 增量审查通过，范围及五文件修改前/后SHA见[审查报告](../release/composer-menu-1.3.62/incremental-review.json)，精确还原五个修改前文件哈希成功，无待修复问题。
+- 正式入口通过：备份旧入口后原子替换根快捷方式，目标和工作目录为1.3.62，原图标`EXE快捷启动.ico,0`保留。新快捷方式SHA-256 `E7CADA1106BB6D2D3E3F85564BA6E408258A59F18AFC725927479FF74A48A05E`；旧入口备份`release/composer-menu-1.3.62/EXE快捷启动.pre-replace.lnk`，SHA-256 `A7D8A9D4A3B6F309B3DB968F8689E076F3C254BD80695F01068848DE084EEBC1`，可复制回根入口回滚至保留的1.3.61目录。EXE及ASAR最终哈希与候选验收一致。
+- 快捷入口实际验收：`SCODEX_MODES_SCOPE=shortcut-smoke SCODEX_MODES_VERSION=1.3.62 SCODEX_MODES_SHORTCUT=<根快捷方式> SCODEX_MODES_OUTPUT=<本轮shortcut-ui>`执行`node tests/composer-model-modes-ui.cjs`，会话51736退出0，2/2通过。通过真实Windows快捷方式启动，回读版本/profile/工作区正确，从真实界面发送并收到loopback模型完成回复。见[UI报告](../release/composer-menu-1.3.62/shortcut-ui/composer-model-modes-ui.json)、[日志](../release/composer-menu-1.3.62/shortcut-smoke.log)及[最终核验](../release/composer-menu-1.3.62/delivery-verification.json)。
+- 清理：`processExited=true`、`cleanup=passed`；已核对报告中精确fixture路径不存在、候选程序进程为0、中间快捷方式不存在，未操作用户进程或数据。无本轮待手动清理项。
+- 必要复测条件：菜单组件/路由/直接样式变化时复验对应UI；构建或根入口变化时核对版本/资源并进行快捷入口验证。其他仍有效结果不重复执行。
+- 限制：本轮显式跳过原生窗口关闭与关闭时草稿刷新；公网模型、真实用户profile、原生文件选择器未验证。快捷启动最终使用loopback模型，不外推公网兼容性。
+
+| 验证范围 | 实际操作与预期 | 结果 | 证据 |
+| --- | --- | --- | --- |
+| 完整候选身份与资源 | 本机Electron构建；读取包版本、资源与dist字节；应全部一致 | 通过 | build-verification.json |
+| 新入口与菜单分组 | 先隐藏面板，从菜单打开三个工具；聊天应保留且服务不应自动启动 | 通过 | composer-smoke-final.log |
+| 原菜单功能及布局 | 操作目标/计划/附件/搜索/技能/权限，缩至1064×660并设20px字体；应可用且无溢出 | 通过 | Composer日志与已查看截图 |
+| 正式快捷入口 | 通过根lnk启动，真实UI发送/收取loopback回复；身份和完成事件应正确 | 通过2/2 | shortcut-ui/composer-model-modes-ui.json |
+| 最终替换与清理 | 回读入口、图标、候选哈希、回滚文件及fixture/进程状态 | 通过 | delivery-verification.json |
+| 原生窗口关闭及公网模型 | 本轮未执行；不影响菜单入口验收范围 | 尚未完成验证 | 上述限制 |
+
+## 1.3.61 聊天输入工具菜单补充（已验证）
+
+- 对象：`release/Scodex-Workbench-1.3.61/win-unpacked/Scodex工作台.exe`，根入口 `EXE快捷启动.lnk`；Windows 10.0.26200 x64、Node.js v24.17.0、Electron 45.0.0、应用 1.3.61。EXE SHA-256 `B13BFE603C1CC256A6C9464CDBA338930D2F6B2D2A5A8351E35D72849B6FC3E2`，ASAR SHA-256 `7B1105E4A6290CAAE6BEDD1B62D16562793981165F92D33EC7360E405A92D1EF`。
+- 入口与回滚：根快捷方式经 COM 回读为 1.3.61 EXE、对应 `win-unpacked` 工作目录和原图标 `EXE快捷启动.ico,0`；哈希 `A7D8A9D4A3B6F309B3DB968F8689E076F3C254BD80695F01068848DE084EEBC1`。旧入口备份 `release/composer-menu-1.3.61/EXE快捷启动.pre-replace.lnk` 哈希 `566E5ADD9AFBBEC098928DA494D7EF508F83BB91039363A72FF77959005475B7`，可恢复至保留的 1.3.60 完整目录。
+- 构建身份：完整目录运行资源齐全；ASAR 包内版本 1.3.61，`dist/assets/index-Brj_4Cn5.js`（2,320,903 字节，SHA-256 `3c8dd83a542eaa0039ee3fd7f4fabe38ddb2bfa62f23251eba7430cbf42003a2`）和 `dist/assets/index-D7UQ6OHU.css`（205,351 字节，SHA-256 `fd2d7dc49e3e9f56ac2e70e4a220b69619e9dd2d902f946c55ebf89ffdd86005`）与 ASAR 内文件逐字节相同。
+- Composer 实际 UI：`SCODEX_SMOKE_SCOPE=composer`、`SCODEX_SMOKE_SKIP_NATIVE_CLOSE=1`，通过 `tests/smoke.cjs` 在候选 EXE 运行。菜单内容/分组/滚动、Escape 与焦点返回、方向键、外部点击、Tab 离开、计划切换、目标持久化及重载状态、工作台/文件/文件夹/搜索、二进制拒绝、技能、仅对话权限与 IPC 拒绝、插件和技能路由、Microsoft YaHei 字体、1064×660 视口与 20px 字体布局均通过；无 renderer error，截图 `release/Scodex-Workbench-1.3.61/win-unpacked/workbench-composer.png` 已查看。原始日志 `release/composer-menu-1.3.61/composer-smoke-final.log`；2026-11-12 收尾复测使用更新后的新聊天目标断言，日志 `release/composer-menu-1.3.61/composer-smoke-final-rerun-20261112.log`，退出码 0。
+- 目标逻辑辅助测试：`node --test tests/goal-runtime.test.mjs`，4/4 通过。测试脚本语法：`node --check tests/smoke.cjs`、`node --check tests/composer-checks.cjs` 均退出 0。
+- 新聊天目标隔离：新聊天后打开菜单，断言目标说明准确为“设置本次对话目标”，确认不会继承前一对话目标；更新后 `node --check tests/composer-checks.cjs` 通过，候选 EXE 上实际 Composer smoke 通过。该次运行显式跳过原生窗口关闭和 close-time draft flush，二者仍为“尚未完成验证”。
+- 实际快捷入口：`SCODEX_MODES_SCOPE=shortcut-smoke`、`SCODEX_MODES_VERSION=1.3.61`、`SCODEX_MODES_SHORTCUT=<根 EXE快捷启动.lnk>` 运行 `tests/composer-model-modes-ui.cjs`，通过真实 Windows 快捷方式启动。2/2 通过：版本、临时 profile/工作区身份正确；真实 UI 请求由 loopback fixture 返回，模型 `glm-5.3`，完成事件收到；无公网请求或真实用户凭据。报告 `release/composer-menu-1.3.61/shortcut-ui/composer-model-modes-ui.json`，测试进程退出、fixture 清理通过。
+- 失败恢复记录：最初驱动依赖旧导航、`.new-task-button`、旧附件 chip、模式选择器及旧路由断言，与当前应用实现不符；逐项改为当前可见入口/持久化行为后，Composer 核心断言全部通过。收尾审查又确认旧 `.goal-chip` 断言检查的是不存在元素，已改为新聊天菜单中目标说明的实际 UI 断言并在 1.3.61 候选上复测通过。早期日志 `composer-smoke-r1.log` 至 `composer-smoke-r12.log` 保留在 `release/composer-menu-1.3.61`。候选 `MainWindowHandle=0`，原生 CloseMainWindow 无有效窗口；最终仅在 composer scope 显式跳过原生关闭/close-time draft flush，默认及其他 scope 未改变该行为，测试 finally 已回收本次进程和临时文件。故原生关闭与关闭时草稿刷新为“尚未完成验证”，不影响本轮菜单验收。
+- 审查边界：源码目录无 Git 元数据。人工增量审查限定 `composer-tools.jsx` 分组/入口/状态、对应 CSS、Composer 驱动、关闭跳过开关及当前 1.3.61 打包 renderer；对比前一已交付 1.3.60 包。验证失败一次来自 ASAR 查询路径多一层斜杠，修正归档内路径后 JS/CSS 字节比较均通过；未重建未变化的候选。
+- 复测条件：菜单组件、相关样式、目标状态数据契约、启动入口或当前遗漏的原生窗口行为变化时，只复验对应范围；未验证公网模型、用户真实 profile 和原生窗口关闭行为。
+
+## 1.3.60 绘图功能补齐（已验证）
+
+- 对象：最终[Scodex工作台.exe](../release/Scodex-Workbench-1.3.60/win-unpacked/Scodex工作台.exe)和根[EXE快捷启动](../EXE快捷启动.lnk)；Windows10.0.26200 x64、Electron45、Node24.17.0，应用1.3.60，前版本1.3.59。
+- 入口与身份：EXE SHA256 3ffdf1b5bdd1aabbe74a18271b1866bf644d7c5fd4cfa88721ba95cc19530aa6；ASAR 543cb0c31f9d378dd5750161aafaa8f37d461b958df8aa542e0b8c8e5af73daa；根lnk 566e5add9afbbec098928da494d7ef508f83bb91039363a72ff77959005475b7。9个包内模块/renderer与源文件字节相同；运行资源齐全。
+- 前置条件：独立profile/SCODEX_HOME、固定聊天ID、loopback OpenAI兼容模型服务和测试凭据。实际EXE、UI、IPC、加密聊天存储、文件、Windows命令及快捷方式真实执行；公网模型由fixture替代。最终布局收起右侧面板，明确等待宿主配置就绪。
+
+| 范围 | 操作与预期 | 实际结果及证据 |
+| --- | --- | --- |
+| 绘图/持久化/运行时逻辑 | node --test tests/visualization.test.mjs tests/conversations.test.mjs tests/agent-runtime.test.mjs；新增协议规则随后定向复验 | 既有44项有效，最终visualization7/7含4个新增规则；48项不同用例有效，不表示整库测试 |
+| 协议/请求边界 | nonce文档、容量/释放、非法导航/请求、宿主专用IPC | [协议日志](../release/visualization-1.3.60/protocol-tests-final.log)7/7；实际无宿主访问和preload |
+| 最终工作流 | 真实发送绘图→切换季度→保存窗口内切换模式→确认追问→重开→接手活动重开 | [最终工作流](../release/visualization-1.3.60/ui-state-final/visualization-ui-verification.json)9/9；Q2恢复、iframe不重载、追问确认后只新增1次模型调用且同chat |
+| 导航恢复/联网隔离 | 图内鼠标发起data替换、再发起loopback HTTP文档跳转 | [早期有效功能记录](../release/visualization-1.3.60/ui-stable-chat/visualization-ui-verification.json)：data恢复一次，重复异常停止并提示，0网络请求；该报告第11项布局无效，不复用。此后协议/恢复实现未变 |
+| 600/1280布局及截图 | 非零宽高、完整可见、文档/卡片不横向溢出；末次修改后截图 | [最终布局](../release/visualization-1.3.60/ui-delivery-view/visualization-ui-verification.json)1/1；409×320和799×380。截图已查看：当前设备、页面、1280×780视口和数据状态下无可见错误 |
+| 实际快捷启动 | Windows根lnk启动→版本/profile→三方提案评议→所选模式改文件/命令核验 | [快捷报告](../release/visualization-1.3.60/shortcut-ui/team-executor-ui.json)2/2；真实文件和命令均成功，fixture已清理 |
+| 构建/身份/编码/审查 | renderer和完整目录构建；包内容、版本、17份相关文本UTF-8无BOM、直接差异 | 均通过；[清单](../release/visualization-1.3.60/delivery.json)含命令、哈希和审查边界 |
+
+- 修复与复验：data继承宿主CSP导致内联脚本失败，改独立协议；Electron事件未覆盖data导航，改请求白名单及有界恢复；状态effect随父刷新取消待保存，改最新callback引用并真实切换控件验证。失败报告保留，未将失败或模拟结果改写为通过。
+- 驱动前提纠正：独立iframe target连接、固定聊天ID、明确等待面板配置、窄屏高度320设计。ui-stable-chat原第11项0宽高是假阳性；由最终非零、可见断言及实际截图替代。
+- 保留结果：本轮没改agent-runtime/model-team，其字节与1.3.59包一致；既有三模式共享上下文/运行中切换结果按原范围保留。最新快捷实际验证所选模式执行链路。
+- 未覆盖：公网模型连接与质量、上游插件等价性；接手图表通过保存活动fixture验证，非完整自动接手端到端新测试。办公srcdoc只验证直接加载兼容，不代表重测办公解析器。data导航是事后有界恢复，不承诺所有导航事先取消。
+- 替换与回滚：根lnk已经备份/替换/回读并真实启动；[原lnk备份](../release/visualization-1.3.60/EXE快捷启动.pre-replace.lnk)恢复至根即可返回保留的1.3.59完整目录，原配置和用户数据不替换。
+- 清理：自动删除被策略拒绝后，12个本轮fixture移至项目手动删除/visualization-1.3.60，准确原/现路径及原因见交付清单；均原路径不存在、现路径存在，待手动删除不影响验收。快捷测试fixture已删除；有限命令均结束，最终无本轮测试进程。
+- 复测条件：只在相关实现、配置、依赖、入口或输入/验收条件变化后，复验受影响范围；当前无功能阻塞，不重复整库测试或仍有效检查。
+
+## 1.3.59 所选模式执行与运行中切换（已验证）
+
+- 实际对象：D:/cx/.Scodex/release/Scodex-Workbench-1.3.59/win-unpacked/Scodex工作台.exe；根入口D:/cx/.Scodex/EXE快捷启动.lnk。上次1.3.58、本次1.3.59，沿用SemVer补丁映射；EXE SHA-256 da9a0c6ad51a8264febd79736b9fff5ba2f85a6cccff86b7f6e719fdf6bcbf7a，ASAR 245627b8a32e4bb9992f1e06bfc9317cf42b298dff736023af65eca3e4bbc932。
+- 环境和前置条件：Windows10.0.26200 x64、Node24.17.0、Electron45；隔离profile/project/SCODEX_HOME，三份loopback服务配置、工具执行授权、实际UI/IPC/文件/PowerShell命令。仅模型HTTP及凭据由fixture替代，不访问真实凭据或公网模型。
+- 范围与预期：三种模式各独立提案并全量评议，所选者实际整合、执行和验证，其余两者监督；执行中补充可再次改文件；用户确认“两者都要”，因此还验证运行中一→二→三→一、同chat/request和完整工具结果、native/JSON互转、无效模式/模型拒绝、不重复副作用、当前执行者不自行完成核验。
+- 当前源码基线为[15份原文件](../release/team-executor-1.3.59/baseline.json)，本次代码审查限定12份代码/测试/元数据；历史中未变化且仍有效的模式列表、隐藏Grok及共享聊天结论复用，不全项目回归。
+
+| 验证范围 | 实际操作、预期和结果 | 状态及证据 |
+| --- | --- | --- |
+| 团队/运行时逻辑 | node --test tests/agent-runtime.test.mjs tests/model-team.test.mjs；角色、动态监督/核验、整批工具边界、最终答复前交接、原生/JSON配对和上下文保留 | 61/61通过；[逻辑日志](../release/team-executor-1.3.59/switch-targeted-tests-final.log) |
+| 语法、renderer及完整包 | 相关CJS语法检查；npm run build及本地Electron45目录构建；版本源和必要资源核对 | 通过；[renderer日志](../release/team-executor-1.3.59/switch-renderer-build.log)、[打包日志](../release/team-executor-1.3.59/switch-package.log) |
+| 最终包身份、三模式执行/降级/补充 | SCODEX_EXECUTOR_SCOPE=all运行node tests/team-executor-ui.cjs，分别选择三模式实际执行，另测模式二/三讨论失败及模式三运行中二次改文件/命令/回读 | 当前包前7项独立通过；[原报告](../release/team-executor-1.3.59/final-candidate-ui/team-executor-ui.json)整轮failed，不将后续未执行项作通过 |
+| 运行中连续切换 | SCODEX_EXECUTOR_SCOPE=switching-only，OUTPUT=release/team-executor-1.3.59/switch-candidate-ui-r2运行同驱动；实际UI一→二→三→一，队列可见、生效后新模式修改，同chat/request；四次edit、一次命令及完整最终文件核对，native→JSON→native，无效模式/模型拒绝 | 3/3通过；[切换报告](../release/team-executor-1.3.59/switch-candidate-ui-r2/team-executor-ui.json)，会话95947退出0 |
+| 职责、用量、窄屏及截图 | 同switching-only轮次检查当前模型身份/用量、共享聊天；600/1280px逐条滚动读取职责，检查横向溢出；1280×900最终截图已查看 | 通过；[职责截图](../release/team-executor-1.3.59/switch-candidate-ui-r2/team-executor-final.png)，当前设备、设置页面、视口和数据状态下无可见错误 |
+| 实际根快捷入口 | 设置SCODEX_EXECUTOR_SHORTCUT=D:/cx/.Scodex/EXE快捷启动.lnk、SCOPE=all、OUTPUT=release/team-executor-1.3.59/shortcut-ui，经Windows快捷方式启动后核对1.3.59/profile/工作区；模式二从UI发送并完成提案、评议、真实文件修改/命令/回读 | 2/2通过；[入口报告](../release/team-executor-1.3.59/shortcut-ui/team-executor-ui.json)，会话67432退出0 |
+| 交付身份/编码/审查 | 包内4份Electron模块及renderer与源码匹配，12份文本UTF-8无BOM及差异空白通过；版本源均1.3.59，最终EXE/ASAR与验收候选同哈希 | 通过；[包身份](../release/team-executor-1.3.59/artifact-identity.json)、[增量审查](../release/team-executor-1.3.59/incremental-review.json)，无剩余高置信度问题 |
+| 配置保留和回滚 | 真实连接仅核对SHA-256，值仍53cc2c54bb6d2283aa5a2a059c767ff9bda8d2a740a76a2d2d2e3631d87db7c3；根快捷方式目标/目录/原图标回读，备份哈希与原基线一致、旧完整目录保留 | 通过；[交付清单](../release/team-executor-1.3.59/delivery.json) |
+
+- 当前失败恢复：final-candidate-ui的连续切换在Running request persisted等待超时，尚未触发第一次切换。根因是normalizeMessage不持久化pending，驱动误以磁盘字段判断运行态；改为实时停止按钮及终态事件判断、当前用户消息后助手的稳定requestId定位。保留原断言并只复验switching-only，未修改业务代码或重复有效基础场景。关闭清理先取消已知请求、等终态再退出，避免原生关闭确认阻塞。
+- 先前切换前候选的保存时序/queued持久化/整段可视断言失败均为驱动前提错误，报告保留；当前最终包基础及最新切换/职责结果已取得，不用旧候选冒充新功能验收。
+- 最终入口状态：根lnk SHA-256 bed096119ecfcdeb51f1984d3338aed086324c8c74407770c201136c9211157f，目标/工作目录为1.3.59完整目录，自定义图标保留。备份[EXE快捷启动.pre-replace.lnk](../release/team-executor-1.3.59/EXE快捷启动.pre-replace.lnk) SHA-256 42547b4155e47e3a8b73436fd82b1e44f9d0ab03594de7c4eda1e39221e22278，恢复根入口即可回滚1.3.58；旧完整目录及用户数据不替换。
+- 清理与有限操作：会话8447退出1（原失败），95947和67432退出0；最终两轮报告均processExited=true、cleanup=passed且fixture原路径不存在，无新增常驻服务。失败轮次自建PID2040/28476/6800/9808已精确回收，未终止用户进程。
+- 待手动清理：自动审批以blocked by policy拒绝删除失败轮次fixture，未重复删除。已从C:/Users/宋建建/AppData/Local/Temp/scodex-team-executor-297e8c80-317e-4db0-a4e3-3d310c22f182移至D:/cx/.Scodex/手动删除/team-executor-1.3.59/scodex-team-executor-297e8c80-317e-4db0-a4e3-3d310c22f182，原路径不存在、目标存在；可手动删除该精确目录，不影响程序。见[恢复清理记录](../release/team-executor-1.3.59/switch-recovery-cleanup.json)，不把后续回收改写成原失败轮次通过。
+- 限制与复测条件：公网模型连通性、输出质量和性能尚未完成验证；未发布GitHub、更新其他安装目录或写真实聊天。未签名构建的PE框架版本仍Electron45，应用1.3.59由包元数据和真实IPC验证。仅相关源码、配置、依赖、输入、入口或验收条件变化时定向复测。
+- 本轮授权功能无未完成项；检查点、双交接和[交付清单](../release/team-executor-1.3.59/delivery.json)已同步，最终文档落盘回读验证随本轮执行，不重跑已通过程序测试。
+
+## 1.3.58 模式列表隔离与输入栏尺寸（已完成）
+
+- 实际目标：`release/Scodex-Workbench-1.3.58/win-unpacked/Scodex工作台.exe`，EXE SHA-256 `a6b861077c70432316ce5c179aa39a2973a64f1e924a7f50d79687a140bbfea9`、ASAR `b238f9c46b41ec3bb35dd76effe745822a228e53cb8d6d7523489bff24b4dfad`；上轮1.3.57、本轮1.3.58。Windows x64、本机Electron45/Node24，使用隔离profile及loopback服务，不发送真实模型请求。
+- 范围/预期：底层已保存配置保留Grok，模式一界面不显示与同地址模式二默认模型相同的条目；该模型仍为底层已配置项，历史主模式消息允许原模型重试；模式二仍显示Grok，服务配置/聊天文件不变。模式控件在模型左边，三控件13px且宽高较1.3.57增加；600/1280px不重叠，键盘可操作，共用聊天上下文连续。程序完整资源和根目录快捷方式实际启动验收。
+- 逻辑有效24项：`node --test tests/model-connection.test.mjs tests/model-list.test.mjs`通过；共同默认模型保护修改后model-list4/4复测通过，连接20项未受影响复用；`node --check tests/composer-model-modes-ui.cjs`退出0。对应[预构建检查](../release/composer-controls-1.3.58/pre-build-checks.json)、[列表复测](../release/composer-controls-1.3.58/model-list-retest.log)。最终实际EXE5/5、实际根快捷入口2/2均通过。
+- 实际运行顺序：UI驱动配置隔离profile和loopback服务，启动最终EXE并核对1.3.58/实际数据目录，保存同地址配置→切换模式列表→重启→旧消息原模型重试→三模式连续发送→键盘/600与1280px布局；最后从根Windows快捷方式实际启动隔离实例并UI发送/收到完成事件。旧1.3.57用户窗口和真实数据不参与测试。
+
+| 验证范围 | 状态 | 操作、预期与实际证据 |
+| --- | --- | --- |
+| 模型连接与列表 | 通过 | 24/24定向逻辑测试；UI脚本语法通过 |
+| 最终逻辑/语法/renderer | 通过 | model-list4项保护条件补改后重测通过，连接20项未受影响复用；UI脚本语法通过；renderer-build-r2.log退出0 |
+| Electron打包 | 修正后通过 | 首次schema层级错误记录package.log；改用win.signAndEditExecutable=false后package-r2.log退出0，运行资源齐全 |
+| 实际EXE UI | 5/5通过 | `SCODEX_MODES_SCOPE=same-address-layout`；[候选报告](../release/composer-controls-1.3.58/candidate-ui/composer-model-modes-ui.json)，保存/重开后主配置仍含Grok而选择器隐藏，模式二可见；主模式历史Grok消息实际重试成功；三模式同聊天6消息/完整前序问答；方向键和600/1280px几何检查通过 |
+| 尺寸及截图 | 通过 | 模式82px、模型124px（窄屏110px）、深度76px，均13px/高32px；无溢出/重叠；[最终截图](../release/composer-controls-1.3.58/candidate-ui/composer-model-modes-final.png)已查看，当前设备/页面/1280×780视口/数据下无可见错误 |
+| 产物身份/编码 | 通过 | ASAR6个模块/renderer字节匹配，版本1.3.58；9文本UTF-8无BOM及变更空白通过；[身份检查](../release/composer-controls-1.3.58/archive-verification.json)。第一次辅助脚本路径失败系Windows分隔符，改原生分隔符后通过 |
+| 配置不变/快捷入口 | 2/2通过 | `SCODEX_MODES_SCOPE=shortcut-smoke`、`SCODEX_MODES_VERSION=1.3.58`、`SCODEX_MODES_SHORTCUT=D:/cx/.Scodex/EXE快捷启动.lnk`运行UI驱动；经Windows实际启动根lnk，版本/profile核对正确、真实输入栏发送并完成；[快捷入口报告](../release/composer-controls-1.3.58/shortcut-ui/composer-model-modes-ui.json)，命令会话55663退出0。用户连接配置最终哈希与基线相同 |
+
+- 入口与版本：根lnk目标和工作目录已回读为1.3.58完整目录，保留`EXE快捷启动.ico,0`；新lnk SHA-256 `42547b4155e47e3a8b73436fd82b1e44f9d0ab03594de7c4eda1e39221e22278`。EXE/ASAR最终哈希与候选相同，应用包/UI/IPC版本1.3.58；未签名构建沿用Electron45.0.0的Windows PE资源版本，不将框架文件版本当作应用版本。
+- 失败恢复：首次空备份路径File.Replace被Windows拒绝且未发生替换；明确备份文件路径后成功，随后2项实际入口测试通过。原快捷备份哈希`8a59ea43f4931d17e66065db67f40911ce7262b50f297c19ab0746520854cac1`与基线相同。首次打包配置层级及ASAR辅助分隔符错误保留诊断，不计作通过；修正后的最终构建和验收结果有效。
+
+- 增量审查与文档验收：9份源码/测试/元数据相对本轮基线定向审查完成；共同默认模型保护已修正并复验，无其余高置信度问题。两份交接和检查点更新后回读，严格UTF-8无BOM、当前章节本地链接及交付清单JSON/身份检查；以最终文档验收命令实际结果为准，不重跑已通过的程序功能。
+- 清理、回滚及限制：[交付清单](../release/composer-controls-1.3.58/delivery.json)记录两个本轮fixture，报告均`processExited=true`/`cleanup=passed`，原路径回查均不存在，无新增待手动项。旧1.3.57窗口（主PID26044）保留，先退出后打开新版；恢复备份根快捷方式可回滚，完整旧目录保留。真实模型HTTP与凭据由loopback fixture替代，公网服务尚未完成验证，不外推连通性、输出质量或性能结论。
+
+## 1.3.57 输入栏模型模式（已完成）
+
+- 最终实际对象：`D:/cx/.Scodex/release/Scodex-Workbench-1.3.57/win-unpacked/Scodex工作台.exe`，入口为根目录 `EXE快捷启动.lnk`；Windows10.0.26200 x64、Electron45.0.0、Node24.17.0，隔离profile和临时SCODEX_HOME。上次版本1.3.56，本轮1.3.57，版本映射及最终EXE/ASAR/快捷方式SHA-256见[交付清单](../release/composer-model-modes-1.3.57/delivery.json)。
+- 验收要求：三模式使用各自服务/凭据/模型但共用同一聊天和完整问答上下文，切换不创建聊天或删除消息；保存/重试/重启兼容，缺配置明确提示，紧凑布局和键盘可用。
+- 外部替代边界：HTTP模型服务和密钥为本地fixture，实际EXE、React界面、IPC、加密、磁盘保存与Windows快捷方式均真实执行；没有读取用户凭据或验证公网模型。
+
+| 验证范围 | 实际操作及预期/结果 | 状态与证据 |
+| --- | --- | --- |
+| 配置、凭据、持久化和兼容 | `node --test tests/model-list.test.mjs tests/conversations.test.mjs tests/model-connection.test.mjs`，36项通过；最终默认模型提示修正后仅复测受影响model-list3项，3/3 | 通过；[逻辑记录](../release/composer-model-modes-1.3.57/unit-tests.log)、[定向复测](../release/composer-model-modes-1.3.57/model-list-retest.log) |
+| 构建/语法/产物 | 受改Electron模块及UI脚本node --check；`npm run build`和本地Electron45目录打包成功；包版本、Electron模块与renderer匹配，ICU/PAK/snapshot/locale存在 | 通过；`release/composer-model-modes-1.3.57/build-r2.log`、`package-r2.log`及交付清单；未重复无关全项目测试 |
+| 最终同一聊天共享上下文 | `SCODEX_MODES_SCOPE=shared-history-layout`运行UI脚本，依次切模式一/二/三并发送；同一聊天保存6条消息，模式二请求带模式一问答，模式三带前两模式问答，模型/地址/伪凭据匹配 | 通过；[最终UI报告](../release/composer-model-modes-1.3.57/final-ui/composer-model-modes-ui.json)的共享场景 |
+| 最终缺配置和布局 | 同一最终UI范围共4/4：模式三有列表和继承凭据但缺默认模型时明确未配置、拒发且可恢复；方向键切模式、600×780和1280×780几何检查无溢出 | 通过；同一最终UI报告；[最终截图](../release/composer-model-modes-1.3.57/final-ui/composer-model-modes-final.png)已查看：当前设备、页面、1280×780视口和数据状态下无可见错误 |
+| 最终实际快捷方式 | `SCODEX_MODES_SCOPE=shortcut-smoke`、`SCODEX_MODES_SHORTCUT=D:/cx/.Scodex/EXE快捷启动.lnk`运行UI脚本，经Windows实际启动lnk，核对版本/profile/工作区后从真实输入栏发送并完成 | 2/2通过；[快捷入口报告](../release/composer-model-modes-1.3.57/shortcut-ui/composer-model-modes-ui.json)，原图标保留，入口指向最终哈希一致的程序 |
+| 仍有效的重试/重启/无列表拒发 | 原1.3.57候选ui-r3中对应场景通过：界面已切模式三时重试仍用原消息模式二，退出重启保留选择，无列表模式提示并拒发。最终仅增加advisorModel为空时的前端提示，不改变这些场景 | 复用通过结果；[原候选报告](../release/composer-model-modes-1.3.57/ui-r3/composer-model-modes-ui.json)前五项；整轮后续布局准备失败，未标作整轮通过；原ASAR为`2b1bb541bc7dce384571e38651812f27e547ff872cb59f7af708579aea51be2e` |
+| 增量审查/编码 | baseline11份文本差异和新增UI脚本定向审查，修复模式三缺默认模型提示；12份文本UTF-8无BOM、版本源一致及差异空白检查 | 通过；未发现其余高置信度问题，未扩展为全仓库审查 |
+| 失败恢复与清理 | 早期UI轮次的异步激活、未分组fixture工作区、刷新早于保存及选择器误中项目按钮均已定向修正；7个本轮临时profile删除、测试启动进程均退出 | 失败报告保留于同一证据目录`ui`、`ui-r2`、`ui-r3`、`shared-ui`；没有用失败/未执行项替代通过，无待手动清理项 |
+
+- 回滚/运行：旧1.3.56完整运行目录保留，恢复交付清单中的基线快捷方式即可回滚；用户数据与连接配置未替换，必须保留完整win-unpacked资源，不单独复制EXE。测试程序均已退出，没有新增常驻服务。
+- 限制与复测条件：公网模型、其他安装目录、GitHub发布未在本轮范围。当前授权需求无未完成验证项；仅当代码、配置、入口、环境或验收条件变化时定向复测。1.3.56旧结果不作为本轮新增功能通过依据。
+
+## 1.3.56 本地 EXE 打包与快捷启动（已完成）
+
+- 测试对象：本地包版本 `1.3.56`；Windows `10.0.26200` x64、Node.js `v24.17.0`、Electron `45.0.0`。实际目标为 `release/Scodex-Workbench-1.3.56/win-unpacked/Scodex工作台.exe`，应用入口为该 EXE。
+- 构建验证：`npm run build` 成功，Vite `7.3.7` 处理 1835 个模块；Electron Builder 本地参数构建成功。输出目录内 EXE 为 249798144 字节、`resources/app.asar` 为 150310264 字节；应用版本 `1.3.56`，ICU、Chrome PAK、V8 snapshot、locale 和项目工具 ZIP 齐备。
+- 实际程序验收：在隔离 profile、临时 `SCODEX_HOME` 和本地 fixture 下执行 `node tests/browser-cdp-ui.cjs`，环境变量设置 `SCODEX_CDP_SCOPE=restart-only`、`SCODEX_CDP_VERSION=1.3.56`、`SCODEX_CDP_EXE=<上述候选 EXE>`、`SCODEX_CDP_OUTPUT=release/Scodex-Workbench-1.3.56/verification/restart-only`。预期设置保存且进程重启后设置保持；实际 `settings-toggle-and-persistence`、`restart-keeps-cdp-settings` 均通过，报告 `release/Scodex-Workbench-1.3.56/verification/restart-only/cdp-ui-verification.json`，截图 `cdp-settings.png`。进程已退出，临时 profile 已删除。
+- 快捷方式验收：根目录 `EXE快捷启动.lnk` 目标仍为候选 `Scodex工作台.exe`，工作目录仍为其 `win-unpacked` 目录；图标使用用户提供图片转换的 `EXE快捷启动.ico`。原 `快捷启动.lnk`、`打开软件先点击环境检查.lnk` 均保留。
+- 失败记录：`tests/smoke.cjs` 的 `full` 因临时 profile 无 DPAPI 凭据而未满足旧断言；`workbench-changes` 因当前旧历史导入视图缺少 fixture 预期的“新建对话”按钮而超时。两次均启动并加载候选 renderer，未访问真实凭据或发起模型请求，候选进程及临时目录已清理；这两项不是通过结果，也不替代最终 `restart-only` 通过记录。
+- 产物 SHA-256：EXE `EA8C2E1415774B502ECDEFECB5B5485722ED1C31756758D3920E2265DE7AC87E`；ASAR `614E218947EBDC9960437D0F65E829DD951A136CF8F1444DC2A57E9A054DFB05`。
+- 未覆盖范围：完整业务 UI、模型服务公网连通性和用户凭据链路均未测试；本地候选未替换到其他正式安装目录，未发布 GitHub。未改业务源码。
+
+### 快捷方式图标更新
+
+| 范围 | 操作与实际结果 | 状态及证据 |
+| --- | --- | --- |
+| 图标资源 | 原图 `EXE快捷启动.png` 与用户附件 SHA-256 一致；生成透明背景 `EXE快捷启动.ico`，包含 16、24、32、48px 四个 PNG 图层；系统图标解析器成功读取 | 通过；ICO SHA-256 `AEC30E1BF47EC9244B7C8688042FADE586CA15D0502C777F5C30D989A31D92E4` |
+| 快捷方式 | COM 回读确认图标路径为 `EXE快捷启动.ico,0`，目标 EXE、工作目录未变，原有两个快捷方式仍存在 | 通过；快捷方式 SHA-256 `99917755204FBDB721C4885118E421063DF7C87B3CC3309F660EEB10D12E6E1D` |
+
+## 本机启动修复验收（2026-11-09，已完成）
+
+- 对象：本目录源码 `1.3.55`、Electron `45.0.0`；入口 `快捷启动.lnk` 或 `打开软件先点击环境检查.lnk` → `start-scodex.cmd` → `npm run dev`；Windows、Node.js `v24.17.0`、npm `11.13.0`。
+- 本轮范围：实际快捷入口启动、Electron 资源自愈、隔离 profile 下的真实工作台设置保存，以及环境检查快捷方式重命名后的配置回读；不发送公网模型请求，不复测无关业务。
+
+| 场景 | 操作与实际结果 | 状态及证据 |
+| --- | --- | --- |
+| 启动失败原因 | `debug.log` 为 Electron `Invalid file descriptor to ICU data received`；Electron dist 与 `path.txt` 缺失。Release EXE 不含便携资源 | 已确认；使用源码启动脚本 |
+| Electron 运行文件 | 镜像取得 158223852 字节归档；官方 SHA-256 `ae53887a23bb640369c93dbd38c408a2af5c0deb86f2fa76c6c244cb444b7f47` 匹配；版本命令返回 `v45.0.0` | 通过；完整运行资源已安装 |
+| 快捷方式启动 | 修正 ShellExecute 遗失的 `D:/RJBC` Node/npm PATH 与 Electron 独立补装后，经 `快捷启动.lnk` 启动 `1.3.55` | 通过；最终保留应用 PID `32568`、标题“Scodex 工作台”，响应正常 |
+| 环境检查快捷方式重命名 | 将原 `程序环境检查缺少就自动安装.lnk` 重命名为 `打开软件先点击环境检查.lnk`；WScript.Shell 回读确认目标 `C:\Windows\System32\cmd.exe`、参数 `/d /c ""D:\cx\.Scodex\start-scodex.cmd""`、工作目录 `D:\cx\.Scodex` 和图标 `build/icon.ico` 均保持不变，旧路径不存在 | 配置通过；未重新启动程序。依赖及 Electron 自动补装行为复用此前实际启动验收；若 Node.js/npm 缺失，现有脚本会提示人工安装 |
+| 隔离实际 UI | Electron `45.0.0` renderer、版本 `1.3.55`、系统临时 profile 和空 `historyError` 实际核对；设置页通过真实鼠标事件选择外观、检查设置文件并刷新后确认仍保存 | 通过；实际 Vite/Electron；[报告](startup-verification.json)，3/3 检查通过 |
+| 最终常驻进程 | 持续会话启动源码命令，Vite PID `31148` 监听 `127.0.0.1:4178`；Electron PID `32568` 正常显示工作台 | 就绪；会话 `71035`，Ctrl+C 停止 |
+
+- 增量审查：仅审查新增启动脚本全部 52 行；涵盖 PATH、Node 主版本、npm 依赖、Electron 校验安装、npm 启动及错误分支；未发现高置信度问题。未修改业务源码。
+- 临时 profile 已清理；递归删除 `.startup-check` 被策略拒绝且未重试，已移至 `../手动删除/startup-check-20261109/`，这是唯一待手动处理项，不影响应用运行。
+- 本轮未读取、打印或修改真实凭据，也未产生公网模型请求；下载的 Electron EXE 不是可独立运行便携包，应使用源码快捷方式。
+
+## 本地下载验收检查点（2026-11-09，文件验收已完成）
+
+- 对象：`D:/cx/.Scodex`；源码提交 `b18db09f7f8a66f3bae7169d6501a2423a9cb74a`，应用包版本 `1.3.55`；入口为根目录 `快捷启动.lnk` → `start-scodex.cmd` → `npm run dev`。
+- 环境与前置条件：Windows PowerShell、CMD、Node.js `v24.17.0`、npm `11.13.0`；本轮为下载及入口准备，没有启动应用、执行 npm 安装或生成用户配置。
+
+| 验证范围 | 操作、预期与实际结果 | 状态与证据 |
+| --- | --- | --- |
+| 最新版本 | GitHub `branches/main` 和 `releases/latest` 返回上述提交及 `v1.3.55`，与下载目标一致 | 通过；[源码提交](https://github.com/song123-jian/-0/commit/b18db09f7f8a66f3bae7169d6501a2423a9cb74a)、[发布页](https://github.com/song123-jian/-0/releases/tag/v1.3.55) |
+| 源码文件 | 对固定提交树清单的每个文件计算 `SHA1("blob " + 字节数 + NUL + 文件原始字节)`；343 个原树文件中，341 个未修改文件全部匹配，两份交接文档保留上游正文并补充本地记录 | 通过；完整原树 54509311 字节，下载核对过程退出码 0；[源码元数据](../package.json) 为 `1.3.55` |
+| EXE 完整性 | 24 个续传分段 HTTP 206 和长度均正确；合并后用 `Get-FileHash -Algorithm SHA256` 核对，大小 249798144 字节且摘要与官方一致 | 通过；[正式下载文件](../Scodex-Workbench-1.3.55-x64.exe)，SHA-256 `7322246bf4839585af09ab6518145bd26ce9a92dc74df9a8a37c30c512889ac9` |
+| 快捷入口与环境 | WScript.Shell 保存后重新读取，目标 `C:/Windows/System32/cmd.exe`，参数 `/d /c ""D:\cx\.Scodex\start-scodex.cmd""`，工作目录 `D:/cx/.Scodex`，图标存在；CMD 实际可找到 Node 和 npm，版本符合要求 | 通过；[快捷方式](../快捷启动.lnk) 和 [启动脚本](../start-scodex.cmd) |
+| 新增脚本增量审查 | 相对不存在该文件的基线，检查全部新增启动脚本：路径引用、Node 24 检查、首次 `npm ci`、安装失败与启动失败处理、标签和退出状态；ASCII 文本、UTF-8 无 BOM、CRLF 完整 | 未发现高置信度问题；脚本 SHA-256 `d6fec48b82d93361912523a87c39609b77d06090a0f9a9415ea7e730cdf0ba46` |
+| 应用实际运行 | 未执行快捷启动、首次依赖安装、界面或模型服务测试；本次目标是下载文件和准备入口 | 尚未完成验证；未将入口读回或上游历史结果作为应用运行通过证据 |
+
+- 运行限制：源码启动使用仓库原有开发命令，预期 Vite 地址 `http://127.0.0.1:4178`；本轮没有启动该服务，没有可报告的就绪状态或常驻进程。首次使用需联网执行依赖安装，不能据本轮结果保证该后续网络链路。
+- 发布附件说明：下载 EXE 的 PE 资源版本是 Electron `45.0.0`，无便携包覆盖区，需要配套资源；快捷方式没有指向该单文件。
+- 失败证据与恢复：原始源码 ZIP 下载在 600 秒时退出码 28、仅收到 29406787 字节；Git 浅克隆无有效 pack，任务进程已终止并回收；raw Node ZIP 的 curl 请求退出码 56、HTTP 000，PowerShell 替代范围请求返回正确 HTTP 206。长下载命令曾在执行前被自动审批拒绝，改用限定当前目录、可检查的本地脚本完成下载；没有将失败路径记为通过。
+- 旧临时文件记录：此前下载交接记载 31 项已移动，但 `清理清单.json` 在当前目录不存在，故无法复核旧条目的现状；本轮未修改旧文件。当前本轮临时目录的待手动处理状态见本节上方。
+- 复用与后续：本轮源码摘要、EXE 摘要和入口配置结果继续有效；仅在对应文件或入口配置变化时定向重检。实际应用运行如需验收，应在首次依赖准备完成后通过真实入口单独验证。以下为上游原环境记录，不代表本机执行结果。
+
 <!-- formal-build-1.3.55:start -->
 ## 当前增量验证：1.3.55 模型三完成态文案、正式 UI 与入口（已完成）
 
@@ -128,7 +357,7 @@
 
 <!-- context-compression-20261108:end -->
 
-## 当前测试对象
+## 上游测试对象（原环境历史记录）
 
 - 源码：`E:/GDP/Scodex/workbench`，当前版本 `1.3.55`。
 - 正式入口：`E:/GDP/Scodex/App/Scodex工作台.exe`，包内版本1.3.55。
