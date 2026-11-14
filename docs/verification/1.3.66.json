@@ -1,11 +1,11 @@
 {
-  "status": "local-delivery-verified-remote-publication-pending",
+  "status": "delivery-and-publication-verified-with-documented-baseline-test-limitation",
   "version": "1.3.66",
   "previousVersion": "1.3.65",
   "versionMapping": "Existing SemVer patch increment; one delivery target per implementation round",
   "repository": "https://github.com/song123-jian/-0",
-  "sourceUpload": "pending",
-  "programPublication": "pending",
+  "sourceUpload": "uploaded-and-remotely-verified",
+  "programPublication": "published-and-remotely-verified",
   "scope": [
     "Saved automatic handoff enable switch and three model capability levels",
     "Two same-class actual tool failures or explicit assistance tool select configured stronger model; return to mode one for actual refinement and continuation",
@@ -239,5 +239,93 @@
     "Learning memory is explicit persisted context, not model training",
     "Public-provider semantics/quality/cost and complete integration compatibility not tested"
   ],
-  "next": "Upload explicit source increment and complete ZIP with two manifests, verify remote source/ref/tag/assets and anonymous CDN availability"
+  "sourceCommit": "0a36514bf41cd8d60b7b45016e16cc2dfcfa5646",
+  "sourceFiles": 25,
+  "sourceRemoteVerification": "GET main ref and commit tree/parent match exact local objects",
+  "publication": {
+    "status": "passed",
+    "releaseId": 445199864,
+    "url": "https://github.com/song123-jian/-0/releases/tag/v1.3.66",
+    "tag": "v1.3.66",
+    "draft": false,
+    "sourceRef": "0a36514bf41cd8d60b7b45016e16cc2dfcfa5646",
+    "assets": [
+      {
+        "id": 747074947,
+        "name": "Scodex-Workbench-1.3.66-files.json",
+        "size": 19378,
+        "digest": "sha256:d0853c48e7c172a950e53585684fcbae8fc19c9621ac95e2da58d1a2bfa9d2e2",
+        "state": "uploaded",
+        "url": "https://github.com/song123-jian/-0/releases/download/v1.3.66/Scodex-Workbench-1.3.66-files.json"
+      },
+      {
+        "id": 747072813,
+        "name": "Scodex-Workbench-1.3.66-win-x64.zip",
+        "size": 252753945,
+        "digest": "sha256:9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6",
+        "state": "uploaded",
+        "url": "https://github.com/song123-jian/-0/releases/download/v1.3.66/Scodex-Workbench-1.3.66-win-x64.zip"
+      },
+      {
+        "id": 747075008,
+        "name": "SHA256SUMS.txt",
+        "size": 203,
+        "digest": "sha256:b2b6f3ed50db61c4c1e58f4e326701666f30553a9a04068d4c399cc34ace8d31",
+        "state": "uploaded",
+        "url": "https://github.com/song123-jian/-0/releases/download/v1.3.66/SHA256SUMS.txt"
+      }
+    ],
+    "note": "URLs read from published release; original upload receipt retains temporary draft URLs as historical evidence."
+  },
+  "publicDownload": {
+    "anonymousApiCdn": {
+      "status": "passed",
+      "route": "Anonymous GitHub release asset API -> public CDN",
+      "scope": "ZIP HEAD and two manifest GETs through anonymous API and public CDN; direct github.com route checked separately",
+      "assets": [
+        {
+          "name": "Scodex-Workbench-1.3.66-win-x64.zip",
+          "status": "passed",
+          "apiStatus": 302,
+          "cdnStatus": 200,
+          "method": "HEAD",
+          "bytes": 252753945,
+          "expectedSha256": "9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6"
+        },
+        {
+          "name": "Scodex-Workbench-1.3.66-files.json",
+          "status": "passed",
+          "apiStatus": 302,
+          "cdnStatus": 200,
+          "method": "GET",
+          "bytes": 19378,
+          "expectedSha256": "d0853c48e7c172a950e53585684fcbae8fc19c9621ac95e2da58d1a2bfa9d2e2",
+          "sha256": "d0853c48e7c172a950e53585684fcbae8fc19c9621ac95e2da58d1a2bfa9d2e2"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "status": "passed",
+          "apiStatus": 302,
+          "cdnStatus": 200,
+          "method": "GET",
+          "bytes": 203,
+          "expectedSha256": "b2b6f3ed50db61c4c1e58f4e326701666f30553a9a04068d4c399cc34ace8d31",
+          "sha256": "b2b6f3ed50db61c4c1e58f4e326701666f30553a9a04068d4c399cc34ace8d31"
+        }
+      ],
+      "startedAt": "2026-11-14T10:09:11.823Z",
+      "finishedAt": "2026-11-14T10:09:13.569Z"
+    },
+    "directZipHead": {
+      "status": "passed",
+      "scope": "Direct github.com ZIP download URL, HEAD with redirects only; no full archive redownload",
+      "url": "https://github.com/song123-jian/-0/releases/download/v1.3.66/Scodex-Workbench-1.3.66-win-x64.zip",
+      "httpStatus": 200,
+      "finalHost": "release-assets.githubusercontent.com",
+      "bytes": 252753945
+    },
+    "fullArchiveRedownload": false
+  },
+  "finalDocumentation": "Final status accompanies this documentation commit; exact documentation SHA and remote GET ref/tree/parent verification are recorded in local release/auto-handoff-1.3.66/documentation-api-upload.json",
+  "refactoringAssessment": "Lightweight review of current changes found no evidence-backed, in-scope restructuring or additional candidate meeting the next-step threshold."
 }

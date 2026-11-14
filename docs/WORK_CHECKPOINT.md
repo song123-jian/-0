@@ -1,17 +1,17 @@
-## 当前检查点：1.3.66 自动接力与指令/技能执行对齐（最终入口验收与上传中）
+## 当前检查点：1.3.66 自动接力与AGENTS/Skill执行（本地及发布已验证，最终文档同步）
 
-- 授权/验收：程序落地、最终本地入口、源码和完整程序上传既定仓库；最新上传授权覆盖此前等待通知。目标1.3.65→1.3.66，沿用SemVer补丁映射，同轮不重复加版本。
-- 核心实现：保存自动开关/三模式等级；连续两次同类实际工具失败或request_model_assistance→已配置更强不同模型→模式一实际核验完善→同任务继续。保留上下文/工具结果，成功操作不重放；手动优先、取消停止；无数字次数上限，同一未解决问题去重。
-- 指令/技能：初始和目录链处理非空AGENTS.override优先/空文件回退、变化阻止执行及副作用前披露；Skill名称/用途/ID初始可见，正文/引用按需读取，脚本先读后经现有run_command执行；显式加密学习记忆重启恢复、作为user资料注入，不是模型训练。
-- 最终产物：release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe；EXE928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956，ASAR5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce；应用/PE1.3.66。8源码/3dist/9资源核验通过。
-- 入口真实状态：根EXE快捷启动.lnk已原子切到final3，SHA b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2；快捷入口真实启动/接力回交/最终视图3/3及清理通过。旧入口备份release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk和1.3.65完整目录保留；delivery.json状态replaced-and-entry-verified。
-- 有效验证：逻辑57/57、失败形状12/12、Skill22/22；指令/工具55项54通过，旧fullAccess缺失.env断言在精确基线同样失败，未弱化断言。实际EXE按范围复用设置重开/600及1280布局、三起始模式/两次独立接力、取消/手动/无候选、外部401/接手鉴权失败、AGENTS/Skill真实读写/规则变化拦截；整轮failed不写整体通过。memory-proof-ui 3/3、skill-script-ui 3/3通过。18文件增量审查/语法/UTF8无BOM通过。
-- 包资产：assets-final3下ZIP252753945字节，SHA9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6，80/80逐流大小/SHA一致。不得上传旧ZIP。所有构建/测试/压缩已结束，UI进程/fixture均清理。
-- 证据/基线：统一release/auto-handoff-1.3.66，baseline.json及baseline/保存原字节；build-verification-final3.json、incremental-review.json、各UI报告及assets-final3/archive-verification.json。docs/verification/auto-handoff-1.3.66.png已查看。
-- 待办：1本地交付/双交接/能力说明/验收摘要已整理，旧3候选及旧ZIP/两清单因删除被拒移到手动删除/auto-handoff-1.3.66，精确映射cleanup.json；2同步明确增量到release/codex-alignment-1.3.64/source-repo，提交/API非强制上传；4发布v1.3.66 ZIP+两清单，核验资产/标签/API-CDN；5上传最终文档状态并回读。
-- 仓库：song123-jian/-0，隔离克隆干净HEAD6bdb971adfcd83043e8beb4d0ea07bce9eed8c71；1.3.66尚未提交/上传。upload-source.cjs已复制，凭据仅内存。程序上传沿用curl HTTP1.1和stdin认证。
-- 约束/差异：不能承诺未公开Codex100%等价；保留祖先规则策略，未导入project_doc_fallback_filenames/官方云服务；公网模型语义和费用未验证。官方证据official-comparison.json。阶段前定向读取双交接、写前哈希/UTF8无BOM、不动真实数据/凭据或用户进程、不重复全测/历史扫描。
-- 使用Skill复用：requirement-understanding95、code-write-review94、openai-docs95；无Agent。后续从本节恢复，不重扫项目。
+- 目标/授权：程序实际落地、更新本地入口并上传源码/完整程序。1.3.65→1.3.66沿用SemVer补丁映射，同轮重建不重复加版本。
+- 完成：开关/三模式等级持久化；连续两次同类实际工具失败或专用求助→已配置更强不同模型→模式一实际核验完善→同任务继续。保留上下文/工具结果，不重放成功操作；手动优先、取消停止、同问题去重，无数字次数上限。
+- 完成：AGENTS非空override优先/空文件回退、目录披露和变化阻止执行；Skill元信息初始可见、正文/引用按需读取、脚本先读后经现有权限真实执行；显式加密记忆重启恢复，作为user资料注入，不是模型训练。
+- 正式程序：release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe，应用/PE1.3.66；EXE928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956，ASAR5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce。8源码/3dist/9资源一致。
+- 入口/回滚：根EXE快捷启动.lnk原子指向final3，SHA b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2；真实快捷入口3/3通过，delivery.json为replaced-and-entry-verified。旧lnk备份及1.3.65完整目录保留，复制release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk回根可回滚。
+- 有效验证：逻辑57/57、失败形状12/12、Skill22/22；指令/工具55中54通过，1项fullAccess缺失.env旧断言在精确基线也ENOENT失败，未弱化断言。实际EXE按场景复用设置/三起始模式/连续失败/独立问题/取消/手动/无候选/401/鉴权/规则及Skill读写/变化阻写；failed整轮不标通过。memory-proof-ui、skill-script-ui、shortcut-ui各3/3。18文件增量审查/语法/UTF8无BOM通过。
+- 程序分发：https://github.com/song123-jian/-0/releases/tag/v1.3.66，Release445199864，draft=false；3资产uploaded且服务器size/digest一致。只使用assets-final3 ZIP252753945字节/SHA9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6，80/80逐流大小/SHA通过。匿名API→CDN ZIP HEAD及两清单GET通过；github.com直接ZIP HEAD200/长度一致。无需再上传或重下载。
+- 源码：25文件提交0a36514bf41cd8d60b7b45016e16cc2dfcfa5646已非强制上传main，blob/tree/commit SHA和GET ref/tree/parent一致；v1.3.66标签绑定该提交。隔离克隆release/codex-alignment-1.3.64/source-repo，原基线6bdb971。最终状态文档随本次documentation提交同步，提交/远端回读由本地documentation-api-upload.json记录。
+- 文档/证据：docs/HANDOFF.md、TEST_HANDOFF.md、README、CODEX_ALIGNMENT、verification/1.3.66.json及最终截图已语义融合；统一证据目录release/auto-handoff-1.3.66，基线baseline.json、审查incremental-review.json、构建build-verification-final3.json、delivery.json、各UI/上传/下载报告。最终文档回读及UTF8无BOM/链接验证随同步执行。
+- 清理：所有有限构建/测试/压缩/发布/下载检查均结束；测试进程/fixture均清理。自动审批拒绝删除3旧候选及旧ZIP/两清单后未重试，已移到手动删除/auto-handoff-1.3.66，原路径不存在；cleanup.json精确映射，待人工删除且不影响运行。正式包、回滚和证据保留。
+- 限制/评估：不承诺未公开Codex100%等价；保留祖先规则及完整规则正文策略，未导入project_doc_fallback_filenames/官方云服务；公网模型语义/费用未验。官方依据official-comparison.json。基于现有差异完成轻量重构评估，无需要追加或自动重构的有证据候选。
+- 收尾：最终文档上传并核对远端回读后即可答复；不重跑有效程序测试、重建或重复发布。Skill复用requirement-understanding95、code-write-review94、openai-docs95；无Agent。保持阶段前读双交接、写前哈希/UTF8无BOM，不动真实数据/凭据/用户进程。
 
 ## 已完成检查点：1.3.65 程序上传（已公开；CDN核验及文档同步通过）
 

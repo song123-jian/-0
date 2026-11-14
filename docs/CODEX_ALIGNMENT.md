@@ -2,7 +2,7 @@
 
 ## 范围与结论
 
-1.3.66已将三模式自动接力、AGENTS目录约束及Skill资料/脚本执行接入实际运行链；候选及最终根快捷入口已验，源码和完整程序正在上传。[验收摘要](verification/1.3.66.json)、[最终接力视图](verification/auto-handoff-1.3.66.png)。
+1.3.66已将三模式自动接力、AGENTS目录约束及Skill资料/脚本执行接入实际运行链；候选及最终根快捷入口已验，25文件源码和[完整程序v1.3.66](https://github.com/song123-jian/-0/releases/tag/v1.3.66)已上传并核验。[验收摘要](verification/1.3.66.json)、[最终接力视图](verification/auto-handoff-1.3.66.png)。
 
 | 本轮能力 | 程序实际行为 | 有效验证边界 |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # 测试交接
 
-## 1.3.66 三模式接力及AGENTS/Skill（本地交付验证通过，远端发布待验）
+## 1.3.66 三模式接力及AGENTS/Skill（本地交付及远端发布已验证）
 
 - 实际对象：D:/cx/.Scodex/release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe，应用/PE1.3.66、ProductVersion1.3.66.0；EXE928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956，ASAR5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce。最终入口D:/cx/.Scodex/EXE快捷启动.lnk已指向该包，该快捷入口已实际验收3/3通过，文件哈希与验收包一致。
 - 环境/替代范围：Windows10.0.26200 x64、Node24.17.0、Electron45；隔离profile和工作区、loopback模型HTTP。实际EXE、renderer/UI/IPC、磁盘文件和命令均真实执行；仅模型响应/凭据由受控服务替代，公网语义质量/连接/费用未验证。
@@ -18,12 +18,14 @@
 | 指令/工具辅助55项 | 54通过，1既有fullAccess缺失.env断言在精确旧源码同样ENOENT失败 | 既有失败保留；instruction-skill-tests.json、reproduce-baseline.cjs |
 | 最终构建和完整ZIP | 8源码/3dist/9运行资源一致，80/80 ZIP路径/大小/SHA逐流一致 | 通过；build-verification-final3.json、assets-final3/archive-verification.json |
 | 根快捷入口实际启动及接力 | 实际快捷方式启动后身份/接手及模式一完善/最终状态3/3，进程退出且fixture清理 | 通过；shortcut-ui/auto-handoff-ui.json |
-| 源码与Release远端状态/匿名下载 | 尚未上传1.3.66 | 尚未完成验证；待上传后只读核验 |
+| 源码与Release远端状态 | 25文件逐blob/tree/commit SHA一致、非强制main和GET ref/tree/parent回读通过；Release445199864已公开，标签与源码0a36514一致，3资产大小/digest正确 | 通过；source-api-upload.json、release-publication.json、published-assets-readback.json |
+| 匿名公开下载 | API302→CDN，ZIP HEAD200/252753945字节；两清单GET200且字节/SHA一致；直接github.com ZIP HEAD200并跳转公共CDN | 通过；public-api-download-verification.json、direct-download-verification.json；不重复全ZIP下载 |
 
 - 失败恢复：首轮驱动以无pending字段判断持久化，改为terminal.text；第二轮取消合成标签被过滤，改证据；外部故障轮发现产品error||output漏看401，改合并字段并补12项/重打final2；自动预检异常增加手动serial优先；记忆夹具误查system且独立场景固定期待开关true，改user资料及重启前后实际值比较；ZIP校验规范化反斜杠。对应原报告保留failed，不减断言或将模拟当实际集成。
 - 最终入口已验命令：设置SCODEX_HANDOFF_SHORTCUT为根lnk、SCODEX_HANDOFF_OUTPUT=release/auto-handoff-1.3.66/shortcut-ui、SCODEX_HANDOFF_SCOPE=shortcut，运行node tests/auto-handoff-ui.cjs。预期与实际均为快捷方式启动、身份一致、接力完成/回模式一、零重复成功操作；3/3通过，本轮fixture/进程清理通过。复用其余未变通过结果，不重跑全测。
 - 交付/回滚：1.3.65→1.3.66沿用SemVer映射；根入口SHA b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2。旧lnk备份release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk（SHA1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103）和1.3.65完整目录保留，恢复备份即可回滚；delivery.json为replaced-and-entry-verified。
 - 资产：只用assets-final3的Scodex-Workbench-1.3.66-win-x64.zip、Scodex-Workbench-1.3.66-files.json、SHA256SUMS.txt；ZIP252753945字节/SHA9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6。程序必须完整解压运行，不单独复制EXE。
+- 分发环境/命令：GitHub公开仓库song123-jian/-0；使用现有git凭据仅在内存与curl stdin上传，不落盘令牌。node release/auto-handoff-1.3.66/publish-program.cjs上传三资产、核对服务器size/digest后发布；node release/auto-handoff-1.3.66/verify-public-download.cjs核验匿名API/CDN，独立HEAD核验直接ZIP入口。均已退出，无待等待有限任务。最终文档随当前提交同步，远端ref/tree/parent结果存本地documentation-api-upload.json。
 - 清理/限制：已有有限任务全部结束，UI进程/隔离fixture已清理；旧中间包的删除被自动审批拒绝，未重试；3旧候选及旧ZIP/两清单已移至手动删除/auto-handoff-1.3.66，原路径不存在、待人工删除，精确映射见cleanup.json；正式包/回滚/证据保留。AGENTS祖先策略、fallback配置/官方云能力及公网模型质量不作100%等价结论；学习是显式持久记忆，不是模型训练。最终截图仅证明当前设备/页面/视口/合成数据状态下无可见错误。
 
 ## 1.3.65 消息文件直达（已验证，源码已上传）

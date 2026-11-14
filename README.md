@@ -12,13 +12,13 @@ See the [1.3.66 acceptance summary](docs/verification/1.3.66.json), [final hando
 
 ## Download
 
-The verified complete Windows x64 package is prepared for the [Scodex Workbench 1.3.66 release](https://github.com/song123-jian/-0/releases/tag/v1.3.66); publication and remote checks are in progress. The prior 1.3.65 release remains available.
+The complete Windows x64 application is available from the [Scodex Workbench 1.3.66 release](https://github.com/song123-jian/-0/releases/tag/v1.3.66), or [download the ZIP directly](https://github.com/song123-jian/-0/releases/download/v1.3.66/Scodex-Workbench-1.3.66-win-x64.zip). Source and release assets have been uploaded and remotely verified.
 
 Extract the entire ZIP into one folder and run `Scodex工作台.exe`. Keep `resources`, `locales`, and the other files beside the EXE. The package includes all 80 files from the verified 1.3.66 application; earlier releases remain available for rollback.
 
 ZIP SHA-256: `9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6`
 
-The release also includes `SHA256SUMS.txt` and `Scodex-Workbench-1.3.66-files.json` for archive and per-file verification. Program files are published as Release assets; source remains on `main`.
+The release also includes `SHA256SUMS.txt` and `Scodex-Workbench-1.3.66-files.json` for archive and per-file verification. Program files are published as Release assets; source remains on `main`. The `v1.3.66` tag identifies source commit `0a36514bf41cd8d60b7b45016e16cc2dfcfa5646`; later documentation updates retain that program version. Anonymous API/CDN checks passed, the direct ZIP URL returned HTTP 200 with the expected length, and both manifests matched byte-for-byte.
 
 On a new computer, model settings start blank. Saved settings remain associated with their computer, and transferring a marked profile does not load the original computer's credentials or chats.
 
