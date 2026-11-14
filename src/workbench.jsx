@@ -461,6 +461,12 @@ function App() {
         setLiveRequests([...activeRequestsRef.current.values()]);
       }
       updateRequestMessages(items => items.map((item) => item.id === event.requestId ? { ...item, phase: event.type === 'paused' ? 'paused' : activeRequestsRef.current.get(event.requestId)?.pausedPhase || item.phase } : item));
+    } else if (event.type === 'auto-handoff-state') {
+      request.handoffState = event.phase;
+      request.handoffDetail = event.detail;
+      setLiveRequests([...activeRequestsRef.current.values()]);
+      if (event.restoreMode && event.restoreModel) updateChat(chat => ({ modelMode: event.restoreMode, model: event.restoreModel,
+        modelSelections: { ...chat.modelSelections, [event.restoreMode]: event.restoreModel } }), request.conversationId);
     } else if (event.type === 'executor-switch-queued') {
       request.pendingModelMode = event.modelMode;
       request.pendingSwitchSerial = event.serial;
@@ -470,6 +476,8 @@ function App() {
       if (event.serial >= (request.pendingSwitchSerial || 0)) request.pendingModelMode = '';
       setLiveRequests([...activeRequestsRef.current.values()]);
       updateRequestMessages(items => items.map(item => item.id === event.requestId ? { ...item, modelMode: event.modelMode, model: event.model } : item));
+      if (event.automatic) updateChat(chat => ({ modelMode: event.modelMode, model: event.model,
+        modelSelections: { ...chat.modelSelections, ...(chat.model ? { [chatModelMode(chat.modelMode)]: chat.model } : {}), [event.modelMode]: event.model } }), request.conversationId);
       showNotice((MODEL_MODES.find(mode => mode.id === event.modelMode)?.label || '所选模式') + '已接续执行');
     } else if (event.type === 'executor-switch-expired') {
       request.pendingModelMode = '';
@@ -2132,6 +2140,7 @@ function App() {
             <div className="composer-area">
               <ConversationContext messages={messages} disabled={sending || storageBusy || workflowBusy || attachmentLoading}
                 onCompact={() => sendMessage('/compact').catch(error => showNotice(readableError(error)))} />
+              {currentRequest?.handoffDetail && <p className="composer-handoff-status" role="status" data-state={currentRequest.handoffState}>{currentRequest.handoffDetail}</p>}
               <div className="composer-box">
                 <ConversationQueue key={currentChat?.id} items={currentChat?.queuedMessages} paused={currentChat?.queuePaused} running={sending}
                   disabled={storageBusy || workflowBusy || attachmentLoading}

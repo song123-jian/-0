@@ -16,6 +16,12 @@ export function ModelTeamSettings({ form, connection, update, apiKey, onApiKeyCh
     update({ advisorModels: [...new Set([...models, id])] }); setManual(''); setManualOpen(false); setError('');
   };
   return <>
+    {section !== 'advisor' && <section className="model-team-roles" aria-label="模型自动接力">
+      <h2>自动接力</h2>
+      <div className="model-field"><label><input id="model-auto-handoff-enabled" type="checkbox" checked={Boolean(form.autoHandoffEnabled)} onChange={event => update({ autoHandoffEnabled: event.target.checked })} />能力不足时自动接力</label><p className="model-field-hint">连续同类工具失败或模型明确求助时，交给较高等级模型处理；接手答复返回后交回模式一核验、完善，再继续原任务。开启后会按需调用其他已配置模型。</p></div>
+      <div className="model-name-row">{[['main', '模式一'], ['subagent', '模式二'], ['advisor', '模式三']].map(([mode, label]) => <div className="model-field" key={mode}><label htmlFor={'model-capability-' + mode}>{label}能力等级</label><select id={'model-capability-' + mode} value={form.modelCapabilityLevels?.[mode] || 0} onChange={event => update({ modelCapabilityLevels: { ...form.modelCapabilityLevels, [mode]: Number(event.target.value) } })}><option value="0">未分级</option><option value="1">1 · 基础</option><option value="2">2 · 较强</option><option value="3">3 · 最强</option></select></div>)}</div>
+      <p className="model-field-hint">依据实际服务设置等级，程序不按模型名称猜测强弱。仅接力到已配置、等级更高的不同模型；手动切换优先，不限制接力次数，同一未解决问题去重。聊天、实际工具结果和已完成操作保留。</p>
+    </section>}
     {section !== 'advisor' && <section className="model-team-roles" aria-label="模型职责分工">
       <h2>模型分工</h2>
       <dl><div><dt>所选模式</dt><dd>整合方案、修改文件、执行命令、验证和交付；运行中切换模式可接续同一任务。</dd></div><div><dt>三个模型</dt><dd>独立提案、交叉评议；其余两个模型监督各自片段，连续偏移时可接手纠偏。</dd></div><div><dt>访问策略</dt><dd>三者使用同一当前权限策略；相同的运行中子任务合并，不设固定并发上限。</dd></div></dl>

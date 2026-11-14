@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { runAgentCommand } = require('./agent-command.cjs');
 const { withFileCommit } = require('./file-commit.cjs');
-const { readInstructionFile, MAX_TOTAL_BYTES } = require('./instruction-context.cjs');
+const { readInstructionFile, readDirectoryInstruction } = require('./instruction-context.cjs');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const IGNORED = new Set(['.git', 'node_modules', 'dist', 'release', 'target', '.next', '.cache', '__pycache__']);
@@ -79,13 +79,11 @@ function createAgentTools({ workspaceRoot, readOnly = false, fullAccess = false,
     let directory = path.dirname(target); const dirs = [];
     const boundary = inside(root, target) ? root : fullAccess ? path.parse(target).root : root;
     while (inside(boundary, directory)) { dirs.unshift(directory); if (directory === boundary) break; directory = path.dirname(directory); }
-    let bytes = 0;
     for (const dir of dirs) {
-      const file = path.join(dir, 'AGENTS.md');
-      if (file === target) continue;
       try {
-        const item = await resolve(file, false, true); const value = await readInstructionFile(item.target); bytes += value.bytes;
-        if (bytes > MAX_TOTAL_BYTES) throw new Error('沿途 AGENTS.md 超过 256 KiB，未截断规则；操作已停止。');
+        const value = await readDirectoryInstruction(dir);
+        if (!value || ruleKey(value.path) === ruleKey(target)) continue;
+        const item = await resolve(value.path, false, true);
         if (deliveredRules.get(ruleKey(item.target)) !== value.hash) result.push({ path: item.relative, content: value.content, hash: value.hash, truncated: false });
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }

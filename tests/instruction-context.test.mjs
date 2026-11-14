@@ -46,3 +46,24 @@ test('assigned-file agents inherit only applicable rules and keep other file rea
  const f=await fixture(t);await fs.writeFile(path.join(f.root,'AGENTS.md'),'INHERITED');await fs.writeFile(path.join(f.root,'assigned.txt'),'allowed');await fs.writeFile(path.join(f.root,'other.txt'),'private');
  const tools=createAgentTools({workspaceRoot:f.root,allowedPaths:['assigned.txt']});const read=await tools.execute('read_file',{path:'assigned.txt'});assert.equal(read.instructions[0].content,'INHERITED');await assert.rejects(tools.execute('read_file',{path:'other.txt'}),/分配范围/);
 });
+
+test('non-empty overrides shadow ordinary guidance at personal and project scopes',async t=>{
+ const f=await fixture(t);
+ for(const dir of [f.global,f.root]){await fs.writeFile(path.join(dir,'AGENTS.md'),'SHADOWED');await fs.writeFile(path.join(dir,'AGENTS.override.md'),'OVERRIDE-'+path.basename(dir));}
+ const c=await createInstructionContext({workspaceRoot:f.root,globalRoots:[f.global]});
+ assert.deepEqual(c.entries.map(e=>path.basename(e.path)),['AGENTS.override.md','AGENTS.override.md']);assert.ok(!c.content.includes('SHADOWED'));await c.assertCurrent();
+ await fs.writeFile(path.join(f.root,'AGENTS.override.md'),'CHANGED');await assert.rejects(c.assertCurrent(),/已变化/);
+});
+test('empty override falls back and appearance of a new override invalidates an active request',async t=>{
+ const f=await fixture(t);await fs.writeFile(path.join(f.root,'AGENTS.md'),'BASE');await fs.writeFile(path.join(f.root,'AGENTS.override.md'),'  \n');
+ let c=await createInstructionContext({workspaceRoot:f.root});assert.equal(c.entries.at(-1).content,'BASE');
+ await fs.writeFile(path.join(f.root,'AGENTS.override.md'),'NEW');await assert.rejects(c.assertCurrent(),/已变化/);
+ await fs.unlink(path.join(f.root,'AGENTS.override.md'));c=await createInstructionContext({workspaceRoot:f.root});await fs.writeFile(path.join(f.root,'AGENTS.override.md'),'ADDED');await assert.rejects(c.assertCurrent(),/已变化/);
+});
+test('nested override disclosure blocks effects and repeats only when effective rules change',async t=>{
+ const f=await fixture(t);const dir=path.join(f.root,'nested');await fs.mkdir(dir);await fs.writeFile(path.join(dir,'AGENTS.md'),'IGNORED');await fs.writeFile(path.join(dir,'AGENTS.override.md'),'SCOPED-OVERRIDE');
+ const tools=createAgentTools({workspaceRoot:f.root});const args={path:'nested/new.txt',content:'verified',expected_hash:'new'};
+ const first=await tools.execute('write_file',args);assert.equal(first.requires_instruction_review,true);assert.deepEqual(first.instructions.map(r=>r.content),['SCOPED-OVERRIDE']);await assert.rejects(fs.stat(path.join(dir,'new.txt')),/ENOENT/);
+ assert.equal((await tools.execute('write_file',args)).ok,true);
+ await fs.unlink(path.join(dir,'AGENTS.override.md'));const command=await tools.execute('run_command',{cwd:'nested',command:'Write-Output ok'});assert.equal(command.requires_instruction_review,true);assert.equal(command.instructions[0].content,'IGNORED');
+});

@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { normalizeAutoHandoff } = require('./auto-handoff.cjs');
 
 const EFFORTS = ['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const DEFAULT_CONNECTION = { name: '聚合模组 2', note: '', website: 'https://catbee.online', baseUrl: 'https://catbee.online/v1', addresses: ['https://catbee.online/v1'], models: ['grok-4.7'], model: 'grok-4.7', reasoningEffort: '', toolProtocol: 'auto', contextWindowTokens: 0, subagentReasoningEffort: '', subagentToolProtocol: '', subagentContextWindowTokens: 0, subagentMaxConcurrent: 2, subagentAllowEdits: false, advisorEnabled: false, advisorModel: '', advisorReasoningEffort: '', advisorToolProtocol: '', advisorContextWindowTokens: 0 };
@@ -42,7 +43,7 @@ function normalizeConnection(input = DEFAULT_CONNECTION, { requireModel = true }
   const contextWindowTokens = Number.isSafeInteger(value.contextWindowTokens) && value.contextWindowTokens > 0 ? value.contextWindowTokens : 0;
   const subagentContextWindowTokens = Number.isSafeInteger(value.subagentContextWindowTokens) && value.subagentContextWindowTokens > 0 ? value.subagentContextWindowTokens : 0;
   const advisorContextWindowTokens = Number.isSafeInteger(value.advisorContextWindowTokens) && value.advisorContextWindowTokens > 0 ? value.advisorContextWindowTokens : 0;
-  return { retryLimit, maxOutputTokens, contextWindowTokens, subagentContextWindowTokens, advisorContextWindowTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol, subagentMaxConcurrent, subagentAllowEdits: true, advisorEnabled: value.advisorEnabled === true, advisorBaseUrl, advisorModels, advisorModel, advisorReasoningEffort: value.advisorReasoningEffort, advisorToolProtocol: value.advisorToolProtocol };
+  return { ...normalizeAutoHandoff(value), retryLimit, maxOutputTokens, contextWindowTokens, subagentContextWindowTokens, advisorContextWindowTokens, reportUsage: value.reportUsage === true, imageModel: modelId(value.imageModel), name, note: clean(value.note, 500), website: value.website ? normalizeAddress(value.website, true) : '', baseUrl, addresses, models, model, reasoningEffort: value.reasoningEffort, toolProtocol: value.toolProtocol, subagentBaseUrl, subagentModels, subagentModel, subagentReasoningEffort: value.subagentReasoningEffort, subagentToolProtocol: value.subagentToolProtocol, subagentMaxConcurrent, subagentAllowEdits: true, advisorEnabled: value.advisorEnabled === true, advisorBaseUrl, advisorModels, advisorModel, advisorReasoningEffort: value.advisorReasoningEffort, advisorToolProtocol: value.advisorToolProtocol };
 }
 function createModelConnection(file, { encryption, legacyKey, fetchImpl = fetch, blankOnMissing = false }) {
   let state; let readError = ''; let queue = Promise.resolve();

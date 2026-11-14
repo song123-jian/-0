@@ -2,21 +2,23 @@
 
 A Windows desktop workbench built with Electron, React, and Vite. Start a conversation and complete local tasks without creating a project; projects are optional and the last project can be archived or deleted. It brings project files, coding tasks, Git and pull-request workflows, installed skills, and MCP connections into one local application.
 
-## Current source: 1.3.65
+## Current source: 1.3.66
 
-The source includes named file and folder links with full-path tooltips, the accumulated workflow/session changes, semantic context summaries with `/compact` and restart recovery, and a compact model-connection editor with five categories and independent role saves. Full chat history remains available; stale summaries are rejected after history changes.
+Automatic model handoff now saves an enable switch and capability levels for three modes. Two consecutive same-class tool failures or an explicit assistance request can select a configured stronger model, then return to mode one to verify, refine, and continue the same task. Manual selection takes priority and cancellation stops the relay. Settings default to off/unranked; model names are not used to guess capability.
 
-See the [alignment and limits](docs/CODEX_ALIGNMENT.md), [file-link verification](docs/verification/1.3.65.json), [context-summary verification](docs/verification/1.3.64.json), and [model settings preview](docs/verification/model-connection-1.3.64.png). Validation uses the actual Windows EXE and isolated profiles; model-dependent scenarios use a loopback service. Public-provider summary quality and Codex remote compaction are not certified.
+AGENTS override/scoped-rule checks, progressive Skill discovery and resource reading, authorized Skill script execution, and encrypted learning-memory restart recovery are implemented in the application. Learning memory is saved context, not model training. Existing file links, `/compact`, full history, and model-connection categories remain available.
+
+See the [1.3.66 acceptance summary](docs/verification/1.3.66.json), [final handoff view](docs/verification/auto-handoff-1.3.66.png), [alignment and limits](docs/CODEX_ALIGNMENT.md), [file-link verification](docs/verification/1.3.65.json), [context-summary verification](docs/verification/1.3.64.json), and [model settings preview](docs/verification/model-connection-1.3.64.png). Validation uses the actual Windows EXE and isolated profiles; model-dependent scenarios use a loopback service. Public-provider summary quality and Codex remote compaction are not certified.
 
 ## Download
 
-The complete Windows x64 application is available from the [Scodex Workbench 1.3.65 release](https://github.com/song123-jian/-0/releases/tag/v1.3.65), or [download the ZIP directly](https://github.com/song123-jian/-0/releases/download/v1.3.65/Scodex-Workbench-1.3.65-win-x64.zip).
+The verified complete Windows x64 package is prepared for the [Scodex Workbench 1.3.66 release](https://github.com/song123-jian/-0/releases/tag/v1.3.66); publication and remote checks are in progress. The prior 1.3.65 release remains available.
 
-Extract the entire ZIP into one folder and run `Scodex工作台.exe`. Keep `resources`, `locales`, and the other files beside the EXE. The package includes all 80 files from the verified 1.3.65 application; earlier releases remain available for rollback.
+Extract the entire ZIP into one folder and run `Scodex工作台.exe`. Keep `resources`, `locales`, and the other files beside the EXE. The package includes all 80 files from the verified 1.3.66 application; earlier releases remain available for rollback.
 
-ZIP SHA-256: `727463b54ec0cc45ff801ebfb121b03dce9f755123f287b6ddf3104737572a1a`
+ZIP SHA-256: `9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6`
 
-The release also includes `SHA256SUMS.txt` and `Scodex-Workbench-1.3.65-files.json` for archive and per-file verification. Program files are published as Release assets; source remains on `main`.
+The release also includes `SHA256SUMS.txt` and `Scodex-Workbench-1.3.66-files.json` for archive and per-file verification. Program files are published as Release assets; source remains on `main`.
 
 On a new computer, model settings start blank. Saved settings remain associated with their computer, and transferring a marked profile does not load the original computer's credentials or chats.
 

@@ -1,5 +1,27 @@
 # 项目交接
 
+## 1.3.66 自动接力与指令/技能执行（本地交付验证通过，仓库上传待完成）
+
+- 当前状态：产品实现、最终候选构建与相关实际EXE验收完成；根EXE快捷启动.lnk已原子切至final3，快捷入口实际验收3/3通过，身份/接力回交/最终状态及清理正常。源码及程序未上传。用户已授权本地更新和上传，不再等待通知。
+- 版本/构建：1.3.65→1.3.66，沿用既定SemVer补丁映射；npm run build及本地Electron45目录打包，最终release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe，应用/PE1.3.66。最终8源码/3dist/9资源一致，未变renderer结果复用。
+- 身份：EXE SHA256 928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956；ASAR 5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce；根快捷方式 b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2。
+
+| 需求/范围 | 已实施行为 | 验证与状态 |
+| --- | --- | --- |
+| 接力配置与执行 | 开关/等级可保存，连续两次同类工具失败或专用工具求助，选择已配置更强不同模型，答复后交模式一实际完善 | 候选实际EXE按范围通过；快捷入口3/3通过 |
+| 连续性与边界 | 同聊天/请求/工具结果，成功操作不重放；手动优先、取消停止，无更强候选不升级；无数字次数上限、同问题去重 | 三起始模式、两次独立接力、取消/手动/外部故障/鉴权边界有效 |
+| AGENTS约束 | 非空override优先、空文件回退，规则变化阻止执行，副作用前披露目录规则 | 初始及目录工具实际读写/变化拦截通过 |
+| Skill与学习 | 元信息可见、正文/引用按需读；脚本先读后用现有权限执行；显式加密记忆重启恢复并作为user资料注入 | memory-proof-ui 3/3、skill-script-ui 3/3通过 |
+
+- 本轮修复与审查：合并error/reason/output排除输出中HTTP401等外部失败；最后异步检查及预检异常均尊重新手动serial。18文件增量审查、语法/UTF8无BOM通过，无剩余本轮高置信度缺陷。基线与原字节保存在release/auto-handoff-1.3.66/baseline.json及baseline/；增量范围以incremental-review.json为准。
+- 验证限制：逻辑57/57、追加失败形状12/12、Skill22/22通过；指令/工具55项54通过，既有fullAccess断言期待不存在.env被保护、基线同样ENOENT失败，未修改无关策略或弱化断言。多轮failed报告只复用其有效场景，恢复原因及证据见测试交接。
+- 分发资产：release/auto-handoff-1.3.66/assets-final3包含完整80文件ZIP和两清单；ZIP252753945字节，SHA9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6，80/80逐流路径/大小/SHA一致。旧中间包不得用于上传。
+- 回滚：入口备份release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk，SHA1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103；复制回根可恢复保留的1.3.65完整目录。原子替换保留图标/参数，不改用户数据，不结束用户进程；交付状态见delivery.json。
+- 仓库待办：沿用release/codex-alignment-1.3.64/source-repo，基线6bdb971adfcd83043e8beb4d0ea07bce9eed8c71，上传明确的代码/版本/测试及相关文档；完整程序发布v1.3.66 Release，上传后核对标签提交/资产大小和digest/API-CDN。当前未上传。
+- 清理：全部有限构建/测试/压缩已结束，测试进程及隔离fixture已清理；正式final3、1.3.65回滚、必要证据/基线保留，自动审批拒绝删除后未重试，3个旧候选和旧ZIP/两清单已逐项移至手动删除/auto-handoff-1.3.66，原路径不存在，待人工删除；精确映射及原因见cleanup.json，不影响正式程序。
+- 对标边界：基于公开文档与实际程序证据，不承诺未公开内部实现100%等价；保留现有祖先规则继承策略，未导入project_doc_fallback_filenames或官方云服务。学习记忆不是模型训练，公网模型质量/费用未验证；official-comparison.json记录公开文档来源。
+- 当前待办：源码与Release上传及最终远端核验；本地交付已验证，尚不能标记全部上传完成。[验收摘要](verification/1.3.66.json)、[最终界面](verification/auto-handoff-1.3.66.png)。使用Skill：requirement-understanding、code-write-review、openai-docs；无Agent。
+
 ## 1.3.65 消息文件直达（已完成，源码已上传）
 
 - 程序上传：已验收1.3.65完整80文件目录已发布为[完整Windows ZIP及校验清单](https://github.com/song123-jian/-0/releases/tag/v1.3.65)，Release 445155585，v1.3.65标签指向923348b。3资产uploaded、服务器大小/digest一致；README已提供正式下载地址及完整解压说明。不包含用户配置/聊天；未重建未变程序或覆盖旧Release。[分发摘要](verification/1.3.65-distribution.json)。

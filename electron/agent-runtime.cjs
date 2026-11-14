@@ -140,8 +140,13 @@ async function readCompletion(response, { signal, apiKey, onDelta = () => {}, on
   } finally { signal?.removeEventListener('abort', cancelRead); await reader.cancel().catch(() => {}); }
 }
 
-async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null, takeExecution = null, requestTimeouts = {}, team = null, waitIfPaused = async () => {}, preserveInput = false, preserveTailMessages = 0 }) {
+async function runModelTask({ connection, messages, tools, executeTool, signal, emit = () => {}, fetchImpl = fetch, maxRounds = MAX_ROUNDS, retryDelayMs = 1000, goal = null, takeSteering = null, takeExecution = null, requestTimeouts = {}, team = null, autoHandoff = null, waitIfPaused = async () => {}, preserveInput = false, preserveTailMessages = 0 }) {
   maxRounds = Number.POSITIVE_INFINITY;
+  if (autoHandoff?.enabled) {
+    tools = [...(tools || []), { type: 'function', function: { name: 'request_model_assistance', description: '当前任务超出自身能力时请求更高等级的已配置模型接手。提供原因和实际证据；服务、环境或权限故障应先处理，不借接力扩大授权。同一未解决问题不重复转交。', parameters: { type: 'object', properties: { reason: { type: 'string' }, evidence: { type: 'string' } }, required: ['reason', 'evidence'], additionalProperties: false } } }];
+    const delegate = executeTool;
+    executeTool = (name, args, context) => name === 'request_model_assistance' ? autoHandoff.requestAssistance(args) : delegate(name, args, context);
+  }
   let goalFinish = null;
   if (goal) {
     tools = [...(tools || []), { type: 'function', function: { name: 'goal_finish', description: '目标已完成或确实受阻时调用。必须引用实际结果或明确阻塞，不能仅凭计划宣告完成。', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['completed', 'blocked'] }, summary: { type: 'string' }, evidence: { type: 'string' } }, required: ['status', 'summary', 'evidence'], additionalProperties: false } } }];
@@ -149,6 +154,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     executeTool = async (name, args, context) => {
       if (name !== 'goal_finish') return delegate(name, args, context);
       if (!['completed', 'blocked'].includes(args.status) || typeof args.summary !== 'string' || !args.summary.trim() || typeof args.evidence !== 'string' || !args.evidence.trim() || args.summary.length > 4000 || args.evidence.length > 4000) throw new Error('请提供完成或阻塞的摘要和实际证据。');
+      if (autoHandoff?.beforeFinal()) return { ok: true, requires_mode_one_review: true, summary: '接手结果待模式一核验完善，本轮目标尚未提交完成。' };
       goalFinish = { status: args.status, summary: args.summary, evidence: args.evidence };
       return { ok: true, ...goalFinish };
     };
@@ -199,7 +205,7 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     }
     if (structured) installJsonProtocol();
     refreshPreserved();
-    conversation.push({ role: 'user', content: '用户已在运行中切换执行模式。继续同一任务，核对下面保留的真实工具结果和文件最新状态；不要重新执行已成功的文件修改或命令。' });
+    conversation.push({ role: 'user', content: update.continuationNote || '用户已在运行中切换执行模式。继续同一任务，核对下面保留的真实工具结果和文件最新状态；不要重新执行已成功的文件修改或命令。' });
     return true;
   };
   // Keep complete tool pairs internally so changing a service's protocol loses no evidence.
@@ -341,6 +347,10 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
     if (!message.tool_calls?.length) {
       if (!message.content?.trim()) throw new Error('模型返回了空内容。');
       if (await refreshExecutor()) { conversation.push(message); continue; }
+      if (autoHandoff?.beforeFinal()) {
+        conversation.push(message);
+        if (await refreshExecutor()) continue;
+      }
       if (!goal) {
         const review = await team?.beforeFinal(message.content);
         await waitIfPaused();
@@ -391,7 +401,8 @@ async function runModelTask({ connection, messages, tools, executeTool, signal, 
       const { activity: _activity, modelImages, ...modelResult } = result || { ok: true };
       if (['browser_screenshot', 'image_read', 'image_edit', 'desktop_screenshot', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_scroll'].includes(name) && status === 'succeeded') pendingImages.push(...normalizeChatImages(modelImages).slice(0, 1));
       conversation.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(modelResult) });
-      const advice = await team?.afterTool(name, args, result, status);
+      autoHandoff?.afterTool(name, args, result, status);
+      const advice = autoHandoff?.hasPending() ? null : await team?.afterTool(name, args, result, status);
       if (advice) {
         teamDeferral = '重复错误的顾问意见已返回；请主模型调整处理方式后继续。';
         teamNotes.push('请主模型核实以下错误诊断资料，改变失败条件或方法后再继续，不能盲目重复操作。\n' + advice);

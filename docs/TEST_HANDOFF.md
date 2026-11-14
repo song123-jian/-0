@@ -1,5 +1,31 @@
 # 测试交接
 
+## 1.3.66 三模式接力及AGENTS/Skill（本地交付验证通过，远端发布待验）
+
+- 实际对象：D:/cx/.Scodex/release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe，应用/PE1.3.66、ProductVersion1.3.66.0；EXE928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956，ASAR5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce。最终入口D:/cx/.Scodex/EXE快捷启动.lnk已指向该包，该快捷入口已实际验收3/3通过，文件哈希与验收包一致。
+- 环境/替代范围：Windows10.0.26200 x64、Node24.17.0、Electron45；隔离profile和工作区、loopback模型HTTP。实际EXE、renderer/UI/IPC、磁盘文件和命令均真实执行；仅模型响应/凭据由受控服务替代，公网语义质量/连接/费用未验证。
+- 操作：tests/auto-handoff-ui.cjs按scope选取实际EXE范围，经UI保存设置/发送任务、等待接力及终态、回读持久化与真实文件、核对请求/工具对及完成次数。证据统一位于release/auto-handoff-1.3.66；对照下表保留有效场景，不把failed整轮记为通过。
+
+| 范围/预期 | 实际结果 | 状态/可定位证据 |
+| --- | --- | --- |
+| 开关/等级保存重开，600/1280布局 | UI保存后重开值一致，目标视口布局通过 | 有效通过；candidate-ui前2项 |
+| 三起始模式明确求助、两次同类实际失败自动升级再回模式一；同请求后续独立问题再接力 | 6项通过，最终正文落盘，同聊天/请求和成功操作完整 | 有效通过；candidate-ui-r2前6项 |
+| 取消零后续请求、手动优先、无更强候选 | 4项含身份通过 | 有效通过；candidate-ui-boundaries前4项 |
+| 输出内HTTP401不误升级、接手鉴权失败、连续失败；规则/Skill真实读写及变化阻止副作用 | final2实际6项通过 | 有效通过；final-ui前6项 |
+| 加密学习记忆保存/真实进程重启、恢复为user任务资料并回交 | 3/3，processExited/fixtureRemoved通过 | 通过；memory-proof-ui |
+| final3身份、Skill脚本先读取/实际命令执行/生成文件回读及最终模式一接续 | 3/3，processExited/fixtureRemoved通过 | 通过；skill-script-ui；docs/verification/auto-handoff-1.3.66.png已查看 |
+| 辅助逻辑及编码/审查 | 原57/57、失败形状12/12、Skill22/22；18文件差异/语法/UTF8无BOM通过 | 通过；logic-verification.json、incremental-review.json及相关日志 |
+| 指令/工具辅助55项 | 54通过，1既有fullAccess缺失.env断言在精确旧源码同样ENOENT失败 | 既有失败保留；instruction-skill-tests.json、reproduce-baseline.cjs |
+| 最终构建和完整ZIP | 8源码/3dist/9运行资源一致，80/80 ZIP路径/大小/SHA逐流一致 | 通过；build-verification-final3.json、assets-final3/archive-verification.json |
+| 根快捷入口实际启动及接力 | 实际快捷方式启动后身份/接手及模式一完善/最终状态3/3，进程退出且fixture清理 | 通过；shortcut-ui/auto-handoff-ui.json |
+| 源码与Release远端状态/匿名下载 | 尚未上传1.3.66 | 尚未完成验证；待上传后只读核验 |
+
+- 失败恢复：首轮驱动以无pending字段判断持久化，改为terminal.text；第二轮取消合成标签被过滤，改证据；外部故障轮发现产品error||output漏看401，改合并字段并补12项/重打final2；自动预检异常增加手动serial优先；记忆夹具误查system且独立场景固定期待开关true，改user资料及重启前后实际值比较；ZIP校验规范化反斜杠。对应原报告保留failed，不减断言或将模拟当实际集成。
+- 最终入口已验命令：设置SCODEX_HANDOFF_SHORTCUT为根lnk、SCODEX_HANDOFF_OUTPUT=release/auto-handoff-1.3.66/shortcut-ui、SCODEX_HANDOFF_SCOPE=shortcut，运行node tests/auto-handoff-ui.cjs。预期与实际均为快捷方式启动、身份一致、接力完成/回模式一、零重复成功操作；3/3通过，本轮fixture/进程清理通过。复用其余未变通过结果，不重跑全测。
+- 交付/回滚：1.3.65→1.3.66沿用SemVer映射；根入口SHA b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2。旧lnk备份release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk（SHA1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103）和1.3.65完整目录保留，恢复备份即可回滚；delivery.json为replaced-and-entry-verified。
+- 资产：只用assets-final3的Scodex-Workbench-1.3.66-win-x64.zip、Scodex-Workbench-1.3.66-files.json、SHA256SUMS.txt；ZIP252753945字节/SHA9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6。程序必须完整解压运行，不单独复制EXE。
+- 清理/限制：已有有限任务全部结束，UI进程/隔离fixture已清理；旧中间包的删除被自动审批拒绝，未重试；3旧候选及旧ZIP/两清单已移至手动删除/auto-handoff-1.3.66，原路径不存在、待人工删除，精确映射见cleanup.json；正式包/回滚/证据保留。AGENTS祖先策略、fallback配置/官方云能力及公网模型质量不作100%等价结论；学习是显式持久记忆，不是模型训练。最终截图仅证明当前设备/页面/视口/合成数据状态下无可见错误。
+
 ## 1.3.65 消息文件直达（已验证，源码已上传）
 
 - 程序分发对象/范围：沿用上述1.3.65 EXE和有效验收；新增完整80文件ZIP、两清单、GitHub发布状态/标签/资产大小及digest、匿名下载核验。main基线923348b；[分发验收摘要](verification/1.3.65-distribution.json)，本地证据release/program-upload-1.3.65。

@@ -1,0 +1,243 @@
+{
+  "status": "local-delivery-verified-remote-publication-pending",
+  "version": "1.3.66",
+  "previousVersion": "1.3.65",
+  "versionMapping": "Existing SemVer patch increment; one delivery target per implementation round",
+  "repository": "https://github.com/song123-jian/-0",
+  "sourceUpload": "pending",
+  "programPublication": "pending",
+  "scope": [
+    "Saved automatic handoff enable switch and three model capability levels",
+    "Two same-class actual tool failures or explicit assistance tool select configured stronger model; return to mode one for actual refinement and continuation",
+    "Same conversation/request/tool pairs; no successful operation replay; manual priority; cancellation; same-issue deduplication without numeric relay cap",
+    "AGENTS overrides, directory disclosure and effective-rule change guards",
+    "Progressive Skill metadata/body/resource reads and actual authorized bundled script execution",
+    "Explicit encrypted learning memory restored after process restart as user task material"
+  ],
+  "artifact": {
+    "executable": "release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe",
+    "exeSha256": "928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956",
+    "asarSha256": "5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce",
+    "shortcut": "EXE快捷启动.lnk",
+    "shortcutSha256": "b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2",
+    "appVersion": "1.3.66",
+    "peFileVersion": "1.3.66",
+    "productVersion": "1.3.66.0",
+    "identity": "8 Electron source files and 3 dist files byte-identical; 9 runtime resources present"
+  },
+  "environment": "Windows 10.0.26200 x64; Node 24.17.0; Electron 45; isolated profiles/workspaces; real EXE/UI/IPC/files/commands. Model HTTP responses and credentials replaced by loopback fixtures.",
+  "validation": {
+    "auxiliary": [
+      "Original runtime/handoff/connection 57/57",
+      "Real failure-shape regression 12/12",
+      "Skill context/catalog 22/22"
+    ],
+    "knownBaselineFailure": "Instruction/Skill/tools suite: 54 of 55 passed; one unchanged fullAccess test expects protected-path denial for missing .env but exact original source also produces ENOENT. Not marked passed or weakened.",
+    "actualProgram": [
+      {
+        "scope": "candidate-ui",
+        "reportSha256": "2bc8ce1b0a57aba908b0d1191b8a05a01baab6e919025bd955ad32c4325bdbe2",
+        "roundStatus": "failed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "settings-save-reopen-and-responsive-layout"
+        ],
+        "reuse": "Only listed independent passed checks; entire round is not passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      },
+      {
+        "scope": "candidate-ui-r2",
+        "reportSha256": "c82bf1a888a1b48307233c8c0896f1226b6d61b4f5285ee85e026df6518f205b",
+        "roundStatus": "failed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "real-handoff-main-and-mode-one-refinement",
+          "real-handoff-subagent-and-mode-one-refinement",
+          "real-handoff-advisor-and-mode-one-refinement",
+          "two-real-command-failures-trigger-handoff",
+          "new-independent-issue-relays-again-in-same-request"
+        ],
+        "reuse": "Only listed independent passed checks; entire round is not passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      },
+      {
+        "scope": "candidate-ui-boundaries",
+        "reportSha256": "b8c554dae57bc2f37952bc70f420db365bad42d9213e5973a1b5f7e4f3442862",
+        "roundStatus": "failed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "cancel-stops-takeover-without-replaying-success",
+          "manual-selection-overrides-automatic-return",
+          "boundary-unavailable"
+        ],
+        "reuse": "Only listed independent passed checks; entire round is not passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      },
+      {
+        "scope": "final-ui",
+        "reportSha256": "8382a2d7b03562aa601aadfd001d0733c864c88eed87032c2fa1eec1ffbc0708",
+        "roundStatus": "failed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "two-real-command-failures-trigger-handoff",
+          "boundary-external",
+          "boundary-auth",
+          "agents-overrides-and-skills-execute-through-real-tools",
+          "changed-effective-rule-blocks-real-write"
+        ],
+        "reuse": "Only listed independent passed checks; entire round is not passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      },
+      {
+        "scope": "memory-proof-ui",
+        "reportSha256": "be79d343d074234a42a2f9011438fa51f9aea1263695092545af13113758f392",
+        "roundStatus": "passed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "learning-memory-ui-save-and-process-restart",
+          "final-visible-status-and-layout"
+        ],
+        "reuse": "All listed checks passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      },
+      {
+        "scope": "skill-script-ui",
+        "reportSha256": "c0e9ce298cc27a0963ec87c1d4e139b1ea6e031ac52f1b4fbf868277d44ba222",
+        "roundStatus": "passed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "skill-script-read-execute-and-real-file-readback",
+          "final-visible-status-and-layout"
+        ],
+        "reuse": "All listed checks passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      },
+      {
+        "scope": "shortcut-ui",
+        "reportSha256": "a00ee34ab4cc7829b588fd82c8db4e9b9e05175cb01f94d706883e91825ddf04",
+        "roundStatus": "passed",
+        "validChecks": [
+          "actual-exe-identity-and-isolated-profile",
+          "real-handoff-subagent-and-mode-one-refinement",
+          "final-visible-status-and-layout"
+        ],
+        "reuse": "All listed checks passed",
+        "cleanup": "passed",
+        "processExited": true,
+        "fixtureRemoved": true
+      }
+    ],
+    "review": {
+      "status": "passed",
+      "files": 18,
+      "baseline": "Exact originals in baseline.json match source-repo 6bdb971",
+      "remainingFindings": []
+    },
+    "screenshot": "auto-handoff-1.3.66.png: final shortcut view inspected; no visible errors in the stated device/page/viewport/fixture state"
+  },
+  "archive": {
+    "status": "passed",
+    "version": "1.3.66",
+    "fileCount": 80,
+    "archiveBytes": 252753945,
+    "archiveSha256": "9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6",
+    "manifestSha256": "d0853c48e7c172a950e53585684fcbae8fc19c9621ac95e2da58d1a2bfa9d2e2",
+    "entriesVerified": 80,
+    "method": "Synchronous .NET ZipArchive stream per entry: path, length and SHA-256",
+    "finishedAt": "2026-11-14T09:50:14.5669668Z"
+  },
+  "officialComparison": {
+    "checkedAt": "2026-11-14T09:26:54.626Z",
+    "skill": "openai-docs",
+    "sources": [
+      {
+        "requested": "https://developers.openai.com/codex/guides/agents-md",
+        "actual": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+        "method": "Actual browser redirect and visible full document",
+        "facts": [
+          "Global override precedes AGENTS.md",
+          "One non-empty file per directory",
+          "Root-to-working-directory precedence",
+          "Configurable fallback filenames and default 32 KiB budget"
+        ]
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/customization/overview#skills",
+        "method": "Official page WebMCP lookup exact Markdown",
+        "facts": [
+          "Metadata visible initially",
+          "Chosen SKILL.md loads on demand",
+          "References or scripts used when needed",
+          "Explicit and implicit skill selection"
+        ]
+      }
+    ],
+    "differences": [
+      "Scodex retains ancestor rules for non-Git workspaces and its local plus reference instruction roots",
+      "Configurable project_doc_fallback_filenames is not currently imported",
+      "Instruction bodies stay complete until context preparation; no claim to official 32 KiB rule truncation",
+      "Learning is explicitly stored local memory, not model training or undocumented Codex internals"
+    ],
+    "httpFallback": {
+      "terminalStatus": 403,
+      "browserStatus": "read"
+    }
+  },
+  "rollback": "Restore release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk to root; full 1.3.65 directory retained. Preserve user configuration/chat data.",
+  "cleanup": {
+    "status": "moved-awaiting-manual-deletion",
+    "reason": "Automatic approval review rejected deletion: blocked by policy. No deletion retry.",
+    "manualDirectory": "手动删除/auto-handoff-1.3.66",
+    "items": [
+      {
+        "originalPath": "release/Scodex-Workbench-1.3.66",
+        "actualPath": "手动删除/auto-handoff-1.3.66/Scodex-Workbench-1.3.66",
+        "status": "moved-awaiting-manual-deletion"
+      },
+      {
+        "originalPath": "release/Scodex-Workbench-1.3.66-final",
+        "actualPath": "手动删除/auto-handoff-1.3.66/Scodex-Workbench-1.3.66-final",
+        "status": "moved-awaiting-manual-deletion"
+      },
+      {
+        "originalPath": "release/Scodex-Workbench-1.3.66-final2",
+        "actualPath": "手动删除/auto-handoff-1.3.66/Scodex-Workbench-1.3.66-final2",
+        "status": "moved-awaiting-manual-deletion"
+      },
+      {
+        "originalPath": "release/auto-handoff-1.3.66/Scodex-Workbench-1.3.66-win-x64.zip",
+        "actualPath": "手动删除/auto-handoff-1.3.66/Scodex-Workbench-1.3.66-win-x64.zip",
+        "status": "moved-awaiting-manual-deletion"
+      },
+      {
+        "originalPath": "release/auto-handoff-1.3.66/Scodex-Workbench-1.3.66-files.json",
+        "actualPath": "手动删除/auto-handoff-1.3.66/Scodex-Workbench-1.3.66-files.json",
+        "status": "moved-awaiting-manual-deletion"
+      },
+      {
+        "originalPath": "release/auto-handoff-1.3.66/SHA256SUMS.txt",
+        "actualPath": "手动删除/auto-handoff-1.3.66/SHA256SUMS.txt",
+        "status": "moved-awaiting-manual-deletion"
+      }
+    ]
+  },
+  "limitations": [
+    "No guarantee of 100% undocumented Codex implementation or official cloud-service equivalence",
+    "Retains ancestor-rule policy and full rule bodies until context preparation; project_doc_fallback_filenames not imported",
+    "Learning memory is explicit persisted context, not model training",
+    "Public-provider semantics/quality/cost and complete integration compatibility not tested"
+  ],
+  "next": "Upload explicit source increment and complete ZIP with two manifests, verify remote source/ref/tag/assets and anonymous CDN availability"
+}

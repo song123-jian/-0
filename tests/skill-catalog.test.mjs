@@ -60,3 +60,8 @@ test('manual prerequisite alias is not preloaded again and missing Skill attempt
  const selected=await createSkillContext({skillId:manual.id,...f.options}),c=await f.create({selected});assert.equal(c.initialActivities.length,1);assert.equal((await c.execute('skill_search',{})).loaded_skills.length,1);
  const events=[];await assert.rejects(c.execute('skill_open',{skill_id:'missing'},{onProgress:event=>events.push(event)}),/skill_search/);assert.equal(events[0].detail,'missing');
 });
+
+test('initial metadata exposes discoverable names and purpose without reading unchosen bodies',async t=>{
+ const f=await fixture(t);const available=await f.add('workflow','核验真实程序与文件');const disabled=await f.add('disabled','停用用途');f.setPreferences({skillsEnabled:true,disabledSkillIds:[disabled.id]});
+ const c=await f.create();assert.ok(c.instruction.includes('核验真实程序与文件'));assert.ok(c.instruction.includes('workflow'));assert.ok(c.instruction.includes(available.id));assert.ok(!c.instruction.includes('GUIDANCE-workflow'));assert.ok(!c.instruction.includes('停用用途'));
+});

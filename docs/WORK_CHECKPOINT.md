@@ -1,12 +1,26 @@
-## 当前检查点：1.3.65 程序上传（已公开；CDN核验通过，文档同步收尾）
+## 当前检查点：1.3.66 自动接力与指令/技能执行对齐（最终入口验收与上传中）
+
+- 授权/验收：程序落地、最终本地入口、源码和完整程序上传既定仓库；最新上传授权覆盖此前等待通知。目标1.3.65→1.3.66，沿用SemVer补丁映射，同轮不重复加版本。
+- 核心实现：保存自动开关/三模式等级；连续两次同类实际工具失败或request_model_assistance→已配置更强不同模型→模式一实际核验完善→同任务继续。保留上下文/工具结果，成功操作不重放；手动优先、取消停止；无数字次数上限，同一未解决问题去重。
+- 指令/技能：初始和目录链处理非空AGENTS.override优先/空文件回退、变化阻止执行及副作用前披露；Skill名称/用途/ID初始可见，正文/引用按需读取，脚本先读后经现有run_command执行；显式加密学习记忆重启恢复、作为user资料注入，不是模型训练。
+- 最终产物：release/Scodex-Workbench-1.3.66-final3/win-unpacked/Scodex工作台.exe；EXE928d3583568a829d7fdb59651890bfe6ce3684e3867cdc7fb47b60a825846956，ASAR5fefead5e3eb211ea2ae6628448ccd14d66e1e74bf7d80e9046d4c1842574dce；应用/PE1.3.66。8源码/3dist/9资源核验通过。
+- 入口真实状态：根EXE快捷启动.lnk已原子切到final3，SHA b2a7c9451c35a8f8c1e51ddab9b1246a791223fab53e70abeefc9600905b20e2；快捷入口真实启动/接力回交/最终视图3/3及清理通过。旧入口备份release/auto-handoff-1.3.66/EXE快捷启动.pre-replace.lnk和1.3.65完整目录保留；delivery.json状态replaced-and-entry-verified。
+- 有效验证：逻辑57/57、失败形状12/12、Skill22/22；指令/工具55项54通过，旧fullAccess缺失.env断言在精确基线同样失败，未弱化断言。实际EXE按范围复用设置重开/600及1280布局、三起始模式/两次独立接力、取消/手动/无候选、外部401/接手鉴权失败、AGENTS/Skill真实读写/规则变化拦截；整轮failed不写整体通过。memory-proof-ui 3/3、skill-script-ui 3/3通过。18文件增量审查/语法/UTF8无BOM通过。
+- 包资产：assets-final3下ZIP252753945字节，SHA9ab13f48c07095742fd210fb5ba7f0b47444503d6d609320db5494db3cda9ad6，80/80逐流大小/SHA一致。不得上传旧ZIP。所有构建/测试/压缩已结束，UI进程/fixture均清理。
+- 证据/基线：统一release/auto-handoff-1.3.66，baseline.json及baseline/保存原字节；build-verification-final3.json、incremental-review.json、各UI报告及assets-final3/archive-verification.json。docs/verification/auto-handoff-1.3.66.png已查看。
+- 待办：1本地交付/双交接/能力说明/验收摘要已整理，旧3候选及旧ZIP/两清单因删除被拒移到手动删除/auto-handoff-1.3.66，精确映射cleanup.json；2同步明确增量到release/codex-alignment-1.3.64/source-repo，提交/API非强制上传；4发布v1.3.66 ZIP+两清单，核验资产/标签/API-CDN；5上传最终文档状态并回读。
+- 仓库：song123-jian/-0，隔离克隆干净HEAD6bdb971adfcd83043e8beb4d0ea07bce9eed8c71；1.3.66尚未提交/上传。upload-source.cjs已复制，凭据仅内存。程序上传沿用curl HTTP1.1和stdin认证。
+- 约束/差异：不能承诺未公开Codex100%等价；保留祖先规则策略，未导入project_doc_fallback_filenames/官方云服务；公网模型语义和费用未验证。官方证据official-comparison.json。阶段前定向读取双交接、写前哈希/UTF8无BOM、不动真实数据/凭据或用户进程、不重复全测/历史扫描。
+- 使用Skill复用：requirement-understanding95、code-write-review94、openai-docs95；无Agent。后续从本节恢复，不重扫项目。
+
+## 已完成检查点：1.3.65 程序上传（已公开；CDN核验及文档同步通过）
 
 - 本轮目标/验收：将已验收1.3.65完整运行程序发布到既定仓库Release，提供完整目录ZIP、逐文件及压缩包SHA-256清单；远端资产大小/digest和公开下载入口核验；更新README及双交接，不重新构建未变程序。
 - 方案/待办：1核对80文件/611299223字节运行目录并制作ZIP；2核验ZIP全部内容与原目录一致；3建立v1.3.65草稿Release并上传/核验资产后发布；4同步仓库下载说明和交接记录并远端回读。程序包不包含真实配置、聊天或本地快捷方式。
 - 仓库基线/边界：main为923348b57a43396c5f4361c86397e8e7d6ca6c2d，干净隔离克隆沿用；EXE和ASAR分别249798144/150375404字节，超过普通Git文件限制，采用Release ZIP。保留旧Release与本地入口，沿用1.3.65及原有效功能验收。
 - 校验恢复：ZIP已生成257608314字节；首次yauzl异步迭代校验进程退出0但未产生完成报告，不能判定通过。只读确认ZIP存在、条目80且首项可读，最早失效步骤为异步校验未等待完成，具体库/事件原因未确证。替代方案改用.NET同步ZipArchive流逐项核对长度/SHA-256，避免以命令退出码代替完成证据；产品和ZIP不变。
 - 实际状态/上传恢复：.NET同步校验80文件全部通过；ZIP SHA727463b54ec0cc45ff801ebfb121b03dce9f755123f287b6ddf3104737572a1a。Node fetch失败后改用curl HTTP/1.1，3资产上传、服务器大小/digest比对和发布成功；Release 445155585，tag v1.3.65指向923348b57a43396c5f4361c86397e8e7d6ca6c2d，draft=false。证据release-curl-publication.json。
-- 下载核验结果：匿名API→CDN ZIP HEAD200/257608314字节、两清单GET200且字节/SHA一致，verify-api-download.cjs退出0，public-api-download-verification.json为有效证据。正式github.com直链curl56连接重置，尚未完成该直链验证；草稿untagged地址404已定位，不重传资产。分发摘要docs/verification/1.3.65-distribution.json；本轮5份文档待同步，精确远端结果见documentation-api-upload.json。
-- 后续已授权需求：模式一/二/三检测能力不足时自动交给更强已配置模型，完成后交回模式一完善并继续同一任务；尚未调查或修改代码。先完成当前上传收尾，再核对现有切换/配置，设计明确触发、能力顺序、手动优先、失败取消与防循环，再构建1.3.66验收和上传。
+- 下载核验结果：匿名API→CDN ZIP HEAD200/257608314字节、两清单GET200且字节/SHA一致；github.com直链连接重置，尚未完成该直链验证。5份分发文档已非强制同步main到6bdb971adfcd83043e8beb4d0ea07bce9eed8c71，GET ref及commit tree/parent回读一致，documentation-api-upload.json通过。新自动接力需求以上节为准，等待用户后续通知才上传。
 
 - 目标/范围：命名Markdown本地链接保留名称、图标、完整路径悬停及可访问名称；文件点击真实预览/Explorer定位，目录直接进入；复用原IPC和目录授权，不加依赖。
 - 已完成：1.3.64→1.3.65完整候选构建、根快捷入口原子切换及真实启动；8份代码/测试/版本增量审查无剩余高置信度问题。基线及精确旧文件位于release/file-links-1.3.65/baseline.json。

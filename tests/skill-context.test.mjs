@@ -143,3 +143,10 @@ test('malformed or extra tool arguments do not broaden access', async (t) => {
     await assert.rejects(tool.execute('skill_read', args), /参数/);
   }
 });
+
+test('read resources provide an authorized absolute path for existing command execution',async t=>{
+ const base=await fs.mkdtemp(path.join(os.tmpdir(),'scodex-script-path-'));t.after(()=>fs.rm(base,{recursive:true,force:true}));
+ const guide=path.join(base,'SKILL.md'),script=path.join(base,'verify.ps1');await fs.writeFile(guide,'Script workflow');await fs.writeFile(script,'Write-Output verified');
+ const authorized=[];const context=await createSkillContext({skillId:'script',getSkills:async()=>[{id:'script',name:'script',absolutePath:guide}],getPreferences:()=>({skillsEnabled:true}),authorize:async(operation,input)=>authorized.push({operation,path:input.path})});
+ const result=await context.execute('skill_read',{path:'verify.ps1'});assert.equal(result.absolute_path,script);assert.equal(result.content,'Write-Output verified');assert.ok(authorized.some(a=>a.operation==='file-read'&&a.path===script));
+});

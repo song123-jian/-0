@@ -46,7 +46,7 @@ async function createSkillCatalog({ selected = null, getSkills, getPreferences, 
   const loadedSkills = () => [...loaded.values()].map(item => ({ id: item.id, name: item.name }));
   return { definitions: CATALOG_TOOLS,
     initialActivities: loadedSkills().map(item => ({ name: 'skill_use', title: '使用 Skill', detail: item.name, output: '已核验并加载到本轮上下文；后续复用，不重复加载。' })),
-    instruction: '技能自动发现已启用，可用技能 ' + initial.length + ' 个。用户无需手选。本程序不设 Skill 数量上限；仅选择任务需要且职责互补的 Skill，不调用功能重复的 Skill。先 skill_search 查看名称、用途和 loaded_skills，比较已加载职责；功能已覆盖则复用，不能因名称不同再次加载。不同职责按需 skill_open 读取完整指引；正文发送前按实际上下文容量和内容重要性动态压缩；引用资料只用该包内 skill_read/skill_list。already_loaded 表示正文已在本轮上下文，不要重复打开或重读。遵守生效 AGENTS、停用设置、授权和权限。首次使用应说明名称与用途，结束时如实列出使用的 Skill，不声称未调用的能力。\n\n' + [...loaded.values()].map(s => '已从本机核验加载的 SKILL.md（' + s.name + '，ID ' + s.id + '，SHA256 ' + s.hash + '）：\n' + s.content).join('\n\n'),
+    instruction: '技能自动发现已启用，可用技能 ' + initial.length + ' 个。用户无需手选。本程序不设 Skill 数量上限；仅选择任务需要且职责互补的 Skill，不调用功能重复的 Skill。先 skill_search 查看名称、用途和 loaded_skills，比较已加载职责；功能已覆盖则复用，不能因名称不同再次加载。不同职责按需 skill_open 读取完整指引；正文发送前按实际上下文容量和内容重要性动态压缩；引用资料只用该包内 skill_read/skill_list。already_loaded 表示正文已在本轮上下文，不要重复打开或重读。遵守生效 AGENTS、停用设置、授权和权限。首次使用应说明名称与用途，结束时如实列出使用的 Skill，不声称未调用的能力。\n\n可用 Skill 元信息（仅名称、用途与ID；正文按需读取）：\n' + initial.map(item => JSON.stringify({ id: item.id, name: item.name, description: item.description || '', source: item.sourceLabel || '', requiredMcp: item.requiredMcp || '' })).join('\n') + '\n\n' + [...loaded.values()].map(s => '已从本机核验加载的 SKILL.md（' + s.name + '，ID ' + s.id + '，SHA256 ' + s.hash + '）：\n' + s.content).join('\n\n'),
     async execute(name, args, context = {}) {
       validate(name, args); const list = await available();
       if (name === 'skill_search') {

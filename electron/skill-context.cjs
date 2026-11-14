@@ -138,7 +138,7 @@ async function createSkillContext({ skillId = '', suppliedContent = '', getSkill
       }
       await safePath(target);
       await check(context.signal);
-      return { ok: true, skill_id: skillId, path: relative.replaceAll(path.sep, '/') || '.', ...result,
+      return { ok: true, skill_id: skillId, path: relative.replaceAll(path.sep, '/') || '.', absolute_path: target, ...result,
         ...(name === 'skill_read' ? { truncated: false, next_offset: null, total_chars: result.content.length } : {}),
         activity: { title: name === 'skill_list' ? '查看技能资料目录' : '读取技能资料', detail: selected.name,
           path: relative.replaceAll(path.sep, '/') || '.', output: JSON.stringify(result) } };
