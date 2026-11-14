@@ -83,7 +83,7 @@ export function parseInline(value, depth = 0) {
       const destination = link[2] || link[3];
       const target = localMessagePath(destination);
       const href = safeMessageUrl(destination);
-      if (target) tokens.push({ type: 'path', path: target, text: link[1] });
+      if (target) tokens.push({ type: 'path', path: target, text: link[1], label: link[1] });
       else if (href) tokens.push({ type: 'link', href, children: depth < 4 ? parseInline(link[1], depth + 1) : [{ type: 'text', text: link[1] }] });
       else pushText(link[0]);
       i += link[0].length; continue;

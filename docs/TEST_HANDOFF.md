@@ -1,5 +1,26 @@
 # 测试交接
 
+## 1.3.65 消息文件直达（本地已验证，源码待同步）
+
+- 实际对象：release/Scodex-Workbench-1.3.65/win-unpacked/Scodex工作台.exe，应用/PE版本1.3.65；最终入口D:/cx/.Scodex/EXE快捷启动.lnk。EXE 8b251d94a8484651bb91bdebdae63a40c97443b4413ac6d544535155e0a77ec1；ASAR 03a5038c52c0d5915441ac6fec17e2141ba81b37ed19af3ea5f8b7d058f08c6c；lnk 1e242367415a57ef4f3c3fff172d6db47300ca15d6d0b0dd79072d35260a7103。
+- 环境/前置：Windows10.0.26200 x64、Node24.17.0、Electron45；隔离profile/项目及自建中文空格文件/目录，无模型服务或真实配置/聊天写入。实际EXE、renderer、IPC和Windows Explorer执行，未用模拟页面替代。
+- 场景/预期：名称/图标/title/可访问名称正确；Enter点击文件后预览和Explorer选中；快捷方式/表格链接目标一致，目录进入对应文件夹；缺失报错、越出授权目录拒绝；600/1280px可见链接不溢出。
+
+| 范围 | 实际操作与结果 | 状态/证据 |
+| --- | --- | --- |
+| 定向逻辑/语法/编码 | node --test tests/message-files.test.mjs tests/message-presentation.test.mjs，13/13；两个UI驱动node --check；8份文本UTF-8无BOM及可读性核对 | 通过；targeted-tests.log、incremental-review.json |
+| renderer/完整候选 | npm run build（1840模块）和本地Electron45目录构建均退出0；4包内容、9资源和版本一致 | 通过；[包核验](../release/file-links-1.3.65/build-verification.json) |
+| 命名链接、Enter、实际文件/快捷方式/目录、错误/授权 | SCODEX_LINKS_EXE指定1.3.65运行node tests/message-links-ui.cjs，按名称/Enter点击；Shell.Application回读真实Explorer目录和SelectedItems | 前5项有效通过；[原报告](../release/file-links-1.3.65/candidate-ui/message-links-ui.json) |
+| 可见链接布局 | SCODEX_LINKS_SCOPE=layout、OUTPUT=layout-ui，同一EXE；打开文件后关闭第三工作台，600/1280×900要求6链接可见、宽高大于0且在父级和视口内 | 3/3通过；[补测](../release/file-links-1.3.65/layout-ui/message-links-ui.json)、[最终截图](verification/message-links-1.3.65.png)已查看 |
+| 最终根快捷入口 | SCODEX_LINKS_SHORTCUT指定根lnk、OUTPUT=shortcut-ui；真实Windows快捷方式启动，核对身份/标签，Enter预览并回读Explorer选中项 | 3/3通过；[入口报告](../release/file-links-1.3.65/shortcut-ui/message-links-ui.json) |
+| 增量审查 | baseline.json精确旧字节与本轮8份差异；修正隐藏零尺寸假阳性后定向复审 | 通过；[审查](../release/file-links-1.3.65/incremental-review.json) |
+
+- 失效证据/恢复：原candidate-ui最后布局项虽报告passed，但600px全部链接width/client/scroll为0，不作通过证据。第三工作台在窄窗口隐藏聊天，驱动缺少可见性断言；仅补足可见/非零/边界校验并以layout范围补测通过，未修改正常产品或重建未变EXE；原前5项有效结果保留。
+- 构建方式：npx electron-builder --win --dir --x64 --config.directories.output=release/Scodex-Workbench-1.3.65 --config.electronDist=node_modules/electron/dist --publish never；[验收摘要](verification/1.3.65.json)、[交付清单](../release/file-links-1.3.65/delivery.json)。
+- 回滚/清理：恢复release/file-links-1.3.65/EXE快捷启动.pre-replace.lnk到根可回保留的1.3.64-final，备份SHA 2283a4246e159c76869e55c46e9f229c4ad69a964aa94d2c7d7ff06d86a511a1。3轮processExited/fixtureRemoved/cleanup为true/true/passed，fixture原路径不存在，自建Explorer窗口关闭，无新增临时残留或常驻服务；完整旧目录及必要证据保留。
+- 有效复用/未覆盖：1.3.64上下文/模型布局、1.3.63队列未变结果继续有效；不重跑无关全项目或旧message-workspace-ui整轮。仅本地链接，不验证公网模型、原生选择器或完整Codex等价；截图仅辅助链接呈现，不能代替功能断言。
+- 上传待办：增量源码、文档及验收资料待同步https://github.com/song123-jian/-0 的main（基线3946d98），采用已验证GitHub REST对象SHA核对、非强制更新和远端回读；不重试未变Git HTTPS故障或发布Release。程序产物、用户数据及凭据排除。文档长终端写入被策略拒绝且未落盘，改用结构化文件工具后回读核验。
+
 ## 1.3.64 Codex上下文接续与模型布局（已验证，源码已上传）
 
 - 最终实际对象：release/Scodex-Workbench-1.3.64-final/win-unpacked/Scodex工作台.exe，应用/PE版本1.3.64、产品版本1.3.64.0；Windows10.0.26200 x64、Node24.17.0 / Electron45，隔离profile/项目和loopback模型HTTP。最终EXE c785cb63e5aaa535905fd897b34f50593321cef39729b728d136c8dc3f109c9b；ASAR 78cc245514ee35c1c7e4254ffb6eafb60850128804f31a91da4a4aa564c939d4。

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronRight, Clipboard, FileCode2, LoaderCircle } from 'lucide-react';
+import { Check, ChevronRight, Clipboard, FileCode2, FileText, LoaderCircle } from 'lucide-react';
 import { formatDuration, messageElapsedMs, messageProgressState, parseInline, parseMessageBlocks, usedSkillNames } from '../lib/message-presentation.js';
 import { AgentActivity } from './agent-activity.jsx';
 import { messagePathName, parseLocalPaths } from '../lib/message-paths.js';
 
 function PathButton({ token, onPath }) {
-  const name = messagePathName(token.path);
-  return <button type="button" className="message-path-link" title={'打开附件：' + name} onClick={() => onPath?.(token.path)}>{token.code ? <code>{name}</code> : name}</button>;
+  const name = token.label || messagePathName(token.path);
+  return <button type="button" className="message-path-link" title={token.path} aria-label={'打开文件或文件夹：' + name} onClick={() => onPath?.(token.path)}><FileText size={15} aria-hidden="true" />{token.code ? <code>{name}</code> : name}</button>;
 }
 
 export function MessagePaths({ text, onPath }) {

@@ -1005,6 +1005,7 @@ kbd { padding: 2px 7px; border: 1px solid #e3e7e8; border-radius: 5px; backgroun
 .workspace-file-columns { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(125px, .72fr) minmax(0, 1.28fr); }
 .message-path-link { display: inline; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--green, #176c5b); font: inherit; text-align: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: inherit; overflow-wrap: anywhere; cursor: pointer; }
 .message-path-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.message-path-link > svg { display: inline; margin-right: 4px; vertical-align: -.15em; }
 .message-files-panel .workspace-file-columns { grid-template-columns: minmax(0, 1.6fr) minmax(145px, 1fr); }
 .message-file-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--border, #e3e8e4); }
 .message-file-preview-toolbar { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; padding: 10px; align-items: center; border-bottom: 1px solid var(--border, #e3e8e4); }

@@ -15,6 +15,9 @@ test('message paths preserve Chinese, spaces, markdown, line numbers and reject 
   assert.equal(localMessagePath(target + ':12:3'), target);
   assert.equal(parseInline('`' + target + '`')[0].path, target);
   assert.equal(parseInline('[说明](<' + target + ':12>)')[0].path, target);
+  assert.equal(parseInline('[快捷入口](<' + target + ':12>)')[0].label, '快捷入口');
+  assert.equal(parseInline('[快捷入口](/D:/cx/.Scodex/EXE快捷启动.lnk)')[0].label, '快捷入口');
+  assert.equal(parseInline('[文件夹](file:///D:/%E4%B8%AD%E6%96%87%20space/)')[0].path, 'D:/中文 space/');
   assert.equal(parseLocalPaths('查看 "' + target + '"。')[1].path, target);
   assert.equal(parseInline('E:\\GDP\\a.txt。')[0].path, 'E:\\GDP\\a.txt');
   for (const input of ['../notes.md', 'cmd /c echo x', 'javascript:alert(1)', 'https://example.com', '\\\\host\\share', 'E:\\file.txt:stream', 'E:\\x\n']) assert.equal(localMessagePath(input), null);
